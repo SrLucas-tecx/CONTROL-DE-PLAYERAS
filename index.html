@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUCXSTUDIO — Control de Playeras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app-layout">
+
+  <!-- ============================ SIDEBAR ============================ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-mark">LX</span>
+      <span class="logo-word">LUCX<b>STUDIO</b></span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group-label">Ventas</div>
+      <button class="nav-item active" data-page="cotizador">🧮 Cotizador rápido</button>
+      <button class="nav-item" data-page="cotizaciones">📁 Cotizaciones guardadas</button>
+
+      <div class="nav-group-label">Inventario</div>
+      <button class="nav-item" data-page="playeras">👕 Playeras</button>
+      <button class="nav-item" data-page="stickers">✂️ Estampados / Stickers</button>
+
+      <div class="nav-group-label">Catálogo</div>
+      <button class="nav-item" data-page="etiquetas">🏷️ Etiquetas y colores</button>
+      <button class="nav-item" data-page="artistas">🎨 Artistas y comisiones</button>
+
+      <div class="nav-group-label">Sistema</div>
+      <button class="nav-item" data-page="ajustes">⚙️ Ajustes de costos</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-icon" id="dark-mode-btn">🌙 <span>Modo claro/oscuro</span></button>
+      <div style="position:relative;">
+        <button class="btn-icon" id="backup-btn" style="width:100%;">💾 <span>Respaldo de datos</span></button>
+        <div class="backup-menu" id="backup-menu">
+          <div class="backup-menu-label">Exportar</div>
+          <button class="backup-menu-item" id="export-json-btn">📦 Descargar todo (JSON)</button>
+          <div class="backup-menu-divider"></div>
+          <label class="backup-menu-item" style="cursor:pointer;">
+            📥 Importar JSON
+            <input type="file" id="import-json-input" accept=".json" style="display:none">
+          </label>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+  <!-- ============================ /SIDEBAR ============================ -->
+
+
+  <!-- ============================ MAIN AREA ============================ -->
+  <main class="main-area">
+    <header class="header">
+      <button class="btn-icon" id="sidebar-toggle" title="Menú">☰</button>
+      <h1 class="header-title" id="page-title">Cotizador rápido</h1>
+      <div class="search-bar">
+        <span>🔍</span>
+        <input type="text" id="global-search" placeholder="Buscar playera, sticker o cotización...">
+      </div>
+      <button class="btn-primary" id="header-cta">+ Nueva cotización</button>
+    </header>
+
+    <div class="page-content" id="page-content">
+
+      <!-- ======================= COTIZADOR RÁPIDO ======================= -->
+      <section id="page-cotizador" class="page-section active">
+
+        <div class="quote-meta-card">
+          <input type="hidden" id="quote-editing-id">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Cliente</label>
+              <input type="text" id="q-cliente" class="form-input" placeholder="Nombre del cliente">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha</label>
+              <input type="date" id="q-fecha" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Vendedor</label>
+              <input type="text" id="q-vendedor" class="form-input" placeholder="Ej. SrLucas">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Artista / colaborador</label>
+              <select id="q-artista" class="form-select" onchange="onQuoteArtistChange()"></select>
+            </div>
+            <div class="form-group" id="q-comision-custom-wrap" style="display:none;">
+              <label class="form-label">% para el artista</label>
+              <input type="number" id="q-comision-pct" class="form-input" min="0" max="100" value="0" oninput="renderQuoteItems()">
+            </div>
+          </div>
+        </div>
+
+        <div class="section-header" style="justify-content:space-between;">
+          <h2 class="section-title">Prendas de la cotización</h2>
+          <button class="btn-secondary" onclick="addQuoteItem()">+ Agregar prenda</button>
+        </div>
+
+        <div class="quote-table-wrap">
+          <table class="quote-table">
+            <thead>
+              <tr>
+                <th style="min-width:170px;">Producto</th>
+                <th>Talla</th>
+                <th>Color</th>
+                <th>Cant.</th>
+                <th>Ancho cm</th>
+                <th>Largo cm</th>
+                <th># Est.</th>
+                <th>Costo playera</th>
+                <th>Costo DTF</th>
+                <th>Precio venta c/u</th>
+                <th>Ganancia</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="quote-items-body"></tbody>
+          </table>
+          <p class="empty-hint" id="quote-empty-hint">Aún no agregas prendas. Usa “+ Agregar prenda” — puedes añadir todas las que necesites.</p>
+        </div>
+
+        <div class="quote-summary">
+          <div class="summary-card">
+            <span class="summary-label">Total de venta</span>
+            <span class="summary-value" id="sum-venta">$0.00</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Costo de producción</span>
+            <span class="summary-value" id="sum-costo">$0.00</span>
+          </div>
+          <div class="summary-card accent">
+            <span class="summary-label">Ganancia total</span>
+            <span class="summary-value" id="sum-ganancia">$0.00</span>
+          </div>
+          <div class="summary-card" id="sum-artista-card">
+            <span class="summary-label" id="sum-artista-label">Parte del artista</span>
+            <span class="summary-value" id="sum-artista">$0.00</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label" id="sum-estudio-label">Parte del estudio</span>
+            <span class="summary-value" id="sum-estudio">$0.00</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notas de la cotización</label>
+          <textarea id="q-notas" class="form-textarea" placeholder="Ej. entregar el viernes, incluye bolsa sorpresa..."></textarea>
+        </div>
+
+        <div class="quote-actions">
+          <button class="btn-secondary" onclick="resetQuoteForm()">🗑️ Nueva cotización</button>
+          <button class="btn-secondary" onclick="exportQuotePDF()">🖨️ Exportar PDF</button>
+          <button class="btn-primary" onclick="saveQuote()">💾 Guardar cotización</button>
+        </div>
+
+      </section>
+      <!-- ======================= /COTIZADOR ======================= -->
+
+
+      <!-- ======================= COTIZACIONES GUARDADAS ======================= -->
+      <section id="page-cotizaciones" class="page-section">
+        <div class="filter-bar">
+          <select class="filter-select" id="filter-cot-estado" onchange="renderCotizacionesGuardadas()">
+            <option value="all">Todos los estados</option>
+            <option value="Pendiente">⏳ Pendiente</option>
+            <option value="Confirmado">✅ Confirmado</option>
+            <option value="Pagado">💰 Pagado</option>
+            <option value="Entregado">📦 Entregado</option>
+          </select>
+        </div>
+        <div id="cotizaciones-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="cotizaciones-empty-hint">Todavía no guardas ninguna cotización.</p>
+      </section>
+      <!-- ======================= /COTIZACIONES GUARDADAS ======================= -->
+
+
+      <!-- ======================= INVENTARIO PLAYERAS ======================= -->
+      <section id="page-playeras" class="page-section">
+        <div class="filter-bar">
+          <button class="filter-chip active" data-tag="all" onclick="setPlayeraTagFilter('all',this)">Todas las etiquetas</button>
+          <div id="playera-tag-chips" style="display:inline-flex;gap:8px;flex-wrap:wrap;"></div>
+          <select class="filter-select" id="filter-playera-estado" onchange="renderPlayeras()">
+            <option value="all">Todos los estados</option>
+            <option value="En stock">🟢 En stock</option>
+            <option value="En proceso">🟡 En proceso</option>
+            <option value="Agotado">🔴 Agotado</option>
+          </select>
+          <select class="filter-select" id="filter-playera-color" onchange="renderPlayeras()">
+            <option value="all">Todos los colores</option>
+          </select>
+          <select class="filter-select" id="filter-playera-talla" onchange="renderPlayeras()">
+            <option value="all">Todas las tallas</option>
+          </select>
+          <button class="btn-primary" style="margin-left:auto;" onclick="openModalPlayera()">+ Nueva playera</button>
+        </div>
+        <div id="playeras-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="playeras-empty-hint">No hay playeras registradas todavía.</p>
+      </section>
+      <!-- ======================= /INVENTARIO PLAYERAS ======================= -->
+
+
+      <!-- ======================= INVENTARIO STICKERS ======================= -->
+      <section id="page-stickers" class="page-section">
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-chico">
+            <span class="sticker-count-label">Chico</span>
+            <span class="sticker-count-value" id="count-chico">0</span>
+            <span class="sticker-count-sub">piezas en stock</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">Mediano</span>
+            <span class="sticker-count-value" id="count-mediano">0</span>
+            <span class="sticker-count-sub">piezas en stock</span>
+          </div>
+          <div class="sticker-count-card size-grande">
+            <span class="sticker-count-label">Grande</span>
+            <span class="sticker-count-value" id="count-grande">0</span>
+            <span class="sticker-count-sub">piezas en stock</span>
+          </div>
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Total diseños</span>
+            <span class="sticker-count-value" id="count-total-disenos">0</span>
+            <span class="sticker-count-sub">diseños distintos</span>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <button class="filter-chip active" data-size="all" onclick="setStickerSizeFilter('all',this)">Todos los tamaños</button>
+          <button class="filter-chip" data-size="Chico" onclick="setStickerSizeFilter('Chico',this)">Chico</button>
+          <button class="filter-chip" data-size="Mediano" onclick="setStickerSizeFilter('Mediano',this)">Mediano</button>
+          <button class="filter-chip" data-size="Grande" onclick="setStickerSizeFilter('Grande',this)">Grande</button>
+          <button class="btn-primary" style="margin-left:auto;" onclick="openModalSticker()">+ Nuevo estampado</button>
+        </div>
+        <div id="stickers-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="stickers-empty-hint">No hay estampados registrados todavía.</p>
+      </section>
+      <!-- ======================= /INVENTARIO STICKERS ======================= -->
+
+
+      <!-- ======================= ETIQUETAS Y COLORES ======================= -->
+      <section id="page-etiquetas" class="page-section">
+
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Colores de playeras</h2>
+            <p class="section-sub">Paleta de colores disponible para tu inventario y cotizaciones.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalColor()">+ Nuevo color</button>
+        </div>
+        <div id="colores-grid" class="chips-grid"></div>
+
+        <div class="section-header" style="justify-content:space-between;margin-top:32px;">
+          <div>
+            <h2 class="section-title">Etiquetas de filtrado</h2>
+            <p class="section-sub">Úsalas para clasificar tus playeras (ej. Anime, Oversize, Edición limitada).</p>
+          </div>
+          <button class="btn-primary" onclick="openModalEtiqueta()">+ Nueva etiqueta</button>
+        </div>
+        <div id="etiquetas-grid" class="chips-grid"></div>
+
+        <div class="section-header" style="justify-content:space-between;margin-top:32px;">
+          <div>
+            <h2 class="section-title">Etiquetas de talla (físicas)</h2>
+            <p class="section-sub">Stock de etiquetas de talla que cosés o colocás en cada prenda — por ahora principalmente negras y blancas.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalTallaEtiqueta()">+ Agregar stock</button>
+        </div>
+        <div id="talla-etiquetas-list" class="cards-grid"></div>
+
+      </section>
+      <!-- ======================= /ETIQUETAS Y COLORES ======================= -->
+
+
+      <!-- ======================= ARTISTAS ======================= -->
+      <section id="page-artistas" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Artistas y colaboradores</h2>
+            <p class="section-sub">Define el % de comisión de cada artista para usarlo automáticamente en el cotizador.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalArtista()">+ Nuevo artista</button>
+        </div>
+        <div id="artistas-grid" class="cards-grid"></div>
+      </section>
+      <!-- ======================= /ARTISTAS ======================= -->
+
+
+      <!-- ======================= AJUSTES ======================= -->
+      <section id="page-ajustes" class="page-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Costo del DTF</h2>
+            <p class="section-sub">El costo de estampado se calcula dividiendo el precio del metro de DTF entre el área del rollo, y multiplicándolo por el tamaño de tu estampado.</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Costo del metro de DTF ($)</label>
+              <input type="number" id="set-dtf-precio" class="form-input" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ancho del rollo de DTF (cm)</label>
+              <input type="number" id="set-dtf-ancho" class="form-input" min="1" step="0.1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Moneda</label>
+              <input type="text" id="set-moneda" class="form-input" placeholder="MXN">
+            </div>
+          </div>
+          <p class="cost-preview">Costo actual por cm²: <b id="preview-costo-cm2">$0.0000</b> — una impresión de 30×40 cm te cuesta <b id="preview-costo-ejemplo">$0.00</b></p>
+          <button class="btn-primary" onclick="saveSettings()">Guardar ajustes</button>
+        </div>
+
+        <div class="section-header" style="margin-top:32px;">
+          <div>
+            <h2 class="section-title">Datos de la aplicación</h2>
+            <p class="section-sub">Todo se guarda en este navegador. Descarga un respaldo con frecuencia.</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <button class="btn-secondary" id="export-json-btn-2">📦 Descargar respaldo (JSON)</button>
+          <button class="btn-danger" onclick="confirmResetAll()">🗑️ Borrar todos los datos</button>
+        </div>
+      </section>
+      <!-- ======================= /AJUSTES ======================= -->
+
+    </div>
+  </main>
+  <!-- ============================ /MAIN AREA ============================ -->
+</div>
+
+
+<!-- =========================================================
+     MODALES
+========================================================= -->
+
+<!-- MODAL: PLAYERA -->
+<div class="modal-overlay" id="modal-playera">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-playera-title">Nueva playera</h2>
+      <button class="modal-close" data-modal="modal-playera">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="p-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Nombre del diseño *</label>
+          <input type="text" id="p-nombre" class="form-input" placeholder="Ej. Playera Negra Miku">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo de prenda</label>
+          <select id="p-tipo" class="form-select">
+            <option>Playera</option>
+            <option>Playera Oversize</option>
+            <option>Manga larga</option>
+            <option>Sudadera</option>
+            <option>Bolsa Sorpresa</option>
+            <option>Niños</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Talla</label>
+          <input type="text" id="p-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G, XG">
+          <datalist id="talla-list">
+            <option value="CH"><option value="MD"><option value="G"><option value="XG"><option value="XXG">
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <select id="p-color" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stock (piezas)</label>
+          <input type="number" id="p-stock" class="form-input" min="0" value="1">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Costo de la playera ($)</label>
+          <input type="number" id="p-costo-playera" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label"># de estampados</label>
+          <input type="number" id="p-num-estampados" class="form-input" min="1" value="1" oninput="updatePlayeraPreview()">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Ancho del estampado (cm)</label>
+          <input type="number" id="p-ancho" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Largo del estampado (cm)</label>
+          <input type="number" id="p-largo" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-switch">
+          <span class="switch-label">¿Lleva etiqueta de talla cosida?</span>
+          <label class="switch">
+            <input type="checkbox" id="p-tiene-etiqueta">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <p class="cost-preview" id="p-cost-preview">Costo del estampado: $0.00 — Costo total: $0.00</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Precio de venta sugerido ($)</label>
+          <input type="number" id="p-precio-venta" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Prioridad de venta</label>
+          <select id="p-prioridad" class="form-select">
+            <option>Alta</option><option>Media</option><option>Baja</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estado</label>
+          <select id="p-estado" class="form-select">
+            <option>En stock</option><option>En proceso</option><option>Agotado</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Etiquetas</label>
+        <div id="p-tags-container" class="tag-checkbox-list"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="p-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-playera">Cancelar</button>
+      <button class="btn-primary" onclick="savePlayera()">Guardar playera</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: STICKER / ESTAMPADO -->
+<div class="modal-overlay" id="modal-sticker">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-sticker-title">Nuevo estampado</h2>
+      <button class="modal-close" data-modal="modal-sticker">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="s-id">
+      <div class="form-group">
+        <label class="form-label">Nombre del diseño *</label>
+        <input type="text" id="s-nombre" class="form-input" placeholder="Ej. Gato alien">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tamaño</label>
+          <select id="s-tamano" class="form-select">
+            <option>Chico</option><option>Mediano</option><option>Grande</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Costo ($)</label>
+          <input type="number" id="s-costo" class="form-input" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stock</label>
+          <input type="number" id="s-stock" class="form-input" min="0" value="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Prioridad de venta</label>
+          <select id="s-prioridad" class="form-select">
+            <option>Alta</option><option>Media</option><option>Baja</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estado</label>
+          <select id="s-estado" class="form-select">
+            <option>En stock</option><option>Agotado</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <input type="text" id="s-notas" class="form-input" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-sticker">Cancelar</button>
+      <button class="btn-primary" onclick="saveSticker()">Guardar estampado</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: COLOR -->
+<div class="modal-overlay" id="modal-color">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-color-title">Nuevo color</h2>
+      <button class="modal-close" data-modal="modal-color">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="col-id">
+      <div class="form-group">
+        <label class="form-label">Nombre del color</label>
+        <input type="text" id="col-nombre" class="form-input" placeholder="Ej. Rojo ladrillo">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tono</label>
+        <input type="color" id="col-hex" class="form-input" style="height:44px;padding:4px;">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-color">Cancelar</button>
+      <button class="btn-primary" onclick="saveColor()">Guardar color</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ETIQUETA DE FILTRADO -->
+<div class="modal-overlay" id="modal-etiqueta">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-etiqueta-title">Nueva etiqueta</h2>
+      <button class="modal-close" data-modal="modal-etiqueta">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="et-id">
+      <div class="form-group">
+        <label class="form-label">Nombre de la etiqueta</label>
+        <input type="text" id="et-nombre" class="form-input" placeholder="Ej. Anime, Oversize...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Color de la etiqueta</label>
+        <input type="color" id="et-color" class="form-input" style="height:44px;padding:4px;" value="#e3363d">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-etiqueta">Cancelar</button>
+      <button class="btn-primary" onclick="saveEtiqueta()">Guardar etiqueta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ETIQUETA DE TALLA (físicas) -->
+<div class="modal-overlay" id="modal-talla-etiqueta">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-talla-etiqueta-title">Stock de etiquetas de talla</h2>
+      <button class="modal-close" data-modal="modal-talla-etiqueta">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="te-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Talla</label>
+          <input type="text" id="te-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color de la etiqueta</label>
+          <select id="te-color" class="form-select">
+            <option>Negro</option>
+            <option>Blanco</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cantidad en stock</label>
+        <input type="number" id="te-cantidad" class="form-input" min="0" value="0">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-talla-etiqueta">Cancelar</button>
+      <button class="btn-primary" onclick="saveTallaEtiqueta()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ARTISTA -->
+<div class="modal-overlay" id="modal-artista">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-artista-title">Nuevo artista</h2>
+      <button class="modal-close" data-modal="modal-artista">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="a-id">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="a-nombre" class="form-input" placeholder="Ej. Obake">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo de colaboración</label>
+        <select id="a-modo" class="form-select" onchange="onArtistModeChange()">
+          <option value="ninguno">Sin comisión (100% estudio)</option>
+          <option value="venta">Solo venta (artista 30% / estudio 70%)</option>
+          <option value="diseno">Diseño propio (artista 35% / estudio 65%)</option>
+          <option value="disenoventa">Diseño propio + venta (artista 40% / estudio 60%)</option>
+          <option value="personalizado">Personalizado</option>
+        </select>
+      </div>
+      <div class="form-row" id="a-pct-row">
+        <div class="form-group">
+          <label class="form-label">% Artista</label>
+          <input type="number" id="a-pct-artista" class="form-input" min="0" max="100" value="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">% Estudio</label>
+          <input type="number" id="a-pct-estudio" class="form-input" min="0" max="100" value="100">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas / contacto</label>
+        <input type="text" id="a-notas" class="form-input" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-artista">Cancelar</button>
+      <button class="btn-primary" onclick="saveArtista()">Guardar artista</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VER COTIZACIÓN GUARDADA -->
+<div class="modal-overlay" id="modal-ver-cotizacion">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="ver-cot-title">Cotización</h2>
+      <button class="modal-close" data-modal="modal-ver-cotizacion">✕</button>
+    </div>
+    <div class="modal-body" id="ver-cot-body"></div>
+    <div class="modal-footer">
+      <select class="filter-select" id="ver-cot-estado-select" onchange="updateCotizacionEstado()">
+        <option value="Pendiente">⏳ Pendiente</option>
+        <option value="Confirmado">✅ Confirmado</option>
+        <option value="Pagado">💰 Pagado</option>
+        <option value="Entregado">📦 Entregado</option>
+      </select>
+      <button class="btn-secondary" onclick="editCotizacion()">✏️ Editar</button>
+      <button class="btn-danger" onclick="deleteCotizacion()">🗑️ Eliminar</button>
+      <button class="btn-secondary" data-modal="modal-ver-cotizacion">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Plantilla oculta para exportar PDF -->
+<div id="pdf-template" style="display:none;"></div>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
