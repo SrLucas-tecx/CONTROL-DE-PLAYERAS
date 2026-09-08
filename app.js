@@ -42,7 +42,8 @@ function defaultState() {
     ],
     bazares: [],
     cotizaciones: [],
-    graficas: []
+    graficas: [],
+    recommendedChartStyles: {}
   };
 }
 
@@ -70,6 +71,9 @@ function loadState() {
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(AppState));
+    Object.keys(SECTION_LABELS).forEach(section => {
+      localStorage.setItem(`${STORAGE_KEY}_section_${section}`, JSON.stringify(getSectionData(section)));
+    });
   } catch (e) {
     console.error("Error guardando estado:", e);
     showToast("No se pudo guardar (almacenamiento lleno).", "error");
@@ -203,8 +207,47 @@ function exportarJSON() {
   a.click();
   showToast("Respaldo descargado.");
 }
+const SECTION_LABELS = {
+  cotizaciones: "Cotizaciones",
+  inventario: "Inventario",
+  catalogo: "Catalogo",
+  bazares: "Bazares",
+  reportes: "Reportes",
+  ajustes: "Ajustes"
+};
+function getSectionData(section) {
+  const sections = {
+    cotizaciones: { cotizaciones: AppState.cotizaciones },
+    inventario: { playeras: AppState.playeras, stickers: AppState.stickers },
+    catalogo: { colores: AppState.colores, etiquetas: AppState.etiquetas, tallaEtiquetas: AppState.tallaEtiquetas, artistas: AppState.artistas },
+    bazares: { bazares: AppState.bazares },
+    reportes: { graficas: AppState.graficas },
+    ajustes: { settings: AppState.settings }
+  };
+  return sections[section] || {};
+}
+function exportarSeccion(section) {
+  const payload = {
+    app: "LUCXSTUDIO",
+    tipo: "respaldo-seccion",
+    seccion: section,
+    fechaExportacion: new Date().toISOString(),
+    datos: getSectionData(section)
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `lucxstudio_${section}_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  document.getElementById("backup-menu").classList.remove("open");
+  showToast(`Respaldo de ${SECTION_LABELS[section]} descargado.`);
+}
 document.getElementById("export-json-btn").addEventListener("click", exportarJSON);
 document.getElementById("export-json-btn-2").addEventListener("click", exportarJSON);
+document.querySelectorAll("[data-export-section]").forEach(button => {
+  button.addEventListener("click", () => exportarSeccion(button.dataset.exportSection));
+});
 document.getElementById("import-json-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -212,10 +255,19 @@ document.getElementById("import-json-input").addEventListener("change", (e) => {
   reader.onload = (evt) => {
     try {
       const parsed = JSON.parse(evt.target.result);
-      AppState = Object.assign(defaultState(), parsed);
+      if (parsed.tipo === "respaldo-seccion" && parsed.datos) {
+        Object.assign(AppState, parsed.datos);
+        if (parsed.seccion === "ajustes") {
+          AppState.settings = Object.assign(defaultState().settings, parsed.datos.settings || {});
+        }
+        showToast(`Sección ${SECTION_LABELS[parsed.seccion] || parsed.seccion} importada correctamente.`);
+      } else {
+        AppState = Object.assign(defaultState(), parsed);
+        AppState.settings = Object.assign(defaultState().settings, parsed.settings || {});
+        showToast("Datos importados correctamente.");
+      }
       saveState();
       renderAll();
-      showToast("Datos importados correctamente.");
     } catch (err) {
       showToast("El archivo no es un respaldo válido.", "error");
     }
@@ -1526,8 +1578,27 @@ function deleteIngresoExtra(id) {
    17b. ESTADÍSTICAS Y GRÁFICAS
 ================================================================= */
 let chartBazares = null;
-let chartTipoVenta = null;
+let recommendedChart = null;
+let selectedRecommendedCombination = "etiqueta-ganancia";
 const customChartInstances = {};
+const RECOMMENDED_COMBINATIONS = [
+  { id: "etiqueta-ganancia", title: "Etiqueta + ganancia", description: "Identifica las etiquetas que dejan más ganancia potencial.", fuente: "inventario", dimension: "etiqueta", metrica: "ganancia", tipo: "bar" },
+  { id: "color-ventas", title: "Color + ventas", description: "Descubre qué colores tienen mayor venta potencial.", fuente: "inventario", dimension: "color", metrica: "ventas", tipo: "bar" },
+  { id: "talla-stock", title: "Talla + stock", description: "Detecta las tallas que debes reponer o producir.", fuente: "inventario", dimension: "talla", metrica: "stock", tipo: "bar" },
+  { id: "prioridad-ganancia", title: "Prioridad + ganancia", description: "Comprueba si tus diseños prioritarios realmente son rentables.", fuente: "inventario", dimension: "prioridad", metrica: "ganancia", tipo: "bar" },
+  { id: "bazar-ganancia", title: "Bazar + ganancia", description: "Compara en qué bazares te conviene vender.", fuente: "ganancias-bazares", tipo: "bar" },
+  { id: "tipo-venta", title: "Tipo de venta + ingreso", description: "Compara si te conviene vender más en menudeo o mayoreo.", fuente: "tipo-venta", tipo: "doughnut" }
+];
+const RECOMMENDED_PALETTES = {
+  accent: ["#e3363d", "#b91f26", "#e0a23a", "#8b8b93", "#3fb87f", "#5d8bd8"],
+  fresh: ["#3fb87f", "#5d8bd8", "#e0a23a", "#e3363d", "#8b8b93", "#c56bdb"],
+  mono: ["#424247", "#5b5b63", "#74747d", "#8b8b93", "#a6a6ad", "#c1c1c5"]
+};
+function getRecommendedStyle(id) {
+  const saved = (AppState.recommendedChartStyles || {})[id] || {};
+  const combination = RECOMMENDED_COMBINATIONS.find(item => item.id === id) || RECOMMENDED_COMBINATIONS[0];
+  return { tipo: saved.tipo || combination.tipo, paleta: saved.paleta || "accent" };
+}
 function renderEstadisticas() {
   const validCots = AppState.cotizaciones.filter(c => !c.ventaNula);
   const nullCots = AppState.cotizaciones.filter(c => c.ventaNula);
@@ -1576,19 +1647,64 @@ function renderEstadisticas() {
     });
   }
 
-  // Menudeo vs Mayoreo
-  const totalMenudeo = validCots.filter(c => c.tipoVenta !== "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
-  if (chartTipoVenta) chartTipoVenta.destroy();
-  chartTipoVenta = new Chart(document.getElementById("chart-tipo-venta"), {
-    type: "doughnut",
-    data: {
-      labels: ["Menudeo", "Mayoreo"],
-      datasets: [{ data: [totalMenudeo, totalMayoreo], backgroundColor: ["#8b8b93", "#e3363d"] }]
-    },
-    options: { responsive: true, plugins: { legend: { position: "bottom" } } }
-  });
+  renderCombinacionesRecomendadas();
   renderGraficasPersonalizadas();
 }
+
+function renderCombinacionesRecomendadas() {
+  const list = document.getElementById("recommended-combinations");
+  if (!list) return;
+  list.innerHTML = RECOMMENDED_COMBINATIONS.map(combination => `
+    <button class="recommended-combination${combination.id === selectedRecommendedCombination ? " active" : ""}" data-recommended-combination="${combination.id}">
+      <span class="recommended-combination-title">${combination.title}</span>
+      <span class="recommended-combination-meta">${combination.description}</span>
+    </button>`).join("");
+  list.querySelectorAll("[data-recommended-combination]").forEach(button => {
+    button.addEventListener("click", () => {
+      selectedRecommendedCombination = button.dataset.recommendedCombination;
+      renderCombinacionesRecomendadas();
+    });
+  });
+  renderCombinacionRecomendada(selectedRecommendedCombination);
+}
+
+function renderCombinacionRecomendada(id) {
+  const combination = RECOMMENDED_COMBINATIONS.find(item => item.id === id) || RECOMMENDED_COMBINATIONS[0];
+  const style = getRecommendedStyle(combination.id);
+  const canvas = document.getElementById("recommended-chart");
+  const empty = document.getElementById("recommended-chart-empty");
+  if (!canvas || !empty) return;
+  document.getElementById("recommended-chart-title").textContent = combination.title;
+  document.getElementById("recommended-chart-description").textContent = combination.description;
+  setVal("recommended-chart-type", style.tipo);
+  setVal("recommended-chart-palette", style.paleta);
+  const data = datosGrafica(combination.fuente, combination.dimension, combination.metrica);
+  if (recommendedChart) recommendedChart.destroy();
+  recommendedChart = null;
+  const hasData = data.labels.length && data.values.some(value => Number(value) > 0);
+  canvas.style.display = hasData ? "block" : "none";
+  empty.style.display = hasData ? "none" : "block";
+  if (!hasData) return;
+  recommendedChart = new Chart(canvas, {
+    type: style.tipo,
+    data: {
+      labels: data.labels,
+      datasets: [{ label: data.label, data: data.values, backgroundColor: RECOMMENDED_PALETTES[style.paleta], borderColor: RECOMMENDED_PALETTES[style.paleta][0], borderWidth: 2, tension: .25 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } }, scales: style.tipo === "doughnut" || style.tipo === "pie" ? {} : { y: { beginAtZero: true } } }
+  });
+}
+
+document.getElementById("recommended-chart-apply").addEventListener("click", () => {
+  if (!AppState.recommendedChartStyles) AppState.recommendedChartStyles = {};
+  AppState.recommendedChartStyles[selectedRecommendedCombination] = {
+    tipo: val("recommended-chart-type"),
+    paleta: val("recommended-chart-palette")
+  };
+  saveState();
+  renderCombinacionRecomendada(selectedRecommendedCombination);
+  showToast("Estilo de la gráfica actualizado.");
+});
 
 function datosGrafica(fuente, dimension, metrica) {
   const validCots = AppState.cotizaciones.filter(c => !c.ventaNula);

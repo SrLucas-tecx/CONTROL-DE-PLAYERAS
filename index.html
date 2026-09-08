@@ -50,6 +50,13 @@
         <div class="backup-menu" id="backup-menu">
           <div class="backup-menu-label">Exportar</div>
           <button class="backup-menu-item" id="export-json-btn">📦 Descargar todo (JSON)</button>
+          <div class="backup-menu-label">Guardar por sección</div>
+          <button class="backup-menu-item" data-export-section="cotizaciones">💰 Cotizaciones</button>
+          <button class="backup-menu-item" data-export-section="inventario">👕 Inventario</button>
+          <button class="backup-menu-item" data-export-section="catalogo">🏷️ Catálogo</button>
+          <button class="backup-menu-item" data-export-section="bazares">🏪 Bazares</button>
+          <button class="backup-menu-item" data-export-section="reportes">📊 Reportes</button>
+          <button class="backup-menu-item" data-export-section="ajustes">⚙️ Ajustes</button>
           <div class="backup-menu-divider"></div>
           <label class="backup-menu-item" style="cursor:pointer;">
             📥 Importar JSON
@@ -489,6 +496,22 @@
 
       <!-- ======================= ESTADÍSTICAS ======================= -->
       <section id="page-estadisticas" class="page-section">
+        <div class="metrics-guide">
+          <div class="metrics-guide-heading">
+            <div>
+              <span class="metrics-guide-kicker">Guía rápida</span>
+              <h2 class="section-title">¿Qué playeras combinan mejor?</h2>
+              <p class="section-sub">Compara diseños usando ventas, ganancia y rotación. Una playera “ganadora” debe venderse y dejar margen.</p>
+            </div>
+            <span class="metrics-guide-icon">↗</span>
+          </div>
+          <div class="metrics-guide-steps">
+            <div class="metrics-guide-step"><b>1. Mide la demanda</b><span>Revisa qué diseños y etiquetas se venden más en cada bazar.</span></div>
+            <div class="metrics-guide-step"><b>2. Mide el margen</b><span>Compara ganancia total, no solo el precio de venta.</span></div>
+            <div class="metrics-guide-step"><b>3. Decide el siguiente lote</b><span>Repite diseños con ventas y margen altos; ajusta o pausa los demás.</span></div>
+          </div>
+          <p class="metrics-guide-tip"><b>Tip:</b> usa “+ Agregar gráfica” para comparar inventario por etiqueta, color o talla. Filtra por el mismo periodo antes de tomar una decisión.</p>
+        </div>
         <div class="sticker-count-row">
           <div class="sticker-count-card size-total">
             <span class="sticker-count-label">Total vendido</span>
@@ -512,19 +535,49 @@
           </div>
         </div>
 
+        <div class="section-header metrics-combinations-header">
+          <div>
+            <h2 class="section-title">Combinaciones útiles</h2>
+            <p class="section-sub">Selecciona una combinación para descubrir qué conviene producir, llevar a un bazar o reponer.</p>
+          </div>
+        </div>
+        <div class="metrics-combinations-layout">
+          <div id="recommended-combinations" class="recommended-combinations"></div>
+          <div class="settings-card recommended-chart-card">
+            <div class="recommended-chart-heading">
+              <div>
+                <span class="metrics-guide-kicker">Comparación seleccionada</span>
+                <h3 class="section-title" id="recommended-chart-title">Etiqueta + ganancia</h3>
+                <p class="section-sub" id="recommended-chart-description">Identifica las etiquetas que dejan más ganancia potencial.</p>
+              </div>
+              <div class="recommended-chart-tools">
+                <label class="form-label" for="recommended-chart-type">Tipo de gráfica</label>
+                <select id="recommended-chart-type" class="form-select">
+                  <option value="bar">Barras</option>
+                  <option value="line">Línea</option>
+                  <option value="doughnut">Dona</option>
+                  <option value="pie">Pastel</option>
+                </select>
+                <label class="form-label" for="recommended-chart-palette">Paleta</label>
+                <select id="recommended-chart-palette" class="form-select">
+                  <option value="accent">Rojo señal</option>
+                  <option value="fresh">Fresco</option>
+                  <option value="mono">Monocromo</option>
+                </select>
+                <button class="btn-secondary" id="recommended-chart-apply">Aplicar estilo</button>
+              </div>
+            </div>
+            <canvas id="recommended-chart" class="recommended-chart-canvas"></canvas>
+            <p class="empty-hint" id="recommended-chart-empty" style="display:none;">Aún no hay datos suficientes para esta combinación.</p>
+          </div>
+        </div>
+
         <div class="section-header">
           <h2 class="section-title">Ventas por bazar / lugar de venta</h2>
         </div>
         <div class="settings-card" style="max-width:100%;">
           <canvas id="chart-bazares" height="90"></canvas>
           <p class="empty-hint" id="chart-bazares-empty" style="display:none;">Aún no hay cotizaciones ligadas a un bazar.</p>
-        </div>
-
-        <div class="section-header" style="margin-top:32px;">
-          <h2 class="section-title">Menudeo vs. mayoreo</h2>
-        </div>
-        <div class="settings-card" style="max-width:480px;">
-          <canvas id="chart-tipo-venta" height="220"></canvas>
         </div>
 
         <div class="section-header" style="margin-top:32px;justify-content:space-between;">
