@@ -40,12 +40,16 @@ function defaultState() {
       { id: "a1", nombre: "SrLucas", modo: "ninguno", pctArtista: 0, pctEstudio: 100, notas: "Estudio principal" },
       { id: "a2", nombre: "Obake", modo: "venta", pctArtista: 30, pctEstudio: 70, notas: "" }
     ],
-    cotizaciones: []
+    bazares: [],
+    cotizaciones: [],
+    graficas: []
   };
 }
 
 let AppState = defaultState();
 let uiFilters = { playeraTag: "all", stickerSize: "all" };
+let activeBazarId = "";
+let assignmentModalContext = null;
 
 /* ---------------------------------------------------------------
    2. PERSISTENCIA
@@ -115,6 +119,9 @@ function costoPorCm2() {
 function costoEstampado(anchoCm, largoCm, numEstampados) {
   return (anchoCm || 0) * (largoCm || 0) * costoPorCm2() * (numEstampados || 1);
 }
+function costoTotalPlayera(playera) {
+  return (playera.costoPlayera || 0) + costoEstampado(playera.anchoCm || 0, playera.largoCm || 0, playera.numEstampados || 1);
+}
 
 /* ---------------------------------------------------------------
    5. NAVEGACIÓN
@@ -126,20 +133,43 @@ const PAGE_TITLES = {
   stickers: "Estampados y stickers",
   etiquetas: "Etiquetas y colores",
   artistas: "Artistas y comisiones",
+  bazares: "Mis Bazares",
+  "bazar-detalle": "Detalle de bazar",
+  estadisticas: "Estadísticas",
   ajustes: "Ajustes de costos"
 };
 function switchPage(page) {
   document.querySelectorAll(".page-section").forEach(s => s.classList.remove("active"));
   document.getElementById("page-" + page).classList.add("active");
-  document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.page === page));
+  const navHighlight = page === "bazar-detalle" ? "bazares" : page;
+  document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.page === navHighlight));
   document.getElementById("page-title").textContent = PAGE_TITLES[page] || "LUCXSTUDIO";
   document.getElementById("header-cta").style.display = page === "cotizador" ? "none" : "inline-block";
+  if (page === "bazares") renderBazares();
+  if (page === "estadisticas") renderEstadisticas();
   closeSidebarMobile();
 }
 document.querySelectorAll(".nav-item").forEach(btn => {
   btn.addEventListener("click", () => switchPage(btn.dataset.page));
 });
 document.getElementById("header-cta").addEventListener("click", () => switchPage("cotizador"));
+
+/* ---------------------------------------------------------------
+   5b. SELECTOR GLOBAL DE "BAZAR ACTIVO" (barra del header)
+--------------------------------------------------------------- */
+function renderHeaderBazarSelect() {
+  const sel = document.getElementById("header-bazar-activo");
+  sel.innerHTML = `<option value="">Sin bazar activo</option>` +
+    AppState.bazares.map(b => `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`).join("");
+  sel.value = activeBazarId || "";
+}
+function onHeaderBazarChange() {
+  activeBazarId = val("header-bazar-activo");
+  const currentPage = document.querySelector(".page-section.active").id.replace("page-", "");
+  if (currentPage === "bazares") renderBazares();
+  if (currentPage === "bazar-detalle") renderBazarDetalle();
+}
+document.getElementById("header-bazar-add").addEventListener("click", () => openModalBazar());
 
 function closeSidebarMobile() {
   document.getElementById("sidebar").classList.remove("open");
@@ -460,6 +490,163 @@ function saveSettings() {
 }
 
 /* =================================================================
+   12b. BAZARES / LUGARES DE VENTA
+================================================================= */
+function openModalBazar(id) {
+  setVal("b-id", id || "");
+  document.getElementById("modal-bazar-title").textContent = id ? "Editar bazar / lugar" : "Nuevo bazar / lugar";
+  if (id) {
+    const b = AppState.bazares.find(x => x.id === id);
+    setVal("b-nombre", b.nombre); setVal("b-lugar", b.lugar); setVal("b-fecha", b.fecha);
+    setVal("b-costo", b.costoBazar || 0); setVal("b-notas", b.notas || "");
+  } else {
+    setVal("b-nombre", ""); setVal("b-lugar", ""); setVal("b-fecha", new Date().toISOString().slice(0,10));
+    setVal("b-costo", 0); setVal("b-notas", "");
+  }
+  openModal("modal-bazar");
+}
+function saveBazar() {
+  const nombre = val("b-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre al bazar.", "error");
+  const id = val("b-id");
+  const data = {
+    nombre, lugar: val("b-lugar"), fecha: val("b-fecha"),
+    costoBazar: parseFloat(num("b-costo")) || 0, notas: val("b-notas")
+  };
+  let newId = id;
+  if (id) {
+    Object.assign(AppState.bazares.find(x => x.id === id), data);
+  } else {
+    newId = uid();
+    AppState.bazares.push(Object.assign({ id: newId, ingresosExtra: [] }, data));
+    activeBazarId = newId; // el bazar recién creado se vuelve el activo automáticamente
+  }
+  saveState(); closeModal("modal-bazar"); renderBazares(); refreshAllSelects();
+  if (document.getElementById("page-bazar-detalle").classList.contains("active")) renderBazarDetalle();
+  if (assignmentModalContext) {
+    const context = assignmentModalContext;
+    assignmentModalContext = null;
+    if (context.type === "playera") openModalAsignarPlayeraBazar(context.id);
+    if (context.type === "cotizacion") openModalAsignarBazar(context.id);
+  }
+  showToast("Bazar guardado.");
+}
+function deleteBazar(id) {
+  if (!confirm("¿Eliminar este bazar? Las cotizaciones y playeras ligadas quedarán sin bazar asignado.")) return;
+  AppState.bazares = AppState.bazares.filter(x => x.id !== id);
+  AppState.cotizaciones.forEach(c => {
+    c.bazarIds = bazarIdsDe(c).filter(bazarId => bazarId !== id);
+    c.bazarId = c.bazarIds[0] || "";
+  });
+  AppState.playeras.forEach(p => {
+    p.bazarIds = bazarIdsDe(p).filter(bazarId => bazarId !== id);
+    p.bazarId = p.bazarIds[0] || "";
+  });
+  if (activeBazarId === id) activeBazarId = "";
+  saveState(); renderBazares(); refreshAllSelects(); renderCotizacionesGuardadas(); renderPlayeras();
+}
+function deleteBazarFromDetalle() {
+  if (!activeBazarId) return;
+  deleteBazar(activeBazarId);
+  switchPage("bazares");
+}
+function bazarNombre(bazarId) {
+  const b = AppState.bazares.find(x => x.id === bazarId);
+  return b ? b.nombre : "Sin bazar asignado";
+}
+function bazarIdsDe(registro) {
+  return registro.bazarIds || (registro.bazarId ? [registro.bazarId] : []);
+}
+function bazarTiene(registro, bazarId) {
+  return bazarIdsDe(registro).includes(bazarId);
+}
+function nombresBazares(registro) {
+  return bazarIdsDe(registro).map(bazarId => bazarNombre(bazarId)).filter(Boolean).join(", ");
+}
+function renderAssignmentBazares(selectedIds) {
+  const list = document.getElementById("ab-bazares-list");
+  if (!list) return;
+  const selected = selectedIds || [];
+  list.innerHTML = AppState.bazares.length
+    ? AppState.bazares.map(b => `
+      <label class="assignment-bazar-option">
+        <input type="checkbox" class="ab-bazar-option" value="${b.id}" ${selected.includes(b.id) ? "checked" : ""}>
+        <span>🏪 ${escapeHtml(b.nombre)}</span>
+      </label>`).join("")
+    : `<div class="assignment-bazar-empty">Aún no hay bazares. Usa “+ Agregar bazar”.</div>`;
+}
+function openModalBazarDesdeAsignacion() {
+  const playeraId = val("ab-playera-id");
+  const cotizacionId = val("ab-cotizacion-id");
+  assignmentModalContext = playeraId
+    ? { type: "playera", id: playeraId }
+    : cotizacionId ? { type: "cotizacion", id: cotizacionId } : null;
+  openModalBazar();
+}
+function goToBazarDetalle(id) {
+  activeBazarId = id;
+  renderHeaderBazarSelect();
+  switchPage("bazar-detalle");
+  renderBazarDetalle();
+}
+function getBazarVentasYGanancia(bazarId) {
+  const cotsAsignadas = AppState.cotizaciones.filter(c => bazarTiene(c, bazarId));
+  const cots = cotsAsignadas.filter(c => !c.ventaNula);
+  const perdidaCotsNulas = cotsAsignadas.filter(c => c.ventaNula).reduce((s, c) => s + (c.totalCosto || 0), 0);
+  const totalVendidoCots = cots.reduce((s, c) => s + c.totalVenta, 0);
+  const gananciaVentasCots = cots.reduce((s, c) => s + c.ganancia, 0);
+
+  const playerasAsignadas = AppState.playeras.filter(p => bazarTiene(p, bazarId) && (p.stock || 0) > 0);
+  const totalVendidoPlayeras = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
+    return s + ((p.precioVenta || 0) * (p.stock || 0));
+  }, 0);
+  const gananciaVentasPlayeras = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
+    const costoTotalUnit = costoTotalPlayera(p);
+    return s + ((p.precioVenta || 0) - costoTotalUnit) * (p.stock || 0);
+  }, 0);
+  const perdidaPlayerasNulas = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
+    return s + costoTotalPlayera(p) * (p.stock || 0);
+  }, 0);
+
+  return {
+    totalVendido: totalVendidoCots + totalVendidoPlayeras,
+    gananciaVentas: gananciaVentasCots + gananciaVentasPlayeras - perdidaCotsNulas - perdidaPlayerasNulas,
+    cotsCount: cotsAsignadas.length + playerasAsignadas.length
+  };
+}
+function renderBazares() {
+  const body = document.getElementById("bazares-table-body");
+  document.getElementById("bazares-empty-hint").style.display = AppState.bazares.length ? "none" : "block";
+  body.innerHTML = AppState.bazares.map(b => {
+    const stats = getBazarVentasYGanancia(b.id);
+    const costoBazar = b.costoBazar || 0;
+    const sumIngresosExtra = (b.ingresosExtra || []).reduce((s, i) => s + (i.monto || 0), 0);
+    const gananciaNeta = stats.gananciaVentas + sumIngresosExtra - costoBazar;
+    const esActivo = activeBazarId === b.id;
+    return `
+    <tr class="${esActivo ? "is-active" : ""}">
+      <td>
+        <div class="bazar-name-cell">🏪 ${escapeHtml(b.nombre)} ${esActivo ? `<span class="card-badge badge-alta">Activo</span>` : ""}</div>
+        <div class="card-meta">${escapeHtml(b.lugar || "—")} · ${b.fecha || "—"}${costoBazar ? ` · Costo: ${fmt(costoBazar)}` : ""}</div>
+      </td>
+      <td>${stats.cotsCount}</td>
+      <td>${fmt(stats.totalVendido)}</td>
+      <td style="color:${gananciaNeta>=0?'var(--color-success)':'var(--color-danger)'}">${fmt(gananciaNeta)}</td>
+      <td>
+        <div class="bazar-row-actions">
+          <button class="${esActivo ? "active-badge" : ""}" onclick="goToBazarDetalle('${b.id}')">${esActivo ? "✓ Viendo" : "➡️ Ir al Bazar"}</button>
+          <button onclick="openModalBazar('${b.id}')">✏️ Editar</button>
+          <button class="danger" onclick="deleteBazar('${b.id}')">🗑️ Eliminar</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+/* =================================================================
    13. INVENTARIO DE PLAYERAS
 ================================================================= */
 function refreshAllSelects() {
@@ -488,6 +675,14 @@ function refreshAllSelects() {
   qArtista.innerHTML = `<option value="">Sin artista (100% estudio)</option>` +
     AppState.artistas.map(a => `<option value="${a.id}">${escapeHtml(a.nombre)} (${a.pctArtista}%)</option>`).join("") +
     `<option value="__custom__">Personalizado...</option>`;
+  // Selector global de bazar activo (header)
+  renderHeaderBazarSelect();
+  // Filtro de bazar en cotizaciones guardadas
+  const filterCotBazar = document.getElementById("filter-cot-bazar");
+  const prevFilterBazar = filterCotBazar.value;
+  filterCotBazar.innerHTML = `<option value="all">Todos los bazares</option>` +
+    AppState.bazares.map(b => `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`).join("");
+  filterCotBazar.value = prevFilterBazar || "all";
 }
 function renderPlayeraTagChips() {
   const container = document.getElementById("playera-tag-chips");
@@ -517,7 +712,7 @@ function openModalPlayera(id) {
     setVal("p-costo-playera", p.costoPlayera); setVal("p-num-estampados", p.numEstampados);
     setVal("p-ancho", p.anchoCm); setVal("p-largo", p.largoCm);
     setChecked("p-tiene-etiqueta", p.tieneEtiquetaTalla);
-    setVal("p-precio-venta", p.precioVenta); setVal("p-prioridad", p.prioridad); setVal("p-estado", p.estado);
+    setVal("p-precio-venta", p.precioVenta); setVal("p-precio-mayoreo", p.precioMayoreo || ""); setVal("p-prioridad", p.prioridad); setVal("p-estado", p.estado);
     setVal("p-notas", p.notas || "");
     document.querySelectorAll(".p-tag-cb").forEach(cb => cb.checked = (p.tags || []).includes(cb.value));
   } else {
@@ -525,7 +720,7 @@ function openModalPlayera(id) {
     setVal("p-tipo", "Playera"); setVal("p-talla", ""); setVal("p-stock", 1);
     setVal("p-costo-playera", 47.5); setVal("p-num-estampados", 1);
     setVal("p-ancho", ""); setVal("p-largo", ""); setChecked("p-tiene-etiqueta", true);
-    setVal("p-precio-venta", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En stock");
+    setVal("p-precio-venta", ""); setVal("p-precio-mayoreo", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En stock");
   }
   updatePlayeraPreview();
   openModal("modal-playera");
@@ -541,6 +736,7 @@ function savePlayera() {
   const nombre = val("p-nombre").trim();
   if (!nombre) return showToast("Ponle un nombre al diseño.", "error");
   const id = val("p-id");
+  const existing = id ? AppState.playeras.find(x => x.id === id) : null;
   const tags = Array.from(document.querySelectorAll(".p-tag-cb:checked")).map(cb => cb.value);
   const data = {
     nombre, tipo: val("p-tipo"), talla: val("p-talla").trim(), colorId: val("p-color"),
@@ -550,11 +746,15 @@ function savePlayera() {
     anchoCm: parseFloat(num("p-ancho")) || 0, largoCm: parseFloat(num("p-largo")) || 0,
     tieneEtiquetaTalla: checked("p-tiene-etiqueta"),
     precioVenta: parseFloat(num("p-precio-venta")) || 0,
+    precioMayoreo: parseFloat(num("p-precio-mayoreo")) || 0,
     prioridad: val("p-prioridad"), estado: val("p-estado"),
+    bazarId: (existing && existing.bazarId) || "",
+    bazarIds: (existing && bazarIdsDe(existing)) || [],
+    bazarEstado: (existing && existing.bazarEstado) || "Disponible",
     tags, notas: val("p-notas")
   };
   if (id) {
-    Object.assign(AppState.playeras.find(x => x.id === id), data);
+    Object.assign(existing, data);
   } else {
     AppState.playeras.push(Object.assign({ id: uid() }, data));
   }
@@ -584,6 +784,10 @@ function prioridadBadgeClass(p) {
   if (p === "Media") return "badge-media";
   return "badge-baja";
 }
+function bazarEstadoBadgeClass(estado) {
+  if (estado === "Vendida") return "badge-agotado";
+  return "badge-stock";
+}
 function renderPlayeras() {
   renderPlayeraTagChips();
   const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
@@ -608,6 +812,7 @@ function renderPlayeras() {
       const e = AppState.etiquetas.find(x => x.id === tid);
       return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
     }).join("");
+    const bazarEstado = bazarIdsDe(p).length ? (p.bazarEstado || "Disponible") : "";
     return `
     <div class="card">
       <div class="card-top">
@@ -623,14 +828,18 @@ function renderPlayeras() {
       <div class="card-row"><span>Costo estampado (${p.anchoCm}×${p.largoCm}cm ×${p.numEstampados})</span><span>${fmt(cEst)}</span></div>
       <div class="card-row"><span>Costo total</span><span>${fmt(cTotal)}</span></div>
       <div class="card-row"><span>Precio de venta</span><span>${fmt(p.precioVenta)}</span></div>
+      ${p.precioMayoreo ? `<div class="card-row"><span>Precio mayoreo</span><span>${fmt(p.precioMayoreo)}</span></div>` : ""}
       <div class="card-row"><span>Ganancia</span><span style="color:${ganancia >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(ganancia)}</span></div>
       <div class="card-tags">
         <span class="card-badge ${estadoBadgeClass(p.estado)}">${p.estado}</span>
         <span class="card-badge ${prioridadBadgeClass(p.prioridad)}">${p.prioridad}</span>
+        ${bazarEstado ? `<span class="card-badge ${bazarEstadoBadgeClass(bazarEstado)}">${bazarEstado === "Vendida" ? "✅ Vendida" : bazarEstado === "Venta nula" ? "🎁 Venta nula" : "🟢 En bazar"}</span>` : ""}
+        ${bazarIdsDe(p).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(p))}</span>` : ""}
         ${tagsHtml}
       </div>
       <div class="card-actions">
         <button onclick="openModalPlayera('${p.id}')">✏️ Editar</button>
+        <button onclick="openModalAsignarPlayeraBazar('${p.id}')">🏪 Bazar</button>
         <button class="danger" onclick="deletePlayera('${p.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
@@ -725,7 +934,7 @@ let quoteItems = [];
 
 function blankQuoteItem() {
   return { rowId: uid(), playeraId: "", nombre: "", talla: "", colorId: "", cantidad: 1,
-    anchoCm: 0, largoCm: 0, numEstampados: 1, costoPlayera: 0, precioVenta: 0 };
+    anchoCm: 0, largoCm: 0, numEstampados: 1, costoPlayera: 0, precioVenta: 0, costoEstampadoManual: null };
 }
 function addQuoteItem() {
   quoteItems.push(blankQuoteItem());
@@ -741,29 +950,47 @@ function onQuoteItemProductChange(rowId, playeraId) {
   if (playeraId) {
     const p = AppState.playeras.find(x => x.id === playeraId);
     if (p) {
+      const esMayoreo = val("q-tipo-venta") === "Mayoreo";
       item.nombre = p.nombre; item.talla = p.talla; item.colorId = p.colorId;
       item.anchoCm = p.anchoCm; item.largoCm = p.largoCm; item.numEstampados = p.numEstampados;
-      item.costoPlayera = p.costoPlayera; item.precioVenta = p.precioVenta || item.precioVenta;
+      item.costoPlayera = p.costoPlayera;
+      item.precioVenta = esMayoreo ? (p.precioMayoreo || p.precioVenta || item.precioVenta) : (p.precioVenta || item.precioVenta);
+      item.costoEstampadoManual = null;
     }
   }
   renderQuoteItems();
 }
+// Campos que solo se recalculan cuando el usuario da clic fuera del campo (evento "change"),
+// así se pueden escribir decimales sin que la tabla se refresque en cada tecla.
 function updateQuoteItemField(rowId, field, value) {
   const item = quoteItems.find(i => i.rowId === rowId);
   if (!item) return;
-  const numericFields = ["cantidad","anchoCm","largoCm","numEstampados","costoPlayera","precioVenta"];
+  const numericFields = ["cantidad","anchoCm","largoCm","numEstampados","costoPlayera","precioVenta","costoEstampadoManual"];
   item[field] = numericFields.includes(field) ? (parseFloat(value) || 0) : value;
-  renderQuoteItems(true);
+  // si cambian las medidas o el número de estampados, se vuelve a calcular el costo automáticamente
+  if (["anchoCm","largoCm","numEstampados"].includes(field)) item.costoEstampadoManual = null;
+  renderQuoteItems();
 }
 function onQuoteArtistChange() {
   const artistaId = val("q-artista");
   const customWrap = document.getElementById("q-comision-custom-wrap");
-  if (artistaId === "__custom__") {
-    customWrap.style.display = "block";
-  } else {
-    customWrap.style.display = "none";
-  }
+  customWrap.style.display = artistaId === "__custom__" ? "block" : "none";
   renderQuoteItems();
+}
+function onQuoteTipoVentaChange() {
+  // al cambiar de menudeo a mayoreo (o viceversa), refresca el precio de las prendas ya jaladas del inventario
+  const esMayoreo = val("q-tipo-venta") === "Mayoreo";
+  quoteItems.forEach(item => {
+    if (!item.playeraId) return;
+    const p = AppState.playeras.find(x => x.id === item.playeraId);
+    if (p) item.precioVenta = esMayoreo ? (p.precioMayoreo || p.precioVenta) : p.precioVenta;
+  });
+  renderQuoteItems();
+}
+function onQuoteVentaNulaChange() {
+  const esNula = checked("q-venta-nula");
+  document.getElementById("q-venta-nula-motivo-wrap").style.display = esNula ? "block" : "none";
+  document.getElementById("venta-nula-banner").style.display = esNula ? "block" : "none";
 }
 function currentQuoteCommission() {
   const artistaId = val("q-artista");
@@ -775,16 +1002,29 @@ function currentQuoteCommission() {
   const a = AppState.artistas.find(x => x.id === artistaId);
   return a ? { pctArtista: a.pctArtista, pctEstudio: a.pctEstudio, nombre: a.nombre } : { pctArtista: 0, pctEstudio: 100, nombre: "" };
 }
+// Devuelve el costo de estampado a usar: si hay más de un estampado y el usuario lo editó
+// manualmente, se respeta ese valor; si no, se calcula con la fórmula de área × costo DTF.
+function getCostoEstampadoEfectivo(item) {
+  if (item.numEstampados > 1 && item.costoEstampadoManual !== null && item.costoEstampadoManual !== undefined) {
+    return item.costoEstampadoManual;
+  }
+  return costoEstampado(item.anchoCm, item.largoCm, item.numEstampados);
+}
 function renderQuoteItems() {
   const body = document.getElementById("quote-items-body");
   document.getElementById("quote-empty-hint").style.display = quoteItems.length ? "none" : "block";
+  const addSpace = document.getElementById("quote-add-space");
+  if (addSpace) addSpace.style.display = quoteItems.length ? "none" : "flex";
   const playeraOptions = AppState.playeras.map(p => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join("");
-  const tallaOptions = ['CH','MD','G','XG','XXG'];
 
   body.innerHTML = quoteItems.map(item => {
-    const cEst = costoEstampado(item.anchoCm, item.largoCm, item.numEstampados);
+    const cEst = getCostoEstampadoEfectivo(item);
     const cTotalUnit = item.costoPlayera + cEst;
     const gananciaUnit = item.precioVenta - cTotalUnit;
+    const cEstCellHtml = item.numEstampados > 1
+      ? `<input type="number" min="0" step="0.01" value="${cEst}" title="Costo del estampado (editable, hay más de un estampado)"
+           onchange="updateQuoteItemField('${item.rowId}','costoEstampadoManual',this.value)" style="width:85px;">`
+      : `<span class="readonly-cell">${fmt(cEst)}</span>`;
     return `
     <tr>
       <td>
@@ -792,22 +1032,22 @@ function renderQuoteItems() {
           <option value="">— Manual / personalizado —</option>
           ${playeraOptions}
         </select>
-        ${!item.playeraId ? `<input type="text" placeholder="Nombre" value="${escapeHtml(item.nombre)}" style="margin-top:4px;" oninput="updateQuoteItemField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta" style="margin-top:4px;">${escapeHtml(item.nombre)}</div>`}
+        ${!item.playeraId ? `<input type="text" placeholder="Nombre" value="${escapeHtml(item.nombre)}" style="margin-top:4px;" onchange="updateQuoteItemField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta" style="margin-top:4px;">${escapeHtml(item.nombre)}</div>`}
       </td>
-      <td><input type="text" value="${escapeHtml(item.talla)}" oninput="updateQuoteItemField('${item.rowId}','talla',this.value)"></td>
+      <td><input type="text" value="${escapeHtml(item.talla)}" onchange="updateQuoteItemField('${item.rowId}','talla',this.value)"></td>
       <td>
         <select onchange="updateQuoteItemField('${item.rowId}','colorId',this.value)">
           <option value="">—</option>
           ${AppState.colores.map(c => `<option value="${c.id}" ${item.colorId===c.id?"selected":""}>${escapeHtml(c.nombre)}</option>`).join("")}
         </select>
       </td>
-      <td><input type="number" min="1" value="${item.cantidad}" oninput="updateQuoteItemField('${item.rowId}','cantidad',this.value)" style="width:60px;"></td>
-      <td><input type="number" min="0" step="0.1" value="${item.anchoCm}" oninput="updateQuoteItemField('${item.rowId}','anchoCm',this.value)" style="width:70px;"></td>
-      <td><input type="number" min="0" step="0.1" value="${item.largoCm}" oninput="updateQuoteItemField('${item.rowId}','largoCm',this.value)" style="width:70px;"></td>
-      <td><input type="number" min="1" value="${item.numEstampados}" oninput="updateQuoteItemField('${item.rowId}','numEstampados',this.value)" style="width:60px;"></td>
-      <td><input type="number" min="0" step="0.01" value="${item.costoPlayera}" oninput="updateQuoteItemField('${item.rowId}','costoPlayera',this.value)" style="width:80px;"></td>
-      <td class="readonly-cell">${fmt(cEst)}</td>
-      <td><input type="number" min="0" step="0.01" value="${item.precioVenta}" oninput="updateQuoteItemField('${item.rowId}','precioVenta',this.value)" style="width:85px;"></td>
+      <td><input type="number" min="1" step="1" value="${item.cantidad}" onchange="updateQuoteItemField('${item.rowId}','cantidad',this.value)" style="width:60px;"></td>
+      <td><input type="number" min="0" step="0.01" value="${item.anchoCm}" onchange="updateQuoteItemField('${item.rowId}','anchoCm',this.value)" style="width:70px;"></td>
+      <td><input type="number" min="0" step="0.01" value="${item.largoCm}" onchange="updateQuoteItemField('${item.rowId}','largoCm',this.value)" style="width:70px;"></td>
+      <td><input type="number" min="1" step="1" value="${item.numEstampados}" onchange="updateQuoteItemField('${item.rowId}','numEstampados',this.value)" style="width:60px;"></td>
+      <td><input type="number" min="0" step="0.01" value="${item.costoPlayera}" onchange="updateQuoteItemField('${item.rowId}','costoPlayera',this.value)" style="width:80px;"></td>
+      <td>${cEstCellHtml}</td>
+      <td><input type="number" min="0" step="0.01" value="${item.precioVenta}" onchange="updateQuoteItemField('${item.rowId}','precioVenta',this.value)" style="width:85px;"></td>
       <td class="readonly-cell" style="color:${gananciaUnit>=0?'var(--color-success)':'var(--color-danger)'}">${fmt(gananciaUnit * item.cantidad)}</td>
       <td><button class="remove-row" onclick="removeQuoteItem('${item.rowId}')" title="Quitar">✕</button></td>
     </tr>`;
@@ -818,7 +1058,7 @@ function renderQuoteItems() {
 function computeQuoteTotals() {
   let totalVenta = 0, totalCosto = 0;
   quoteItems.forEach(item => {
-    const cEst = costoEstampado(item.anchoCm, item.largoCm, item.numEstampados);
+    const cEst = getCostoEstampadoEfectivo(item);
     const cTotalUnit = item.costoPlayera + cEst;
     totalVenta += item.precioVenta * item.cantidad;
     totalCosto += cTotalUnit * item.cantidad;
@@ -846,7 +1086,11 @@ function resetQuoteForm() {
   setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-vendedor", "");
   setVal("q-fecha", new Date().toISOString().slice(0,10));
   setVal("q-artista", ""); setVal("q-comision-pct", 0); setVal("q-notas", "");
+  setVal("q-tipo-venta", "Menudeo");
+  setChecked("q-venta-nula", false); setVal("q-venta-nula-motivo", "");
   document.getElementById("q-comision-custom-wrap").style.display = "none";
+  document.getElementById("q-venta-nula-motivo-wrap").style.display = "none";
+  document.getElementById("venta-nula-banner").style.display = "none";
   renderQuoteItems();
 }
 function saveQuote() {
@@ -859,6 +1103,11 @@ function saveQuote() {
     vendedor: val("q-vendedor"),
     artistaId: val("q-artista"),
     comisionPctPersonalizado: val("q-artista") === "__custom__" ? num("q-comision-pct") : null,
+    tipoVenta: val("q-tipo-venta") || "Menudeo",
+    bazarId: editingId ? ((AppState.cotizaciones.find(c => c.id === editingId) || {}).bazarId || "") : "",
+    bazarIds: editingId ? bazarIdsDe(AppState.cotizaciones.find(c => c.id === editingId) || {}) : [],
+    ventaNula: checked("q-venta-nula"),
+    ventaNulaMotivo: val("q-venta-nula-motivo"),
     notas: val("q-notas"),
     items: JSON.parse(JSON.stringify(quoteItems)),
     totalVenta: t.totalVenta, totalCosto: t.totalCosto, ganancia: t.ganancia,
@@ -886,7 +1135,8 @@ function exportQuotePDF() {
   const html = buildQuoteHTML({
     folio: val("quote-editing-id") ? "Edición" : "Nueva",
     cliente: val("q-cliente") || "Cliente sin nombre", fecha: val("q-fecha"), vendedor: val("q-vendedor"),
-    items: quoteItems, notas: val("q-notas"), ...t
+    items: quoteItems, notas: val("q-notas"), ventaNula: checked("q-venta-nula"),
+    tipoVenta: val("q-tipo-venta"), ...t
   });
   const container = document.getElementById("pdf-template");
   container.innerHTML = html;
@@ -894,8 +1144,6 @@ function exportQuotePDF() {
 }
 function buildQuoteHTML(q) {
   const rows = q.items.map(item => {
-    const cEst = costoEstampado(item.anchoCm, item.largoCm, item.numEstampados);
-    const cTotalUnit = item.costoPlayera + cEst;
     return `<tr>
       <td>${escapeHtml(item.nombre || "—")}</td><td>${escapeHtml(item.talla)}</td><td>${colorNombre(item.colorId)}</td>
       <td>${item.cantidad}</td><td>${fmt(item.precioVenta)}</td><td>${fmt(item.precioVenta*item.cantidad)}</td>
@@ -904,10 +1152,11 @@ function buildQuoteHTML(q) {
   return `
   <div style="font-family:Arial,sans-serif;color:#222;padding:10px;">
     <div style="display:flex;justify-content:space-between;border-bottom:3px solid #c0242c;padding-bottom:10px;margin-bottom:16px;">
-      <div><h1 style="margin:0;color:#c0242c;">LUCXSTUDIO</h1><p style="margin:2px 0;font-size:12px;">Cotización de playeras</p></div>
+      <div><h1 style="margin:0;color:#c0242c;">LUCXSTUDIO</h1><p style="margin:2px 0;font-size:12px;">Cotización de playeras ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}</p></div>
       <div style="text-align:right;font-size:12px;"><b>Folio:</b> ${q.folio}<br><b>Fecha:</b> ${q.fecha}</div>
     </div>
     <p style="font-size:13px;"><b>Cliente:</b> ${escapeHtml(q.cliente)} &nbsp;&nbsp; <b>Vendedor:</b> ${escapeHtml(q.vendedor||"—")}</p>
+    ${q.ventaNula ? `<p style="font-size:12px;background:#fdeeee;border:1px dashed #c0242c;padding:6px;">🎁 Cotización marcada como venta nula (regalo / cortesía).</p>` : ""}
     <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
       <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Producto</th><th>Talla</th><th>Color</th><th>Cant.</th><th>Precio c/u</th><th>Subtotal</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -926,9 +1175,13 @@ function buildQuoteHTML(q) {
 ================================================================= */
 function renderCotizacionesGuardadas() {
   const estadoF = document.getElementById("filter-cot-estado").value;
+  const bazarF = document.getElementById("filter-cot-bazar").value;
+  const tipoF = document.getElementById("filter-cot-tipo").value;
   const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
   let list = AppState.cotizaciones.filter(c => {
     if (estadoF !== "all" && c.estado !== estadoF) return false;
+    if (bazarF !== "all" && !bazarTiene(c, bazarF)) return false;
+    if (tipoF !== "all" && (c.tipoVenta || "Menudeo") !== tipoF) return false;
     if (searchTerm && !(c.cliente || "").toLowerCase().includes(searchTerm) && !(c.folio||"").toLowerCase().includes(searchTerm)) return false;
     return true;
   });
@@ -941,10 +1194,16 @@ function renderCotizacionesGuardadas() {
         <span class="card-badge ${c.estado==='Pagado'?'badge-stock':c.estado==='Entregado'?'badge-alta':c.estado==='Confirmado'?'badge-media':'badge-baja'}">${c.estado}</span>
       </div>
       <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length} prenda(s)</div>
+      <div class="card-tags">
+        <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
+        ${bazarIdsDe(c).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>` : ""}
+        ${c.ventaNula ? `<span class="card-badge badge-agotado">🎁 Venta nula</span>` : ""}
+      </div>
       <div class="card-row"><span>Total de venta</span><span>${fmt(c.totalVenta)}</span></div>
       <div class="card-row"><span>Ganancia</span><span>${fmt(c.ganancia)}</span></div>
       <div class="card-actions">
         <button onclick="viewCotizacion('${c.id}')">👁️ Ver</button>
+        <button onclick="openModalAsignarBazar('${c.id}')">🏪 Bazar</button>
         <button onclick="duplicateCotizacion('${c.id}')">📄 Duplicar</button>
       </div>
     </div>`).join("");
@@ -955,12 +1214,15 @@ function viewCotizacion(id) {
   const c = AppState.cotizaciones.find(x => x.id === id);
   document.getElementById("ver-cot-title").textContent = c.folio + " — " + c.cliente;
   const rows = c.items.map(item => {
-    const cEst = costoEstampado(item.anchoCm, item.largoCm, item.numEstampados);
-    const cTotalUnit = item.costoPlayera + cEst;
     return `<div class="card-row"><span>${escapeHtml(item.nombre||"—")} (${escapeHtml(item.talla)}, ${colorNombre(item.colorId)}) ×${item.cantidad}</span><span>${fmt(item.precioVenta*item.cantidad)}</span></div>`;
   }).join("");
   document.getElementById("ver-cot-body").innerHTML = `
     <div class="card-meta" style="margin-bottom:10px;">Fecha: ${c.fecha} · Vendedor: ${escapeHtml(c.vendedor||"—")} · Artista: ${escapeHtml(c.comisionNombre||"Sin artista")}</div>
+    <div class="card-tags" style="margin-bottom:10px;">
+      <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
+      <span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>
+      ${c.ventaNula ? `<span class="card-badge badge-agotado">🎁 Venta nula${c.ventaNulaMotivo ? ": " + escapeHtml(c.ventaNulaMotivo) : ""}</span>` : ""}
+    </div>
     ${rows}
     <div class="card-row"><span>Total costo</span><span>${fmt(c.totalCosto)}</span></div>
     <div class="card-row"><span><b>Total venta</b></span><span><b>${fmt(c.totalVenta)}</b></span></div>
@@ -981,10 +1243,15 @@ function updateCotizacionEstado() {
 function editCotizacion() {
   const c = AppState.cotizaciones.find(x => x.id === viewingCotizacionId);
   quoteItems = JSON.parse(JSON.stringify(c.items));
+  quoteItems.forEach(it => { if (it.costoEstampadoManual === undefined) it.costoEstampadoManual = null; });
   setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-fecha", c.fecha);
   setVal("q-vendedor", c.vendedor); setVal("q-artista", c.artistaId || "");
   setVal("q-comision-pct", c.comisionPctPersonalizado || 0); setVal("q-notas", c.notas || "");
+  setVal("q-tipo-venta", c.tipoVenta || "Menudeo");
+  setChecked("q-venta-nula", !!c.ventaNula); setVal("q-venta-nula-motivo", c.ventaNulaMotivo || "");
   document.getElementById("q-comision-custom-wrap").style.display = c.artistaId === "__custom__" ? "block" : "none";
+  document.getElementById("q-venta-nula-motivo-wrap").style.display = c.ventaNula ? "block" : "none";
+  document.getElementById("venta-nula-banner").style.display = c.ventaNula ? "block" : "none";
   closeModal("modal-ver-cotizacion");
   renderQuoteItems();
   switchPage("cotizador");
@@ -1012,6 +1279,473 @@ document.getElementById("global-search").addEventListener("input", () => {
 });
 
 /* =================================================================
+   17c. DETALLE DE UN BAZAR (métricas y gráficas de un solo bazar)
+================================================================= */
+let chartBazarFecha = null;
+let chartBazarTipo = null;
+function renderBazarDetalle() {
+  const b = AppState.bazares.find(x => x.id === activeBazarId);
+  if (!b) { switchPage("bazares"); return; }
+  document.getElementById("bd-nombre").textContent = "🏪 " + b.nombre;
+  document.getElementById("bd-meta").textContent = `${b.lugar || "—"} · ${b.fecha || "—"}${b.notas ? " · " + b.notas : ""}`;
+
+  const todas = AppState.cotizaciones.filter(c => bazarTiene(c, b.id));
+  const validas = todas.filter(c => !c.ventaNula);
+  const nulas = todas.filter(c => c.ventaNula);
+  const playerasAsignadas = AppState.playeras.filter(p => bazarTiene(p, b.id) && (p.stock || 0) > 0);
+
+  const totalVendidoPlayeras = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
+    return s + ((p.precioVenta || 0) * (p.stock || 0));
+  }, 0);
+  const gananciaVentasPlayeras = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
+    const costoTotalUnit = costoTotalPlayera(p);
+    return s + ((p.precioVenta || 0) - costoTotalUnit) * (p.stock || 0);
+  }, 0);
+  const perdidaPlayerasNulas = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
+    return s + costoTotalPlayera(p) * (p.stock || 0);
+  }, 0);
+  const totalVendido = validas.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras;
+  const perdidaCotsNulas = nulas.reduce((s, c) => s + (c.totalCosto || 0), 0);
+  const gananciaVentas = validas.reduce((s, c) => s + c.ganancia, 0) + gananciaVentasPlayeras - perdidaCotsNulas - perdidaPlayerasNulas;
+  const totalRegalado = perdidaCotsNulas + perdidaPlayerasNulas;
+  const costoBazar = b.costoBazar || 0;
+  const ingresosExtra = b.ingresosExtra || [];
+  const sumIngresosExtra = ingresosExtra.reduce((s, i) => s + (i.monto || 0), 0);
+  const gananciaNeta = gananciaVentas + sumIngresosExtra - costoBazar;
+  const playerasVendidas = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") === "Vendida");
+  const playerasDisponibles = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") !== "Vendida");
+
+  document.getElementById("bd-total-vendido").textContent = fmt(totalVendido);
+  document.getElementById("bd-ganancia").textContent = fmt(gananciaVentas);
+  document.getElementById("bd-cotizaciones").textContent = todas.length + playerasAsignadas.length;
+  document.getElementById("bd-regalado").textContent = fmt(totalRegalado);
+  document.getElementById("bd-costo-bazar").textContent = fmt(costoBazar);
+  document.getElementById("bd-ingresos-extra").textContent = fmt(sumIngresosExtra);
+  document.getElementById("bd-ganancia-neta").textContent = fmt(gananciaNeta);
+
+  const renderPlayerasEnBazar = (containerId, emptyId, items, esVendida) => {
+    const grid = document.getElementById(containerId);
+    const empty = document.getElementById(emptyId);
+    grid.innerHTML = items.map(p => {
+      const costoTotalUnit = costoTotalPlayera(p);
+      const esNula = (p.bazarEstado || "Disponible") === "Venta nula";
+      const gananciaUnit = (p.precioVenta || 0) - costoTotalUnit;
+      const montoTotal = (p.precioVenta || 0) * (p.stock || 0);
+      const resultadoTotal = (esNula ? -costoTotalUnit : gananciaUnit) * (p.stock || 0);
+      const estadoBadge = esVendida || esNula ? "badge-agotado" : "badge-stock";
+      const estadoLabel = esVendida ? "✅ Vendida" : esNula ? "🎁 Venta nula" : "🟢 Disponible";
+      return `
+        <div class="card">
+          <div class="card-top">
+            <span class="card-title">${escapeHtml(p.nombre)}</span>
+            <span class="card-badge ${estadoBadge}">${estadoLabel}</span>
+          </div>
+          <div class="card-meta">${escapeHtml(p.tipo)} · Talla ${escapeHtml(p.talla) || "—"} · ${escapeHtml(colorNombre(p.colorId))}</div>
+          <div class="card-row"><span>Stock</span><span>${p.stock} pza(s)</span></div>
+          <div class="card-row"><span>Precio venta</span><span>${fmt(p.precioVenta)}</span></div>
+          <div class="card-row"><span>${esNula ? "Pérdida por pieza" : "Ganancia por pieza"}</span><span style="color:${resultadoTotal >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(esNula ? -costoTotalUnit : gananciaUnit)}</span></div>
+          ${esVendida ? `<div class="card-row"><span>Total vendido</span><span>${fmt(montoTotal)}</span></div>` : ""}
+          ${esVendida ? `<div class="card-row"><span>Ganancia total</span><span style="color:${resultadoTotal >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(resultadoTotal)}</span></div>` : ""}
+          ${esNula ? `<div class="card-row"><span>Costo regalado</span><span style="color:var(--color-danger)">${fmt(costoTotalUnit * (p.stock || 0))}</span></div>` : ""}
+          <div class="card-actions">
+            <button onclick="openModalAsignarPlayeraBazar('${p.id}')">🏪 Cambiar estado</button>
+          </div>
+        </div>`;
+    }).join("");
+    empty.style.display = items.length ? "none" : "block";
+  };
+
+  renderPlayerasEnBazar("bd-playeras-vendidas-grid", "bd-playeras-vendidas-empty", playerasVendidas, true);
+  renderPlayerasEnBazar("bd-playeras-disponibles-grid", "bd-playeras-disponibles-empty", playerasDisponibles, false);
+
+  // Tabla de ingresos extra
+  const ieBody = document.getElementById("bd-ingresos-extra-body");
+  document.getElementById("bd-ingresos-extra-empty").style.display = ingresosExtra.length ? "none" : "block";
+  ieBody.innerHTML = ingresosExtra.map(i => `
+    <tr>
+      <td>${escapeHtml(i.concepto)}</td>
+      <td><span class="card-badge badge-alta">${escapeHtml(i.etiqueta || "Otro")}</span></td>
+      <td>${fmt(i.monto)}</td>
+      <td>
+        <div class="bazar-row-actions">
+          <button onclick="openModalIngresoExtra('${i.id}')">✏️ Editar</button>
+          <button class="danger" onclick="deleteIngresoExtra('${i.id}')">🗑️ Eliminar</button>
+        </div>
+      </td>
+    </tr>`).join("");
+
+  // Ventas por fecha dentro de este bazar
+  const porFecha = {};
+  validas.forEach(c => { porFecha[c.fecha] = (porFecha[c.fecha] || 0) + c.totalVenta; });
+  const fechas = Object.keys(porFecha).sort();
+  const valoresFecha = fechas.map(f => porFecha[f]);
+  const canvasFecha = document.getElementById("chart-bazar-fecha");
+  document.getElementById("chart-bazar-fecha-empty").style.display = fechas.length ? "none" : "block";
+  canvasFecha.style.display = fechas.length ? "block" : "none";
+  if (chartBazarFecha) chartBazarFecha.destroy();
+  if (fechas.length) {
+    chartBazarFecha = new Chart(canvasFecha, {
+      type: "bar",
+      data: { labels: fechas, datasets: [{ label: "Vendido ($)", data: valoresFecha, backgroundColor: "#e3363d", borderRadius: 6 }] },
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+  }
+
+  // Menudeo vs mayoreo dentro de este bazar
+  const totalMenudeo = validas.filter(c => c.tipoVenta !== "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
+  const totalMayoreo = validas.filter(c => c.tipoVenta === "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
+  if (chartBazarTipo) chartBazarTipo.destroy();
+  chartBazarTipo = new Chart(document.getElementById("chart-bazar-tipo"), {
+    type: "doughnut",
+    data: { labels: ["Menudeo", "Mayoreo"], datasets: [{ data: [totalMenudeo, totalMayoreo], backgroundColor: ["#8b8b93", "#e3363d"] }] },
+    options: { responsive: true, plugins: { legend: { position: "bottom" } } }
+  });
+
+  // Lista de cotizaciones de este bazar
+  const grid = document.getElementById("bd-cotizaciones-grid");
+  grid.innerHTML = todas.map(c => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">${escapeHtml(c.folio)}</span>
+        <span class="card-badge ${c.estado==='Pagado'?'badge-stock':c.estado==='Entregado'?'badge-alta':c.estado==='Confirmado'?'badge-media':'badge-baja'}">${c.estado}</span>
+      </div>
+      <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length} prenda(s)</div>
+      <div class="card-tags">
+        <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
+        ${c.ventaNula ? `<span class="card-badge badge-agotado">🎁 Venta nula</span>` : ""}
+      </div>
+      <div class="card-row"><span>Total de venta</span><span>${fmt(c.totalVenta)}</span></div>
+      <div class="card-row"><span>Ganancia</span><span>${fmt(c.ganancia)}</span></div>
+      <div class="card-actions">
+        <button onclick="viewCotizacion('${c.id}')">👁️ Ver</button>
+      </div>
+    </div>`).join("") || `<p class="empty-hint">Este bazar todavía no tiene cotizaciones ligadas. Ve a “Cotizaciones guardadas” y usa “🏪 Asignar a bazar”.</p>`;
+}
+
+/* =================================================================
+   17d. ASIGNAR COTIZACIÓN A UN BAZAR
+================================================================= */
+function openModalAsignarBazar(cotizacionId) {
+  if (!cotizacionId) return;
+  setVal("ab-cotizacion-id", cotizacionId);
+  setVal("ab-playera-id", "");
+  document.getElementById("ab-status-wrap").style.display = "none";
+  document.getElementById("ab-null-sale-wrap").style.display = "block";
+  const c = AppState.cotizaciones.find(x => x.id === cotizacionId);
+  const assignedIds = c ? bazarIdsDe(c) : [];
+  renderAssignmentBazares(assignedIds);
+  setChecked("ab-venta-nula", !!(c && c.ventaNula));
+  closeModal("modal-ver-cotizacion");
+  openModal("modal-asignar-bazar");
+}
+function openModalAsignarPlayeraBazar(playeraId) {
+  if (!playeraId) return;
+  setVal("ab-cotizacion-id", "");
+  setVal("ab-playera-id", playeraId);
+  document.getElementById("ab-status-wrap").style.display = "block";
+  document.getElementById("ab-null-sale-wrap").style.display = "none";
+  const p = AppState.playeras.find(x => x.id === playeraId);
+  const assignedIds = p ? bazarIdsDe(p) : [];
+  renderAssignmentBazares(assignedIds);
+  setVal("ab-status", (p && p.bazarEstado) || "Disponible");
+  openModal("modal-asignar-bazar");
+}
+function saveAsignarBazar() {
+  const playeraId = val("ab-playera-id");
+  const cotId = val("ab-cotizacion-id");
+  const selectedBazarIds = Array.from(document.querySelectorAll(".ab-bazar-option:checked"))
+    .map(option => option.value);
+  const bazarId = selectedBazarIds[0] || "";
+  if (playeraId) {
+    const p = AppState.playeras.find(x => x.id === playeraId);
+    if (!p) return;
+    p.bazarId = bazarId;
+    p.bazarIds = selectedBazarIds;
+    p.bazarEstado = val("ab-status") || "Disponible";
+    saveState();
+    closeModal("modal-asignar-bazar");
+    renderPlayeras(); renderBazares(); renderBazarDetalle();
+    showToast(bazarId ? (p.bazarEstado === "Vendida" ? "Playera marcada como vendida en los bazares." : p.bazarEstado === "Venta nula" ? "Playera marcada como venta nula." : "Playera asignada como disponible en los bazares.") : "Playera sin bazar asignado.");
+    return;
+  }
+  const c = AppState.cotizaciones.find(x => x.id === cotId);
+  if (!c) return;
+  c.bazarId = bazarId;
+  c.bazarIds = selectedBazarIds;
+  c.ventaNula = checked("ab-venta-nula");
+  saveState();
+  closeModal("modal-asignar-bazar");
+  renderCotizacionesGuardadas(); renderBazares();
+  showToast(c.bazarId ? (c.ventaNula ? "Cotización asignada como venta nula." : "Cotización asignada a los bazares.") : "Cotización sin bazar asignado.");
+}
+
+/* =================================================================
+   17e. INGRESOS EXTRA DE UN BAZAR (juegos, rifas, propinas, etc.)
+================================================================= */
+function openModalIngresoExtra(id) {
+  const b = AppState.bazares.find(x => x.id === activeBazarId);
+  if (!b) return;
+  setVal("ie-id", id || "");
+  document.getElementById("modal-ingreso-extra-title").textContent = id ? "Editar ingreso extra" : "Nuevo ingreso extra";
+  if (id) {
+    const i = (b.ingresosExtra || []).find(x => x.id === id);
+    setVal("ie-concepto", i.concepto); setVal("ie-etiqueta", i.etiqueta); setVal("ie-monto", i.monto);
+  } else {
+    setVal("ie-concepto", ""); setVal("ie-etiqueta", "Juegos"); setVal("ie-monto", 0);
+  }
+  openModal("modal-ingreso-extra");
+}
+function saveIngresoExtra() {
+  const b = AppState.bazares.find(x => x.id === activeBazarId);
+  if (!b) return;
+  const concepto = val("ie-concepto").trim();
+  if (!concepto) return showToast("Ponle un concepto al ingreso extra.", "error");
+  if (!b.ingresosExtra) b.ingresosExtra = [];
+  const id = val("ie-id");
+  const data = { concepto, etiqueta: val("ie-etiqueta").trim() || "Otro", monto: parseFloat(num("ie-monto")) || 0 };
+  if (id) {
+    Object.assign(b.ingresosExtra.find(x => x.id === id), data);
+  } else {
+    b.ingresosExtra.push(Object.assign({ id: uid() }, data));
+  }
+  saveState(); closeModal("modal-ingreso-extra"); renderBazarDetalle(); renderBazares();
+  showToast("Ingreso extra guardado.");
+}
+function deleteIngresoExtra(id) {
+  const b = AppState.bazares.find(x => x.id === activeBazarId);
+  if (!b) return;
+  if (!confirm("¿Eliminar este ingreso extra?")) return;
+  b.ingresosExtra = (b.ingresosExtra || []).filter(x => x.id !== id);
+  saveState(); renderBazarDetalle(); renderBazares();
+}
+
+/* =================================================================
+   17b. ESTADÍSTICAS Y GRÁFICAS
+================================================================= */
+let chartBazares = null;
+let chartTipoVenta = null;
+const customChartInstances = {};
+function renderEstadisticas() {
+  const validCots = AppState.cotizaciones.filter(c => !c.ventaNula);
+  const nullCots = AppState.cotizaciones.filter(c => c.ventaNula);
+  const playerasAsignadas = AppState.playeras.filter(p => bazarIdsDe(p).length && (p.stock || 0) > 0);
+  const totalVendidoPlayeras = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
+    return s + ((p.precioVenta || 0) * (p.stock || 0));
+  }, 0);
+  const totalGananciaPlayeras = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
+    const costoTotalUnit = costoTotalPlayera(p);
+    return s + ((p.precioVenta || 0) - costoTotalUnit) * (p.stock || 0);
+  }, 0);
+  const perdidaPlayerasNulas = playerasAsignadas.reduce((s, p) => {
+    if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
+    return s + costoTotalPlayera(p) * (p.stock || 0);
+  }, 0);
+  const totalVendido = validCots.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras;
+  const perdidaCotsNulas = nullCots.reduce((s, c) => s + (c.totalCosto || 0), 0);
+  const totalGanancia = validCots.reduce((s, c) => s + c.ganancia, 0) + totalGananciaPlayeras - perdidaCotsNulas - perdidaPlayerasNulas;
+  const totalMayoreo = validCots.filter(c => c.tipoVenta === "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
+  const totalRegalado = perdidaCotsNulas + perdidaPlayerasNulas;
+
+  document.getElementById("stat-total-vendido").textContent = fmt(totalVendido);
+  document.getElementById("stat-total-ganancia").textContent = fmt(totalGanancia);
+  document.getElementById("stat-total-mayoreo").textContent = fmt(totalMayoreo);
+  document.getElementById("stat-total-regalado").textContent = fmt(totalRegalado);
+
+  // Ventas por bazar
+  const porBazar = {};
+  validCots.forEach(c => {
+    const nombre = bazarIdsDe(c).length ? nombresBazares(c) : "Sin bazar / venta directa";
+    porBazar[nombre] = (porBazar[nombre] || 0) + c.totalVenta;
+  });
+  const bazarLabels = Object.keys(porBazar);
+  const bazarValues = Object.values(porBazar);
+  const chartBazarCanvas = document.getElementById("chart-bazares");
+  document.getElementById("chart-bazares-empty").style.display = bazarLabels.length ? "none" : "block";
+  chartBazarCanvas.style.display = bazarLabels.length ? "block" : "none";
+  if (chartBazares) chartBazares.destroy();
+  if (bazarLabels.length) {
+    chartBazares = new Chart(chartBazarCanvas, {
+      type: "bar",
+      data: { labels: bazarLabels, datasets: [{ label: "Total vendido ($)", data: bazarValues, backgroundColor: "#e3363d", borderRadius: 6 }] },
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+  }
+
+  // Menudeo vs Mayoreo
+  const totalMenudeo = validCots.filter(c => c.tipoVenta !== "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
+  if (chartTipoVenta) chartTipoVenta.destroy();
+  chartTipoVenta = new Chart(document.getElementById("chart-tipo-venta"), {
+    type: "doughnut",
+    data: {
+      labels: ["Menudeo", "Mayoreo"],
+      datasets: [{ data: [totalMenudeo, totalMayoreo], backgroundColor: ["#8b8b93", "#e3363d"] }]
+    },
+    options: { responsive: true, plugins: { legend: { position: "bottom" } } }
+  });
+  renderGraficasPersonalizadas();
+}
+
+function datosGrafica(fuente, dimension, metrica) {
+  const validCots = AppState.cotizaciones.filter(c => !c.ventaNula);
+  if (fuente === "ventas-bazares" || fuente === "ganancias-bazares") {
+    const labels = AppState.bazares.map(b => b.nombre);
+    const values = AppState.bazares.map(b => {
+      const stats = getBazarVentasYGanancia(b.id);
+      return fuente === "ventas-bazares" ? stats.totalVendido : stats.gananciaVentas;
+    });
+    return { labels, values, label: fuente === "ventas-bazares" ? "Ventas ($)" : "Ganancia ($)" };
+  }
+  if (fuente === "tipo-venta") {
+    return {
+      labels: ["Menudeo", "Mayoreo"],
+      values: [
+        validCots.filter(c => c.tipoVenta !== "Mayoreo").reduce((s, c) => s + c.totalVenta, 0),
+        validCots.filter(c => c.tipoVenta === "Mayoreo").reduce((s, c) => s + c.totalVenta, 0)
+      ],
+      label: "Ventas ($)"
+    };
+  }
+  if (fuente === "estado-playeras") {
+    const cantidades = { Vendida: 0, Disponible: 0, "Venta nula": 0 };
+    AppState.playeras.forEach(p => {
+      const estado = p.bazarEstado || "Disponible";
+      cantidades[estado] = (cantidades[estado] || 0) + (p.stock || 0);
+    });
+    return { labels: Object.keys(cantidades), values: Object.values(cantidades), label: "Playeras" };
+  }
+  if (fuente === "inventario") {
+    return datosInventarioGrafica(dimension || "etiqueta", metrica || "stock");
+  }
+  const costoCotizaciones = AppState.cotizaciones.filter(c => c.ventaNula).reduce((s, c) => s + (c.totalCosto || 0), 0);
+  const costoPlayeras = AppState.playeras.filter(p => p.bazarEstado === "Venta nula")
+    .reduce((s, p) => s + costoTotalPlayera(p) * (p.stock || 0), 0);
+  return { labels: ["Cotizaciones", "Playeras"], values: [costoCotizaciones, costoPlayeras], label: "Costo perdido ($)" };
+}
+
+function datosInventarioGrafica(dimension, metrica) {
+  const grupos = {};
+  const agregar = (grupo, playera) => {
+    const cantidad = playera.stock || 0;
+    const costo = costoTotalPlayera(playera) * cantidad;
+    const ventas = (playera.precioVenta || 0) * cantidad;
+    const ganancia = (playera.precioVenta - costoTotalPlayera(playera)) * cantidad;
+    grupos[grupo] = (grupos[grupo] || 0) + ({ stock: cantidad, costo, ventas, ganancia }[metrica] || 0);
+  };
+  AppState.playeras.forEach(playera => {
+    if (dimension === "etiqueta") {
+      const etiquetas = (playera.tags || []).map(tagId => {
+        const etiqueta = AppState.etiquetas.find(item => item.id === tagId);
+        return etiqueta ? etiqueta.nombre : "Sin etiqueta";
+      });
+      (etiquetas.length ? etiquetas : ["Sin etiqueta"]).forEach(etiqueta => agregar(etiqueta, playera));
+      return;
+    }
+    const valores = {
+      color: colorNombre(playera.colorId),
+      talla: playera.talla || "Sin talla",
+      tipo: playera.tipo || "Sin tipo",
+      prioridad: playera.prioridad || "Sin prioridad",
+      estado: playera.estado || "Sin estado"
+    };
+    agregar(valores[dimension] || "Sin dato", playera);
+  });
+  const labels = Object.keys(grupos);
+  const metricLabels = { stock: "Piezas", costo: "Costo ($)", ventas: "Venta potencial ($)", ganancia: "Ganancia potencial ($)" };
+  return { labels, values: labels.map(label => grupos[label]), label: metricLabels[metrica] || "Inventario" };
+}
+
+function toggleGraficaInventarioOptions() {
+  const options = document.getElementById("grafica-inventario-options");
+  if (options) options.style.display = val("grafica-fuente") === "inventario" ? "flex" : "none";
+}
+
+function openModalGrafica(id) {
+  setVal("grafica-id", id || "");
+  document.getElementById("modal-grafica-title").textContent = id ? "Editar gráfica" : "Nueva gráfica";
+  const grafica = id ? AppState.graficas.find(g => g.id === id) : null;
+  setVal("grafica-titulo", grafica ? grafica.titulo : "");
+  setVal("grafica-fuente", grafica ? grafica.fuente : "ventas-bazares");
+  setVal("grafica-tipo", grafica ? grafica.tipo : "bar");
+  setVal("grafica-dimension", grafica ? (grafica.dimension || "etiqueta") : "etiqueta");
+  setVal("grafica-metrica", grafica ? (grafica.metrica || "stock") : "stock");
+  toggleGraficaInventarioOptions();
+  openModal("modal-grafica");
+}
+
+function saveGrafica() {
+  const titulo = val("grafica-titulo").trim();
+  if (!titulo) return showToast("Escribe un título para la gráfica.", "error");
+  const id = val("grafica-id");
+  const data = {
+    titulo,
+    fuente: val("grafica-fuente"),
+    tipo: val("grafica-tipo"),
+    dimension: val("grafica-dimension") || "etiqueta",
+    metrica: val("grafica-metrica") || "stock"
+  };
+  if (id) {
+    Object.assign(AppState.graficas.find(g => g.id === id), data);
+  } else {
+    AppState.graficas.push(Object.assign({ id: uid() }, data));
+  }
+  saveState();
+  closeModal("modal-grafica");
+  renderGraficasPersonalizadas();
+  showToast(id ? "Gráfica actualizada." : "Gráfica agregada.");
+}
+
+function deleteGrafica(id) {
+  if (!confirm("¿Eliminar esta gráfica?")) return;
+  AppState.graficas = AppState.graficas.filter(g => g.id !== id);
+  if (customChartInstances[id]) {
+    customChartInstances[id].destroy();
+    delete customChartInstances[id];
+  }
+  saveState();
+  renderGraficasPersonalizadas();
+  showToast("Gráfica eliminada.");
+}
+
+function renderGraficasPersonalizadas() {
+  const grid = document.getElementById("custom-charts-grid");
+  const empty = document.getElementById("custom-charts-empty");
+  if (!grid || !empty) return;
+  Object.keys(customChartInstances).forEach(id => {
+    customChartInstances[id].destroy();
+    delete customChartInstances[id];
+  });
+  empty.style.display = AppState.graficas.length ? "none" : "block";
+  grid.innerHTML = AppState.graficas.map(g => `
+    <div class="settings-card custom-chart-card">
+      <div class="section-header" style="justify-content:space-between;margin-bottom:0;">
+        <h3 class="section-title" style="font-size:1.1rem;">${escapeHtml(g.titulo)}</h3>
+        <div class="bazar-row-actions">
+          <button onclick="openModalGrafica('${g.id}')">✏️ Editar</button>
+          <button class="danger" onclick="deleteGrafica('${g.id}')">🗑️ Borrar</button>
+        </div>
+      </div>
+      <canvas id="custom-chart-${g.id}" class="custom-chart-canvas"></canvas>
+    </div>`).join("");
+  AppState.graficas.forEach(g => {
+    const canvas = document.getElementById(`custom-chart-${g.id}`);
+    const data = datosGrafica(g.fuente, g.dimension, g.metrica);
+    customChartInstances[g.id] = new Chart(canvas, {
+      type: g.tipo,
+      data: {
+        labels: data.labels,
+        datasets: [{ label: data.label, data: data.values, backgroundColor: ["#e3363d", "#3fb87f", "#e0a23a", "#8b8b93"], borderColor: "#e3363d", borderWidth: 2, tension: .25 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } }, scales: g.tipo === "doughnut" || g.tipo === "pie" ? {} : { y: { beginAtZero: true } } }
+    });
+  });
+}
+
+/* =================================================================
    18. UTIL
 ================================================================= */
 function escapeHtml(str) {
@@ -1028,6 +1762,7 @@ function renderAll() {
   renderEtiquetas();
   renderTallaEtiquetas();
   renderArtistas();
+  renderBazares();
   renderAjustes();
   renderPlayeras();
   renderStickers();

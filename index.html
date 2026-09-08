@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -33,6 +34,10 @@
       <div class="nav-group-label">Catálogo</div>
       <button class="nav-item" data-page="etiquetas">🏷️ Etiquetas y colores</button>
       <button class="nav-item" data-page="artistas">🎨 Artistas y comisiones</button>
+      <button class="nav-item" data-page="bazares">🏪 Mis Bazares</button>
+
+      <div class="nav-group-label">Reportes</div>
+      <button class="nav-item" data-page="estadisticas">📊 Estadísticas</button>
 
       <div class="nav-group-label">Sistema</div>
       <button class="nav-item" data-page="ajustes">⚙️ Ajustes de costos</button>
@@ -63,6 +68,11 @@
     <header class="header">
       <button class="btn-icon" id="sidebar-toggle" title="Menú">☰</button>
       <h1 class="header-title" id="page-title">Cotizador rápido</h1>
+      <div class="bazar-activo-bar">
+        <span class="bazar-activo-label">🏪 Bazar activo</span>
+        <select id="header-bazar-activo" class="form-select" onchange="onHeaderBazarChange()"></select>
+        <button class="btn-icon" id="header-bazar-add" title="Nuevo bazar">+</button>
+      </div>
       <div class="search-bar">
         <span>🔍</span>
         <input type="text" id="global-search" placeholder="Buscar playera, sticker o cotización...">
@@ -96,9 +106,33 @@
             </div>
             <div class="form-group" id="q-comision-custom-wrap" style="display:none;">
               <label class="form-label">% para el artista</label>
-              <input type="number" id="q-comision-pct" class="form-input" min="0" max="100" value="0" oninput="renderQuoteItems()">
+              <input type="number" id="q-comision-pct" class="form-input" min="0" max="100" step="0.1" value="0" onchange="renderQuoteItems()">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Tipo de venta</label>
+              <select id="q-tipo-venta" class="form-select" onchange="onQuoteTipoVentaChange()">
+                <option value="Menudeo">🛍️ Menudeo</option>
+                <option value="Mayoreo">📦 Mayoreo</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:2;min-width:260px;">
+              <label class="form-label">&nbsp;</label>
+              <div class="form-switch" style="background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3);">
+                <span class="switch-label">🎁 Venta nula (regalo / cortesía, no cuenta como ingreso)</span>
+                <label class="switch">
+                  <input type="checkbox" id="q-venta-nula" onchange="onQuoteVentaNulaChange()">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="form-group" id="q-venta-nula-motivo-wrap" style="display:none;">
+              <label class="form-label">Motivo</label>
+              <input type="text" id="q-venta-nula-motivo" class="form-input" placeholder="Ej. regalo de cumpleaños">
+            </div>
+          </div>
+          <p class="cost-preview" style="margin-bottom:0;">🏪 Este cotizador ya no asigna el bazar. Cuando guardes la cotización, ve a “Cotizaciones guardadas” y usa el botón <b>🏪 Asignar a bazar</b> para ligarla al bazar donde la vendiste.</p>
         </div>
 
         <div class="section-header" style="justify-content:space-between;">
@@ -118,7 +152,7 @@
                 <th>Largo cm</th>
                 <th># Est.</th>
                 <th>Costo playera</th>
-                <th>Costo DTF</th>
+                <th>Costo estampado</th>
                 <th>Precio venta c/u</th>
                 <th>Ganancia</th>
                 <th></th>
@@ -127,6 +161,12 @@
             <tbody id="quote-items-body"></tbody>
           </table>
           <p class="empty-hint" id="quote-empty-hint">Aún no agregas prendas. Usa “+ Agregar prenda” — puedes añadir todas las que necesites.</p>
+          <div class="quote-add-space" id="quote-add-space">
+            <span class="quote-add-space-icon">👕</span>
+            <strong>Agrega prendas a esta cotización</strong>
+            <span>Selecciona una playera del inventario o captura una prenda personalizada.</span>
+            <button class="btn-primary" onclick="addQuoteItem()">+ Agregar prenda</button>
+          </div>
         </div>
 
         <div class="quote-summary">
@@ -151,6 +191,9 @@
             <span class="summary-value" id="sum-estudio">$0.00</span>
           </div>
         </div>
+        <p class="cost-preview" id="venta-nula-banner" style="display:none;border-color:var(--color-accent);">
+          🎁 Esta cotización está marcada como <b>venta nula</b> — no se sumará a tus ingresos en Estadísticas, solo se registrará como obsequio/cortesía.
+        </p>
 
         <div class="form-group">
           <label class="form-label">Notas de la cotización</label>
@@ -176,6 +219,14 @@
             <option value="Confirmado">✅ Confirmado</option>
             <option value="Pagado">💰 Pagado</option>
             <option value="Entregado">📦 Entregado</option>
+          </select>
+          <select class="filter-select" id="filter-cot-bazar" onchange="renderCotizacionesGuardadas()">
+            <option value="all">Todos los bazares</option>
+          </select>
+          <select class="filter-select" id="filter-cot-tipo" onchange="renderCotizacionesGuardadas()">
+            <option value="all">Menudeo y mayoreo</option>
+            <option value="Menudeo">🛍️ Menudeo</option>
+            <option value="Mayoreo">📦 Mayoreo</option>
           </select>
         </div>
         <div id="cotizaciones-grid" class="cards-grid"></div>
@@ -295,6 +346,200 @@
       <!-- ======================= /ARTISTAS ======================= -->
 
 
+      <!-- ======================= BAZARES / LUGARES DE VENTA ======================= -->
+      <section id="page-bazares" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Mis Bazares</h2>
+            <p class="section-sub">Solo desde aquí puedes eliminar un bazar. Da clic en “Ir al Bazar” para ver sus métricas y gráficas.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalBazar()">+ Nuevo Bazar</button>
+        </div>
+        <div class="bazar-table-wrap">
+          <table class="bazar-table">
+            <thead>
+              <tr>
+                <th>Bazar (nombre + lugar)</th>
+                <th>Cotizaciones</th>
+                <th>Total vendido</th>
+                <th>Ganancia</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="bazares-table-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-hint" id="bazares-empty-hint">Aún no registras bazares o lugares de venta.</p>
+      </section>
+      <!-- ======================= /BAZARES ======================= -->
+
+
+      <!-- ======================= DETALLE DE UN BAZAR ======================= -->
+      <section id="page-bazar-detalle" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <button class="btn-secondary" onclick="switchPage('bazares')">← Volver a Mis Bazares</button>
+            <h2 class="section-title" id="bd-nombre" style="margin-top:10px;">Bazar</h2>
+            <p class="section-sub" id="bd-meta">—</p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-secondary" onclick="openModalBazar(activeBazarId)">✏️ Editar</button>
+            <button class="btn-danger" onclick="deleteBazarFromDetalle()">🗑️ Eliminar</button>
+          </div>
+        </div>
+
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Total vendido</span>
+            <span class="sticker-count-value" id="bd-total-vendido">$0</span>
+            <span class="sticker-count-sub">sin contar ventas nulas</span>
+          </div>
+          <div class="sticker-count-card size-grande">
+            <span class="sticker-count-label">Ganancia de ventas</span>
+            <span class="sticker-count-value" id="bd-ganancia">$0</span>
+            <span class="sticker-count-sub">solo playeras/estampados</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">Cotizaciones</span>
+            <span class="sticker-count-value" id="bd-cotizaciones">0</span>
+            <span class="sticker-count-sub">ligadas a este bazar</span>
+          </div>
+          <div class="sticker-count-card size-chico">
+            <span class="sticker-count-label">🎁 Regalado</span>
+            <span class="sticker-count-value" id="bd-regalado">$0</span>
+            <span class="sticker-count-sub">costo perdido por regalos</span>
+          </div>
+          <div class="sticker-count-card">
+            <span class="sticker-count-label">Costo del bazar</span>
+            <span class="sticker-count-value" id="bd-costo-bazar" style="color:var(--color-danger);">$0</span>
+            <span class="sticker-count-sub">renta, mesa, transporte...</span>
+          </div>
+          <div class="sticker-count-card">
+            <span class="sticker-count-label">+ Ingresos extra</span>
+            <span class="sticker-count-value" id="bd-ingresos-extra" style="color:var(--color-success);">$0</span>
+            <span class="sticker-count-sub">juegos, rifas, propinas...</span>
+          </div>
+          <div class="sticker-count-card" style="background:var(--color-accent-soft);border-color:var(--color-accent);">
+            <span class="sticker-count-label">Ganancia neta</span>
+            <span class="sticker-count-value" id="bd-ganancia-neta">$0</span>
+            <span class="sticker-count-sub">ventas + extra − costo del bazar</span>
+          </div>
+        </div>
+
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Ingresos extra de este bazar</h2>
+            <p class="section-sub">Dinero extra que no viene de vender playeras: juegos, rifas, venta de comida, propinas, etc.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalIngresoExtra()">+ Agregar ingreso</button>
+        </div>
+        <div class="bazar-table-wrap">
+          <table class="bazar-table">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Etiqueta</th>
+                <th>Monto</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="bd-ingresos-extra-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-hint" id="bd-ingresos-extra-empty">Aún no registras ingresos extra en este bazar.</p>
+
+        <div class="section-header" style="margin-top:32px;">
+          <h2 class="section-title">Ventas por fecha</h2>
+        </div>
+        <div class="settings-card" style="max-width:100%;">
+          <canvas id="chart-bazar-fecha" height="90"></canvas>
+          <p class="empty-hint" id="chart-bazar-fecha-empty" style="display:none;">Aún no hay cotizaciones ligadas a este bazar.</p>
+        </div>
+
+        <div class="section-header" style="margin-top:32px;">
+          <h2 class="section-title">Menudeo vs. mayoreo en este bazar</h2>
+        </div>
+        <div class="settings-card" style="max-width:480px;">
+          <canvas id="chart-bazar-tipo" height="220"></canvas>
+        </div>
+
+        <div class="section-header" style="margin-top:32px;justify-content:space-between;">
+          <h2 class="section-title">Cotizaciones de este bazar</h2>
+        </div>
+        <div id="bd-cotizaciones-grid" class="cards-grid"></div>
+
+        <div class="section-header" style="margin-top:32px;justify-content:space-between;">
+          <h2 class="section-title">Playeras asignadas a este bazar</h2>
+        </div>
+
+        <div class="section-header" style="margin-top:12px;">
+          <h3 class="section-title" style="font-size:1.1rem;">Vendidas</h3>
+        </div>
+        <div id="bd-playeras-vendidas-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="bd-playeras-vendidas-empty">No hay playeras vendidas en este bazar.</p>
+
+        <div class="section-header" style="margin-top:20px;">
+          <h3 class="section-title" style="font-size:1.1rem;">Disponibles</h3>
+        </div>
+        <div id="bd-playeras-disponibles-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="bd-playeras-disponibles-empty">No hay playeras disponibles en este bazar.</p>
+      </section>
+      <!-- ======================= /DETALLE DE UN BAZAR ======================= -->
+
+
+      <!-- ======================= ESTADÍSTICAS ======================= -->
+      <section id="page-estadisticas" class="page-section">
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Total vendido</span>
+            <span class="sticker-count-value" id="stat-total-vendido">$0</span>
+            <span class="sticker-count-sub">sin contar ventas nulas</span>
+          </div>
+          <div class="sticker-count-card size-grande">
+            <span class="sticker-count-label">Ganancia total</span>
+            <span class="sticker-count-value" id="stat-total-ganancia">$0</span>
+            <span class="sticker-count-sub">de cotizaciones guardadas</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">Mayoreo vendido</span>
+            <span class="sticker-count-value" id="stat-total-mayoreo">$0</span>
+            <span class="sticker-count-sub">solo cotizaciones de mayoreo</span>
+          </div>
+          <div class="sticker-count-card size-chico">
+            <span class="sticker-count-label">🎁 Regalado / venta nula</span>
+            <span class="sticker-count-value" id="stat-total-regalado">$0</span>
+            <span class="sticker-count-sub">costo perdido por regalos</span>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <h2 class="section-title">Ventas por bazar / lugar de venta</h2>
+        </div>
+        <div class="settings-card" style="max-width:100%;">
+          <canvas id="chart-bazares" height="90"></canvas>
+          <p class="empty-hint" id="chart-bazares-empty" style="display:none;">Aún no hay cotizaciones ligadas a un bazar.</p>
+        </div>
+
+        <div class="section-header" style="margin-top:32px;">
+          <h2 class="section-title">Menudeo vs. mayoreo</h2>
+        </div>
+        <div class="settings-card" style="max-width:480px;">
+          <canvas id="chart-tipo-venta" height="220"></canvas>
+        </div>
+
+        <div class="section-header" style="margin-top:32px;justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Mis gráficas</h2>
+            <p class="section-sub">Crea gráficas personalizadas con los datos registrados en tu control.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalGrafica()">+ Agregar gráfica</button>
+        </div>
+        <div id="custom-charts-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="custom-charts-empty">Todavía no tienes gráficas personalizadas.</p>
+      </section>
+      <!-- ======================= /ESTADÍSTICAS ======================= -->
+
+
       <!-- ======================= AJUSTES ======================= -->
       <section id="page-ajustes" class="page-section">
         <div class="section-header">
@@ -367,7 +612,14 @@
             <option>Manga larga</option>
             <option>Sudadera</option>
             <option>Bolsa Sorpresa</option>
+            <option>Cuello V Mujer</option>
+            <option>Cuello V Hombre</option>
+            <option>Sudadera sin capucha</option>
+            <option>Playera de tirantes</option>
+            <option>Playera sin mangas</option>
+            
             <option>Niños</option>
+
           </select>
         </div>
       </div>
@@ -424,8 +676,12 @@
 
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Precio de venta sugerido ($)</label>
+          <label class="form-label">Precio de venta (menudeo) ($)</label>
           <input type="number" id="p-precio-venta" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Precio de mayoreo ($)</label>
+          <input type="number" id="p-precio-mayoreo" class="form-input" min="0" step="0.01" placeholder="Opcional">
         </div>
         <div class="form-group">
           <label class="form-label">Prioridad de venta</label>
@@ -642,6 +898,184 @@
   </div>
 </div>
 
+<!-- MODAL: BAZAR / LUGAR DE VENTA -->
+<div class="modal-overlay" id="modal-bazar">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-bazar-title">Nuevo bazar / lugar</h2>
+      <button class="modal-close" data-modal="modal-bazar">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="b-id">
+      <div class="form-group">
+        <label class="form-label">Nombre del bazar / evento</label>
+        <input type="text" id="b-nombre" class="form-input" placeholder="Ej. Bazar Navideño Plaza Central">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Lugar</label>
+          <input type="text" id="b-lugar" class="form-input" placeholder="Ej. Toluca, Edo. Méx.">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input type="date" id="b-fecha" class="form-input">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Costo del bazar (renta, mesa, transporte, etc.) ($)</label>
+        <input type="number" id="b-costo" class="form-input" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="b-notas" class="form-textarea" placeholder="Opcional: horario, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-bazar">Cancelar</button>
+      <button class="btn-primary" onclick="saveBazar()">Guardar bazar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ASIGNAR COTIZACIÓN A UN BAZAR -->
+<div class="modal-overlay" id="modal-asignar-bazar">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Asignar a un bazar</h2>
+      <button class="modal-close" data-modal="modal-asignar-bazar">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ab-cotizacion-id">
+      <input type="hidden" id="ab-playera-id">
+      <div class="form-group">
+        <div class="section-header assignment-header">
+          <label class="form-label">Bazares / lugares de venta</label>
+          <button type="button" class="btn-secondary assignment-add-btn" onclick="openModalBazarDesdeAsignacion()">+ Agregar bazar</button>
+        </div>
+        <div id="ab-bazares-list" class="assignment-bazares-list"></div>
+        <p class="cost-preview">Marca uno o varios bazares. Puedes agregar un bazar nuevo desde aquí.</p>
+      </div>
+      <div class="form-group" id="ab-null-sale-wrap" style="display:none;">
+        <label class="form-label">Tipo de registro</label>
+        <label class="tag-checkbox" style="border-color:var(--color-danger);">
+          <input type="checkbox" id="ab-venta-nula"> 🎁 Venta nula / cortesía
+        </label>
+      </div>
+      <div class="form-group" id="ab-status-wrap" style="display:none;">
+        <label class="form-label">Estado de la playera</label>
+        <select id="ab-status" class="form-select">
+          <option value="Disponible">🟢 Disponible / se quedó</option>
+          <option value="Vendida">✅ Vendida</option>
+          <option value="Venta nula">🎁 Venta nula / cortesía</option>
+        </select>
+      </div>
+      <p class="cost-preview">¿No está en la lista? Cierra esta ventana y créalo primero en “🏪 Mis Bazares”.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-asignar-bazar">Cancelar</button>
+      <button class="btn-primary" onclick="saveAsignarBazar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: INGRESO EXTRA DE UN BAZAR -->
+<div class="modal-overlay" id="modal-ingreso-extra">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-ingreso-extra-title">Nuevo ingreso extra</h2>
+      <button class="modal-close" data-modal="modal-ingreso-extra">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ie-id">
+      <div class="form-group">
+        <label class="form-label">Concepto</label>
+        <input type="text" id="ie-concepto" class="form-input" placeholder="Ej. Ruleta de premios">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Etiqueta</label>
+          <input type="text" id="ie-etiqueta" list="ie-etiqueta-list" class="form-input" placeholder="Ej. Juegos">
+          <datalist id="ie-etiqueta-list">
+            <option value="Juegos"><option value="Rifa"><option value="Venta de comida">
+            <option value="Propinas"><option value="Otro">
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monto ($)</label>
+          <input type="number" id="ie-monto" class="form-input" min="0" step="0.01">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-ingreso-extra">Cancelar</button>
+      <button class="btn-primary" onclick="saveIngresoExtra()">Guardar ingreso</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: GRÁFICA PERSONALIZADA -->
+<div class="modal-overlay" id="modal-grafica">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-grafica-title">Nueva gráfica</h2>
+      <button class="modal-close" data-modal="modal-grafica">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="grafica-id">
+      <div class="form-group">
+        <label class="form-label">Título</label>
+        <input type="text" id="grafica-titulo" class="form-input" placeholder="Ej. Rendimiento por bazar">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Datos</label>
+        <select id="grafica-fuente" class="form-select" onchange="toggleGraficaInventarioOptions()">
+          <option value="ventas-bazares">Ventas por bazar</option>
+          <option value="ganancias-bazares">Ganancias por bazar</option>
+          <option value="tipo-venta">Ventas por tipo (menudeo / mayoreo)</option>
+          <option value="estado-playeras">Playeras por estado</option>
+          <option value="venta-nula">Costo perdido por ventas nulas</option>
+          <option value="inventario">Comparar inventario</option>
+        </select>
+      </div>
+      <div class="form-row" id="grafica-inventario-options" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Comparar por</label>
+          <select id="grafica-dimension" class="form-select">
+            <option value="etiqueta">Etiqueta</option>
+            <option value="color">Color</option>
+            <option value="talla">Talla</option>
+            <option value="tipo">Tipo de prenda</option>
+            <option value="prioridad">Prioridad</option>
+            <option value="estado">Estado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Comparar valor</label>
+          <select id="grafica-metrica" class="form-select">
+            <option value="stock">Piezas en stock</option>
+            <option value="costo">Costo del inventario</option>
+            <option value="ventas">Valor de venta</option>
+            <option value="ganancia">Ganancia potencial</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo de gráfica</label>
+        <select id="grafica-tipo" class="form-select">
+          <option value="bar">Barras</option>
+          <option value="line">Líneas</option>
+          <option value="doughnut">Dona</option>
+          <option value="pie">Pastel</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-grafica">Cancelar</button>
+      <button class="btn-primary" onclick="saveGrafica()">Guardar gráfica</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: VER COTIZACIÓN GUARDADA -->
 <div class="modal-overlay" id="modal-ver-cotizacion">
   <div class="modal-box">
@@ -657,6 +1091,7 @@
         <option value="Pagado">💰 Pagado</option>
         <option value="Entregado">📦 Entregado</option>
       </select>
+      <button class="btn-secondary" onclick="openModalAsignarBazar(viewingCotizacionId)">🏪 Asignar a bazar</button>
       <button class="btn-secondary" onclick="editCotizacion()">✏️ Editar</button>
       <button class="btn-danger" onclick="deleteCotizacion()">🗑️ Eliminar</button>
       <button class="btn-secondary" data-modal="modal-ver-cotizacion">Cerrar</button>

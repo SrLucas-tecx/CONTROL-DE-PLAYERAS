@@ -149,6 +149,21 @@ ul{list-style:none;}
 }
 #sidebar-toggle{display:none;font-size:1.1rem;}
 .header-title{font-family:var(--font-display);font-weight:700;font-size:var(--fs-lg);flex-shrink:0;}
+.bazar-activo-bar{
+  display:flex;align-items:center;gap:var(--space-2);flex-shrink:0;
+  background:var(--color-surface-alt);border:1px solid var(--color-border);
+  border-radius:var(--radius-full);padding:6px 6px 6px 14px;
+}
+.bazar-activo-label{font-size:var(--fs-xs);font-weight:700;color:var(--color-text-muted);white-space:nowrap;}
+.bazar-activo-bar select{
+  border:none;background:transparent;font-size:var(--fs-sm);font-weight:700;color:var(--color-text);
+  max-width:150px;padding:4px;outline:none;
+}
+#header-bazar-add{
+  width:26px;height:26px;border-radius:50%;background:var(--color-accent);color:#fff;
+  font-weight:800;font-size:1rem;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;
+}
+#header-bazar-add:hover{background:var(--color-accent-dark);}
 .search-bar{
   flex:1;max-width:420px;display:flex;align-items:center;gap:var(--space-2);
   background:var(--color-surface-alt);border:1px solid var(--color-border);
@@ -227,6 +242,21 @@ ul{list-style:none;}
   font-size:var(--fs-xs);font-weight:600;cursor:pointer;background:var(--color-surface-alt);
 }
 .tag-checkbox input{accent-color:var(--color-accent);}
+.assignment-header{justify-content:space-between;align-items:center;margin-bottom:var(--space-2);}
+.assignment-header .form-label{margin-bottom:0;}
+.assignment-add-btn{padding:var(--space-2) var(--space-3);font-size:var(--fs-xs);}
+.assignment-bazares-list{
+  display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-2);
+  background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);
+  max-height:190px;overflow-y:auto;
+}
+.assignment-bazar-option{
+  display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);
+  border:1px solid transparent;border-radius:var(--radius-sm);font-size:var(--fs-base);cursor:pointer;
+}
+.assignment-bazar-option:hover{background:var(--color-surface);border-color:var(--color-border);}
+.assignment-bazar-option input{accent-color:var(--color-accent);width:20px;height:20px;flex-shrink:0;}
+.assignment-bazar-empty{padding:var(--space-3);font-size:var(--fs-sm);color:var(--color-text-muted);}
 
 .cost-preview{
   font-size:var(--fs-sm);background:var(--color-surface-alt);border:1px dashed var(--color-border);
@@ -289,6 +319,14 @@ ul{list-style:none;}
   background:var(--color-surface-alt);position:sticky;top:0;
 }
 .quote-table td{padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);vertical-align:middle;}
+.quote-add-space{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-2);
+  min-height:190px;padding:var(--space-6);text-align:center;color:var(--color-text-muted);
+  border-top:1px dashed var(--color-border);background:var(--color-surface-alt);
+}
+.quote-add-space strong{color:var(--color-text);font-family:var(--font-display);font-size:var(--fs-md);}
+.quote-add-space span:not(.quote-add-space-icon){font-size:var(--fs-sm);}
+.quote-add-space-icon{font-size:2rem;line-height:1;}
 .quote-table input,.quote-table select{
   width:100%;min-width:80px;padding:var(--space-2);border-radius:var(--radius-sm);
   background:var(--color-surface-alt);border:1px solid var(--color-border);font-size:var(--fs-sm);color:var(--color-text);
@@ -308,14 +346,14 @@ ul{list-style:none;}
 .quote-actions{display:flex;gap:var(--space-3);justify-content:flex-end;flex-wrap:wrap;}
 
 /* ============ STICKER COUNT ============ */
-.sticker-count-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--space-4);margin-bottom:var(--space-5);}
+.sticker-count-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--space-4);margin-bottom:var(--space-5);}
 .sticker-count-card{
-  border-radius:var(--radius-lg);padding:var(--space-5);display:flex;flex-direction:column;gap:2px;
-  border:1px solid var(--color-border);background:var(--color-surface);
+  min-width:0;border-radius:var(--radius-lg);padding:var(--space-5);display:flex;flex-direction:column;gap:2px;
+  border:1px solid var(--color-border);background:var(--color-surface);overflow:hidden;
 }
 .sticker-count-label{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted);}
-.sticker-count-value{font-family:var(--font-display);font-size:var(--fs-2xl);font-weight:800;}
-.sticker-count-sub{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.sticker-count-value{font-family:var(--font-display);font-size:clamp(1.5rem, 2vw + 1rem, 2.6rem);font-weight:800;line-height:1.1;word-break:break-word;}
+.sticker-count-sub{font-size:var(--fs-xs);color:var(--color-text-muted);line-height:1.4;}
 .size-chico .sticker-count-value{color:var(--color-gray);}
 .size-mediano .sticker-count-value{color:var(--color-warning);}
 .size-grande .sticker-count-value{color:var(--color-accent);}
@@ -326,6 +364,26 @@ ul{list-style:none;}
   background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);
   padding:var(--space-5);display:flex;flex-direction:column;gap:var(--space-3);max-width:720px;
 }
+.custom-chart-card{min-height:320px;max-width:none;}
+.custom-chart-canvas{display:block;width:100%!important;height:240px!important;max-height:240px;}
+
+/* ============ BAZARES (tabla estilo "Mis Bazares") ============ */
+.bazar-table-wrap{overflow-x:auto;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);margin-bottom:var(--space-2);}
+.bazar-table{width:100%;border-collapse:collapse;min-width:640px;}
+.bazar-table th{
+  text-align:left;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.03em;
+  color:var(--color-text-muted);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border);
+  background:var(--color-surface-alt);
+}
+.bazar-table td{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border);vertical-align:middle;font-size:var(--fs-sm);}
+.bazar-table tr:last-child td{border-bottom:none;}
+.bazar-table tr.is-active{background:var(--color-accent-soft);}
+.bazar-name-cell{font-weight:700;display:flex;align-items:center;gap:8px;}
+.bazar-row-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.bazar-row-actions button{padding:6px 12px;border-radius:var(--radius-sm);font-size:var(--fs-xs);font-weight:700;background:var(--color-surface-alt);border:1px solid var(--color-border);}
+.bazar-row-actions button:hover{border-color:var(--color-gray);}
+.bazar-row-actions .danger:hover{background:var(--color-danger);color:#fff;border-color:var(--color-danger);}
+.bazar-row-actions .active-badge{background:var(--color-accent);color:#fff;border-color:var(--color-accent);}
 
 /* ============ MODALS ============ */
 .modal-overlay{
@@ -368,4 +426,16 @@ ul{list-style:none;}
   .search-bar{order:3;max-width:none;flex-basis:100%;margin-left:0;}
   .header-title{font-size:var(--fs-md);}
   .page-content{padding:var(--space-4);}
+  .bazar-activo-label{display:none;}
+  .bazar-activo-bar select{max-width:100px;}
+  .sticker-count-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:560px){
+  .section-header{align-items:stretch;}
+  .section-header > div,
+  .section-header > div:last-child{width:100%;}
+  .section-header > div:last-child{display:flex;flex-wrap:wrap;gap:8px;}
+  .sticker-count-row{grid-template-columns:1fr;}
+  .sticker-count-card{padding:var(--space-4);}
+  .sticker-count-label{letter-spacing:.02em;}
 }
