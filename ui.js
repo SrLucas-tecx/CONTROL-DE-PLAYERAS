@@ -2,13 +2,14 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES } from "./config.js";
+import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
-  fmt, escapeHtml, costoEstampado, costoTotalPlayera, getCostoEstampadoEfectivo,
+  fmt, escapeHtml, costoTotalPlayera, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
+  areaTotalCm2, costoImpresion,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia,
-  datosGrafica, datosInventarioGrafica
+  datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
@@ -50,10 +51,14 @@ document.addEventListener("click", (e) => {
 const PAGE_TITLES = {
   cotizador: "Cotizador rápido",
   cotizaciones: "Cotizaciones guardadas",
+  produccion: "Producción (semáforo)",
+  clientes: "Clientes",
+  artes: "Historial de artes",
   playeras: "Inventario de playeras",
   stickers: "Estampados y stickers",
   etiquetas: "Etiquetas y colores",
   artistas: "Artistas y comisiones",
+  proveedores: "Proveedores",
   bazares: "Mis Bazares",
   "bazar-detalle": "Detalle de bazar",
   estadisticas: "Estadísticas",
@@ -68,6 +73,9 @@ export function switchPage(page) {
   document.getElementById("header-cta").style.display = page === "cotizador" ? "none" : "inline-block";
   if (page === "bazares") renderBazares();
   if (page === "estadisticas") renderEstadisticas();
+  if (page === "produccion") renderProduccionKanban();
+  if (page === "clientes") renderClientes();
+  if (page === "artes") renderHistorialArtes();
   closeSidebarMobile();
 }
 document.querySelectorAll(".nav-item").forEach(btn => {
@@ -272,6 +280,51 @@ function renderEtiquetas() {
 }
 
 /* =================================================================
+   ETIQUETAS OPERATIVAS (para cotizaciones: Urgente, Retrabajo, etc.)
+================================================================= */
+function openModalEtiquetaOp(id) {
+  setVal("eo-id", id || "");
+  document.getElementById("modal-etiqueta-op-title").textContent = id ? "Editar etiqueta operativa" : "Nueva etiqueta operativa";
+  if (id) {
+    const e = AppState.etiquetasOperativas.find(x => x.id === id);
+    setVal("eo-nombre", e.nombre); setVal("eo-color", e.color);
+  } else {
+    setVal("eo-nombre", ""); setVal("eo-color", "#e3363d");
+  }
+  openModal("modal-etiqueta-op");
+}
+function saveEtiquetaOp() {
+  const nombre = val("eo-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre a la etiqueta operativa.", "error");
+  const id = val("eo-id");
+  const data = { nombre, color: val("eo-color") };
+  if (id) {
+    Object.assign(AppState.etiquetasOperativas.find(x => x.id === id), data);
+  } else {
+    AppState.etiquetasOperativas.push(Object.assign({ id: uid() }, data));
+  }
+  saveState(); closeModal("modal-etiqueta-op"); renderEtiquetasOperativas(); refreshAllSelects();
+  showToast("Etiqueta operativa guardada.");
+}
+function deleteEtiquetaOp(id) {
+  if (!confirm("¿Eliminar esta etiqueta operativa? Se quitará de todas las cotizaciones.")) return;
+  AppState.etiquetasOperativas = AppState.etiquetasOperativas.filter(x => x.id !== id);
+  AppState.cotizaciones.forEach(c => { c.tagsOperativos = (c.tagsOperativos || []).filter(t => t !== id); });
+  saveState(); renderEtiquetasOperativas(); refreshAllSelects(); renderCotizacionesGuardadas();
+}
+function renderEtiquetasOperativas() {
+  const grid = document.getElementById("etiquetas-operativas-grid");
+  if (!grid) return;
+  grid.innerHTML = AppState.etiquetasOperativas.map(e => `
+    <div class="chip-item">
+      <span class="chip-swatch" style="background:${e.color}"></span>
+      ${escapeHtml(e.nombre)}
+      <button onclick="openModalEtiquetaOp('${e.id}')" title="Editar">✏️</button>
+      <button onclick="deleteEtiquetaOp('${e.id}')" title="Eliminar">✕</button>
+    </div>`).join("") || `<p class="empty-hint">Aún no hay etiquetas operativas.</p>`;
+}
+
+/* =================================================================
    ETIQUETAS DE TALLA (stock físico)
 ================================================================= */
 function openModalTallaEtiqueta(id) {
@@ -398,30 +451,98 @@ function renderArtistas() {
 }
 
 /* =================================================================
+   PROVEEDORES
+================================================================= */
+function openModalProveedor(id) {
+  setVal("prov-id", id || "");
+  document.getElementById("modal-proveedor-title").textContent = id ? "Editar proveedor" : "Nuevo proveedor";
+  if (id) {
+    const pr = AppState.proveedores.find(x => x.id === id);
+    setVal("prov-nombre", pr.nombre); setVal("prov-contacto", pr.contacto || "");
+    setVal("prov-producto", pr.producto || ""); setVal("prov-notas", pr.notas || "");
+  } else {
+    setVal("prov-nombre", ""); setVal("prov-contacto", ""); setVal("prov-producto", ""); setVal("prov-notas", "");
+  }
+  openModal("modal-proveedor");
+}
+function saveProveedor() {
+  const nombre = val("prov-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre al proveedor.", "error");
+  const id = val("prov-id");
+  const data = { nombre, contacto: val("prov-contacto"), producto: val("prov-producto"), notas: val("prov-notas") };
+  if (id) {
+    Object.assign(AppState.proveedores.find(x => x.id === id), data);
+  } else {
+    AppState.proveedores.push(Object.assign({ id: uid() }, data));
+  }
+  saveState(); closeModal("modal-proveedor"); renderProveedores();
+  showToast("Proveedor guardado.");
+}
+function deleteProveedor(id) {
+  if (!confirm("¿Eliminar este proveedor?")) return;
+  AppState.proveedores = AppState.proveedores.filter(x => x.id !== id);
+  saveState(); renderProveedores();
+}
+function renderProveedores() {
+  const grid = document.getElementById("proveedores-grid");
+  if (!grid) return;
+  grid.innerHTML = AppState.proveedores.map(pr => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">${escapeHtml(pr.nombre)}</span>
+      </div>
+      ${pr.producto ? `<div class="card-meta">📦 ${escapeHtml(pr.producto)}</div>` : ""}
+      ${pr.contacto ? `<div class="card-meta">📞 ${escapeHtml(pr.contacto)}</div>` : ""}
+      ${pr.notas ? `<div class="card-meta">${escapeHtml(pr.notas)}</div>` : ""}
+      <div class="card-actions">
+        <button onclick="openModalProveedor('${pr.id}')">✏️ Editar</button>
+        <button class="danger" onclick="deleteProveedor('${pr.id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`).join("") || `<p class="empty-hint">Aún no registras proveedores.</p>`;
+}
+
+/* =================================================================
    AJUSTES DE COSTOS (DTF)
 ================================================================= */
 function renderAjustes() {
   setVal("set-dtf-precio", AppState.settings.dtfPrecioMetro);
+  setVal("set-dtf-precio-especial", AppState.settings.dtfPrecioMetroEspecial);
   setVal("set-dtf-ancho", AppState.settings.dtfAnchoRolloCm);
+  setVal("set-sobrecargo-2xl", AppState.settings.sobrecargo2XLMonto);
+  setVal("set-stock-minimo-default", AppState.settings.stockMinimoDefault);
+  setVal("set-gangsheet-precio", AppState.settings.gangSheetPrecioMetro);
+  setVal("set-gangsheet-blanco-precio", AppState.settings.gangSheetBlancoSolidoPrecioMetro);
+  setVal("set-recargo-urgente", AppState.settings.recargoUrgentePct);
   setVal("set-moneda", AppState.settings.moneda);
   updateCostPreview();
 }
 function updateCostPreview() {
   const precio = parseFloat(document.getElementById("set-dtf-precio").value) || 0;
+  const precioEspecial = parseFloat(document.getElementById("set-dtf-precio-especial").value) || 0;
   const ancho = parseFloat(document.getElementById("set-dtf-ancho").value) || 1;
   const cm2 = precio / (100 * ancho);
+  const cm2Especial = precioEspecial / (100 * ancho);
   document.getElementById("preview-costo-cm2").textContent = "$" + cm2.toFixed(4);
   document.getElementById("preview-costo-ejemplo").textContent = fmt(cm2 * 30 * 40);
+  const previewEspecialEl = document.getElementById("preview-costo-especial-ejemplo");
+  if (previewEspecialEl) previewEspecialEl.textContent = fmt(cm2Especial * 30 * 40);
 }
 document.getElementById("set-dtf-precio").addEventListener("input", updateCostPreview);
+document.getElementById("set-dtf-precio-especial").addEventListener("input", updateCostPreview);
 document.getElementById("set-dtf-ancho").addEventListener("input", updateCostPreview);
 function saveSettings() {
   AppState.settings.dtfPrecioMetro = parseFloat(num("set-dtf-precio")) || 0;
+  AppState.settings.dtfPrecioMetroEspecial = parseFloat(num("set-dtf-precio-especial")) || 0;
   AppState.settings.dtfAnchoRolloCm = parseFloat(num("set-dtf-ancho")) || 1;
+  AppState.settings.sobrecargo2XLMonto = parseFloat(num("set-sobrecargo-2xl")) || 0;
+  AppState.settings.stockMinimoDefault = parseInt(num("set-stock-minimo-default")) || 0;
+  AppState.settings.gangSheetPrecioMetro = parseFloat(num("set-gangsheet-precio")) || 0;
+  AppState.settings.gangSheetBlancoSolidoPrecioMetro = parseFloat(num("set-gangsheet-blanco-precio")) || 0;
+  AppState.settings.recargoUrgentePct = Math.max(0, parseFloat(num("set-recargo-urgente")) || 0);
   AppState.settings.moneda = val("set-moneda") || "MXN";
   saveState();
   showToast("Ajustes guardados. Los costos se recalculan automáticamente.");
-  renderPlayeras(); renderQuoteItems();
+  renderPlayeras(); renderStickers(); renderQuoteItems();
 }
 
 /* =================================================================
@@ -511,6 +632,11 @@ function goToBazarDetalle(id) {
   switchPage("bazar-detalle");
   renderBazarDetalle();
 }
+// Envoltura para el botón "Editar" de la página de detalle de bazar: no se puede
+// referenciar directamente la variable de módulo `activeBazarId` desde HTML inline.
+function editActiveBazar() {
+  openModalBazar(activeBazarId);
+}
 function renderBazares() {
   const body = document.getElementById("bazares-table-body");
   document.getElementById("bazares-empty-hint").style.display = AppState.bazares.length ? "none" : "block";
@@ -569,6 +695,8 @@ function refreshAllSelects() {
   qArtista.innerHTML = `<option value="">Sin artista (100% estudio)</option>` +
     AppState.artistas.map(a => `<option value="${a.id}">${escapeHtml(a.nombre)} (${a.pctArtista}%)</option>`).join("") +
     `<option value="__custom__">Personalizado...</option>`;
+  // Etiquetas operativas en el cotizador (Urgente, Retrabajo, etc.)
+  renderQuoteTagsOperativos();
   // Selector global de bazar activo (header)
   renderHeaderBazarSelect();
   // Filtro de bazar en cotizaciones guardadas
@@ -595,6 +723,36 @@ function setPlayeraTagFilter(tag, btn) {
   renderPlayeras();
 }
 
+let playeraEstampadosDraft = [];
+function onPlayeraModoCosteoChange() {
+  const esGangSheet = val("p-modo-costeo") === "gangsheet";
+  document.getElementById("p-area-wrap").style.display = esGangSheet ? "none" : "block";
+  document.getElementById("p-gangsheet-wrap").style.display = esGangSheet ? "flex" : "none";
+  updatePlayeraPreview();
+}
+function onPlayeraNumEstampadosChange() {
+  const n = Math.max(1, parseInt(num("p-num-estampados")) || 1);
+  while (playeraEstampadosDraft.length < n) playeraEstampadosDraft.push({ id: uid(), anchoCm: 0, largoCm: 0 });
+  while (playeraEstampadosDraft.length > n) playeraEstampadosDraft.pop();
+  renderPlayeraEstampadosList();
+  updatePlayeraPreview();
+}
+function updatePlayeraEstampadoField(estId, field, value) {
+  const e = playeraEstampadosDraft.find(x => x.id === estId);
+  if (e) e[field] = parseFloat(value) || 0;
+  updatePlayeraPreview();
+}
+function renderPlayeraEstampadosList() {
+  const container = document.getElementById("p-estampados-list");
+  if (!container) return;
+  container.innerHTML = playeraEstampadosDraft.map((e, idx) => `
+    <div class="estampado-row">
+      <span class="estampado-row-label">#${idx + 1}</span>
+      <input type="number" min="0" step="0.1" placeholder="Ancho cm" value="${e.anchoCm}" onchange="updatePlayeraEstampadoField('${e.id}','anchoCm',this.value)">
+      <span>×</span>
+      <input type="number" min="0" step="0.1" placeholder="Largo cm" value="${e.largoCm}" onchange="updatePlayeraEstampadoField('${e.id}','largoCm',this.value)">
+    </div>`).join("");
+}
 function openModalPlayera(id) {
   setVal("p-id", id || "");
   document.getElementById("modal-playera-title").textContent = id ? "Editar playera" : "Nueva playera";
@@ -603,28 +761,61 @@ function openModalPlayera(id) {
     const p = AppState.playeras.find(x => x.id === id);
     setVal("p-nombre", p.nombre); setVal("p-tipo", p.tipo); setVal("p-talla", p.talla);
     setVal("p-color", p.colorId); setVal("p-stock", p.stock);
-    setVal("p-costo-playera", p.costoPlayera); setVal("p-num-estampados", p.numEstampados);
-    setVal("p-ancho", p.anchoCm); setVal("p-largo", p.largoCm);
+    setVal("p-costo-playera", p.costoPlayera);
     setChecked("p-tiene-etiqueta", p.tieneEtiquetaTalla);
+    setChecked("p-prenda-cliente", !!p.prendaCliente);
+    setChecked("p-dtf-especial", !!p.dtfEspecial);
+    setVal("p-stock-minimo", p.stockMinimo ?? AppState.settings.stockMinimoDefault ?? 0);
     setVal("p-precio-venta", p.precioVenta); setVal("p-precio-mayoreo", p.precioMayoreo || ""); setVal("p-prioridad", p.prioridad); setVal("p-estado", p.estado);
     setVal("p-notas", p.notas || "");
     document.querySelectorAll(".p-tag-cb").forEach(cb => cb.checked = (p.tags || []).includes(cb.value));
+    playeraEstampadosDraft = JSON.parse(JSON.stringify(p.estampados && p.estampados.length ? p.estampados : [{ id: uid(), anchoCm: 0, largoCm: 0 }]));
+    setVal("p-num-estampados", playeraEstampadosDraft.length);
+    setVal("p-modo-costeo", p.modoCosteo || "area");
+    setVal("p-gangsheet-metros", p.gangSheetMetros || 0);
+    setChecked("p-gangsheet-blanco-solido", !!p.gangSheetBlancoSolido);
   } else {
     ["p-nombre","p-notas"].forEach(f => setVal(f, ""));
     setVal("p-tipo", "Playera"); setVal("p-talla", ""); setVal("p-stock", 1);
-    setVal("p-costo-playera", 47.5); setVal("p-num-estampados", 1);
-    setVal("p-ancho", ""); setVal("p-largo", ""); setChecked("p-tiene-etiqueta", true);
+    setVal("p-costo-playera", 47.5);
+    setChecked("p-tiene-etiqueta", true);
+    setChecked("p-prenda-cliente", false); setChecked("p-dtf-especial", false);
+    setVal("p-stock-minimo", AppState.settings.stockMinimoDefault || 0);
     setVal("p-precio-venta", ""); setVal("p-precio-mayoreo", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En stock");
+    playeraEstampadosDraft = [{ id: uid(), anchoCm: 0, largoCm: 0 }];
+    setVal("p-num-estampados", 1);
+    setVal("p-modo-costeo", "area");
+    setVal("p-gangsheet-metros", 0);
+    setChecked("p-gangsheet-blanco-solido", false);
   }
-  updatePlayeraPreview();
+  document.getElementById("p-costo-playera").disabled = checked("p-prenda-cliente");
+  renderPlayeraEstampadosList();
+  onPlayeraModoCosteoChange();
   openModal("modal-playera");
 }
+function onPrendaClienteChange() {
+  const esCliente = checked("p-prenda-cliente");
+  const input = document.getElementById("p-costo-playera");
+  input.disabled = esCliente;
+  if (esCliente) input.value = 0;
+  updatePlayeraPreview();
+}
 function updatePlayeraPreview() {
-  const cEst = costoEstampado(num("p-ancho"), num("p-largo"), num("p-num-estampados"));
-  const cTotal = num("p-costo-playera") + cEst;
+  const draft = {
+    modoCosteo: val("p-modo-costeo"),
+    dtfEspecial: checked("p-dtf-especial"),
+    estampados: playeraEstampadosDraft,
+    gangSheetMetros: num("p-gangsheet-metros"),
+    gangSheetBlancoSolido: checked("p-gangsheet-blanco-solido")
+  };
+  const cEst = costoImpresion(draft);
+  const costoBase = checked("p-prenda-cliente") ? 0 : num("p-costo-playera");
+  const sobrecargo = sobrecargoTalla(val("p-talla"));
+  const cTotal = costoBase + cEst + sobrecargo;
   const ganancia = num("p-precio-venta") - cTotal;
+  const etiquetaCosto = draft.modoCosteo === "gangsheet" ? "Costo Gang Sheet" : "Costo del estampado";
   document.getElementById("p-cost-preview").innerHTML =
-    `Costo del estampado: <b>${fmt(cEst)}</b> — Costo total: <b>${fmt(cTotal)}</b> — Ganancia estimada: <b>${fmt(ganancia)}</b>`;
+    `${etiquetaCosto}: <b>${fmt(cEst)}</b>${sobrecargo ? ` — Sobrecargo talla: <b>${fmt(sobrecargo)}</b>` : ""} — Costo total: <b>${fmt(cTotal)}</b> — Ganancia estimada: <b>${fmt(ganancia)}</b>`;
 }
 function savePlayera() {
   const nombre = val("p-nombre").trim();
@@ -632,13 +823,18 @@ function savePlayera() {
   const id = val("p-id");
   const existing = id ? AppState.playeras.find(x => x.id === id) : null;
   const tags = Array.from(document.querySelectorAll(".p-tag-cb:checked")).map(cb => cb.value);
+  const prendaCliente = checked("p-prenda-cliente");
   const data = {
     nombre, tipo: val("p-tipo"), talla: val("p-talla").trim(), colorId: val("p-color"),
     stock: parseInt(num("p-stock")) || 0,
-    costoPlayera: parseFloat(num("p-costo-playera")) || 0,
-    numEstampados: parseInt(num("p-num-estampados")) || 1,
-    anchoCm: parseFloat(num("p-ancho")) || 0, largoCm: parseFloat(num("p-largo")) || 0,
+    costoPlayera: prendaCliente ? 0 : (parseFloat(num("p-costo-playera")) || 0),
+    estampados: JSON.parse(JSON.stringify(playeraEstampadosDraft)),
+    modoCosteo: val("p-modo-costeo") || "area",
+    gangSheetMetros: parseFloat(num("p-gangsheet-metros")) || 0,
+    gangSheetBlancoSolido: checked("p-gangsheet-blanco-solido"),
     tieneEtiquetaTalla: checked("p-tiene-etiqueta"),
+    prendaCliente, dtfEspecial: checked("p-dtf-especial"),
+    stockMinimo: parseInt(num("p-stock-minimo")) || 0,
     precioVenta: parseFloat(num("p-precio-venta")) || 0,
     precioMayoreo: parseFloat(num("p-precio-mayoreo")) || 0,
     prioridad: val("p-prioridad"), estado: val("p-estado"),
@@ -677,9 +873,14 @@ function renderPlayeras() {
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
   grid.innerHTML = list.map(p => {
-    const cEst = costoEstampado(p.anchoCm, p.largoCm, p.numEstampados);
-    const cTotal = p.costoPlayera + cEst;
+    const cEst = costoImpresion(p);
+    const cTotal = costoTotalPlayera(p);
     const ganancia = p.precioVenta - cTotal;
+    const stockBajo = (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
+    const esGangSheet = p.modoCosteo === "gangsheet";
+    const etiquetaImpresion = esGangSheet
+      ? `Gang Sheet (${(p.gangSheetMetros||0)} m${p.gangSheetBlancoSolido ? ", blanco sólido" : ""})`
+      : `Estampado (${(p.estampados||[]).length} · ${areaTotalCm2(p.estampados).toFixed(0)} cm²)${p.dtfEspecial ? " ✨" : ""}`;
     const tagsHtml = (p.tags || []).map(tid => {
       const e = AppState.etiquetas.find(x => x.id === tid);
       return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
@@ -696,8 +897,8 @@ function renderPlayeras() {
         ${p.tieneEtiquetaTalla ? "·<span>🏷️ con etiqueta</span>" : ""}
       </div>
       <div class="card-row"><span>Stock</span><span>${p.stock} pza(s)</span></div>
-      <div class="card-row"><span>Costo playera</span><span>${fmt(p.costoPlayera)}</span></div>
-      <div class="card-row"><span>Costo estampado (${p.anchoCm}×${p.largoCm}cm ×${p.numEstampados})</span><span>${fmt(cEst)}</span></div>
+      <div class="card-row"><span>Costo playera</span><span>${p.prendaCliente ? "🎁 Prenda del cliente ($0.00)" : fmt(p.costoPlayera)}</span></div>
+      <div class="card-row"><span>${etiquetaImpresion}</span><span>${fmt(cEst)}</span></div>
       <div class="card-row"><span>Costo total</span><span>${fmt(cTotal)}</span></div>
       <div class="card-row"><span>Precio de venta</span><span>${fmt(p.precioVenta)}</span></div>
       ${p.precioMayoreo ? `<div class="card-row"><span>Precio mayoreo</span><span>${fmt(p.precioMayoreo)}</span></div>` : ""}
@@ -707,6 +908,9 @@ function renderPlayeras() {
         <span class="card-badge ${prioridadBadgeClass(p.prioridad)}">${p.prioridad}</span>
         ${bazarEstado ? `<span class="card-badge ${bazarEstadoBadgeClass(bazarEstado)}">${bazarEstado === "Vendida" ? "✅ Vendida" : bazarEstado === "Venta nula" ? "🎁 Venta nula" : "🟢 En bazar"}</span>` : ""}
         ${bazarIdsDe(p).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(p))}</span>` : ""}
+        ${p.prendaCliente ? `<span class="card-badge badge-media">🎁 Prenda del cliente</span>` : ""}
+        ${esGangSheet ? `<span class="card-badge badge-alta">🧻 Gang Sheet</span>` : (p.dtfEspecial ? `<span class="card-badge badge-alta">✨ DTF especial</span>` : "")}
+        ${stockBajo ? `<span class="card-badge badge-agotado">⚠️ Stock bajo</span>` : ""}
         ${tagsHtml}
       </div>
       <div class="card-actions">
@@ -727,11 +931,13 @@ function openModalSticker(id) {
   if (id) {
     const s = AppState.stickers.find(x => x.id === id);
     setVal("s-nombre", s.nombre); setVal("s-tamano", s.tamano); setVal("s-costo", s.costo);
-    setVal("s-stock", s.stock); setVal("s-prioridad", s.prioridad); setVal("s-estado", s.estado);
+    setVal("s-stock", s.stock); setVal("s-stock-minimo", s.stockMinimo ?? AppState.settings.stockMinimoDefault ?? 0);
+    setVal("s-prioridad", s.prioridad); setVal("s-estado", s.estado);
     setVal("s-notas", s.notas || "");
   } else {
     setVal("s-nombre", ""); setVal("s-tamano", "Chico"); setVal("s-costo", 10);
-    setVal("s-stock", 1); setVal("s-prioridad", "Media"); setVal("s-estado", "En stock"); setVal("s-notas", "");
+    setVal("s-stock", 1); setVal("s-stock-minimo", AppState.settings.stockMinimoDefault || 0);
+    setVal("s-prioridad", "Media"); setVal("s-estado", "En stock"); setVal("s-notas", "");
   }
   openModal("modal-sticker");
 }
@@ -741,7 +947,8 @@ function saveSticker() {
   const id = val("s-id");
   const data = {
     nombre, tamano: val("s-tamano"), costo: parseFloat(num("s-costo")) || 0,
-    stock: parseInt(num("s-stock")) || 0, prioridad: val("s-prioridad"), estado: val("s-estado"),
+    stock: parseInt(num("s-stock")) || 0, stockMinimo: parseInt(num("s-stock-minimo")) || 0,
+    prioridad: val("s-prioridad"), estado: val("s-estado"),
     notas: val("s-notas")
   };
   if (id) {
@@ -779,7 +986,9 @@ function renderStickers() {
   });
   const grid = document.getElementById("stickers-grid");
   document.getElementById("stickers-empty-hint").style.display = list.length ? "none" : "block";
-  grid.innerHTML = list.map(s => `
+  grid.innerHTML = list.map(s => {
+    const stockBajo = (s.stockMinimo || 0) > 0 && (s.stock || 0) <= s.stockMinimo;
+    return `
     <div class="card">
       <div class="card-top">
         <span class="card-title">${escapeHtml(s.nombre)}</span>
@@ -790,23 +999,47 @@ function renderStickers() {
       <div class="card-tags">
         <span class="card-badge ${estadoBadgeClass(s.estado)}">${s.estado}</span>
         <span class="card-badge ${prioridadBadgeClass(s.prioridad)}">${s.prioridad}</span>
+        ${stockBajo ? `<span class="card-badge badge-agotado">⚠️ Stock bajo</span>` : ""}
       </div>
       ${s.notas ? `<div class="card-meta">${escapeHtml(s.notas)}</div>` : ""}
       <div class="card-actions">
         <button onclick="openModalSticker('${s.id}')">✏️ Editar</button>
         <button class="danger" onclick="deleteSticker('${s.id}')">🗑️ Eliminar</button>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 
 /* =================================================================
    COTIZADOR RÁPIDO
 ================================================================= */
 let quoteItems = [];
+let quoteServiciosExtra = [];
+let quoteTagsOperativos = [];
+let editingQuoteItemRowId = null;
+
+function toggleQuoteTagOperativo(tagId, isChecked) {
+  if (isChecked) {
+    if (!quoteTagsOperativos.includes(tagId)) quoteTagsOperativos.push(tagId);
+  } else {
+    quoteTagsOperativos = quoteTagsOperativos.filter(t => t !== tagId);
+  }
+}
+function renderQuoteTagsOperativos() {
+  const tagsOpContainer = document.getElementById("q-tags-operativos-container");
+  if (!tagsOpContainer) return;
+  tagsOpContainer.innerHTML = AppState.etiquetasOperativas.map(e => `
+    <label class="tag-checkbox" style="border-color:${e.color}">
+      <input type="checkbox" value="${e.id}" class="q-tag-op-cb" ${quoteTagsOperativos.includes(e.id) ? "checked" : ""} onchange="toggleQuoteTagOperativo('${e.id}', this.checked)"> ${escapeHtml(e.nombre)}
+    </label>`).join("") || `<span class="card-meta">Crea etiquetas operativas en el apartado "Etiquetas y colores".</span>`;
+}
 
 function blankQuoteItem() {
-  return { rowId: uid(), playeraId: "", nombre: "", talla: "", colorId: "", cantidad: 1,
-    anchoCm: 0, largoCm: 0, numEstampados: 1, costoPlayera: 0, precioVenta: 0, costoEstampadoManual: null };
+  return { rowId: uid(), playeraId: "", nombre: "", tipo: "Playera", talla: "", colorId: "", cantidad: 1,
+    estampados: [{ id: uid(), anchoCm: 0, largoCm: 0 }],
+    modoCosteo: "area", gangSheetMetros: 0, gangSheetBlancoSolido: false,
+    costoPlayera: 0, precioVenta: 0, costoEstampadoManual: null,
+    prendaCliente: false, dtfEspecial: false };
 }
 function addQuoteItem() {
   quoteItems.push(blankQuoteItem());
@@ -823,13 +1056,26 @@ function onQuoteItemProductChange(rowId, playeraId) {
     const p = AppState.playeras.find(x => x.id === playeraId);
     if (p) {
       const esMayoreo = val("q-tipo-venta") === "Mayoreo";
-      item.nombre = p.nombre; item.talla = p.talla; item.colorId = p.colorId;
-      item.anchoCm = p.anchoCm; item.largoCm = p.largoCm; item.numEstampados = p.numEstampados;
+      item.nombre = p.nombre; item.tipo = p.tipo; item.talla = p.talla; item.colorId = p.colorId;
+      item.estampados = JSON.parse(JSON.stringify(p.estampados && p.estampados.length ? p.estampados : [{ id: uid(), anchoCm: 0, largoCm: 0 }]));
+      item.modoCosteo = p.modoCosteo || "area";
+      item.gangSheetMetros = p.gangSheetMetros || 0;
+      item.gangSheetBlancoSolido = !!p.gangSheetBlancoSolido;
       item.costoPlayera = p.costoPlayera;
       item.precioVenta = esMayoreo ? (p.precioMayoreo || p.precioVenta || item.precioVenta) : (p.precioVenta || item.precioVenta);
       item.costoEstampadoManual = null;
+      item.prendaCliente = !!p.prendaCliente;
+      item.dtfEspecial = !!p.dtfEspecial;
     }
   }
+  renderQuoteItems();
+}
+// Activa/desactiva las banderas "prenda del cliente" y "DTF especial" de una prenda de la cotización.
+function toggleQuoteItemFlag(rowId, field, isChecked) {
+  const item = quoteItems.find(i => i.rowId === rowId);
+  if (!item) return;
+  item[field] = isChecked;
+  if (field === "prendaCliente" && isChecked) item.costoPlayera = 0;
   renderQuoteItems();
 }
 // Campos que solo se recalculan cuando el usuario da clic fuera del campo (evento "change"),
@@ -837,11 +1083,90 @@ function onQuoteItemProductChange(rowId, playeraId) {
 function updateQuoteItemField(rowId, field, value) {
   const item = quoteItems.find(i => i.rowId === rowId);
   if (!item) return;
-  const numericFields = ["cantidad","anchoCm","largoCm","numEstampados","costoPlayera","precioVenta","costoEstampadoManual"];
+  const numericFields = ["cantidad","costoPlayera","precioVenta","costoEstampadoManual"];
   item[field] = numericFields.includes(field) ? (parseFloat(value) || 0) : value;
-  // si cambian las medidas o el número de estampados, se vuelve a calcular el costo automáticamente
-  if (["anchoCm","largoCm","numEstampados"].includes(field)) item.costoEstampadoManual = null;
   renderQuoteItems();
+}
+
+/* -----------------------------------------------------------------
+   ÁREAS / GANG SHEET DE UNA PRENDA DEL COTIZADOR
+   Se editan en un modal aparte (en vez de columnas en la tabla) para
+   no saturar la tabla, ya que una prenda puede tener varios estampados.
+----------------------------------------------------------------- */
+function updateQuoteItemNumEstampados(rowId, value) {
+  const item = quoteItems.find(i => i.rowId === rowId);
+  if (!item) return;
+  const n = Math.max(1, parseInt(value) || 1);
+  const estampados = item.estampados || [];
+  while (estampados.length < n) estampados.push({ id: uid(), anchoCm: 0, largoCm: 0 });
+  while (estampados.length > n) estampados.pop();
+  item.estampados = estampados;
+  item.costoEstampadoManual = null;
+  renderQuoteItems();
+}
+// Envoltura para usarse desde el atributo onchange del modal: no se puede referenciar
+// directamente la variable de módulo `editingQuoteItemRowId` desde HTML inline.
+function updateQuoteEstampadosCountFromModal(value) {
+  updateQuoteItemNumEstampados(editingQuoteItemRowId, value);
+  renderQuoteEstampadosList();
+}
+function openModalQuoteEstampados(rowId) {
+  editingQuoteItemRowId = rowId;
+  const item = quoteItems.find(i => i.rowId === rowId);
+  if (!item) return;
+  document.getElementById("modal-quote-estampados-title").textContent = `Impresión — ${item.nombre || "prenda personalizada"}`;
+  setVal("qe-modo-costeo", item.modoCosteo || "area");
+  setChecked("qe-dtf-especial", !!item.dtfEspecial);
+  setVal("qe-num-estampados", (item.estampados || []).length || 1);
+  setVal("qe-gangsheet-metros", item.gangSheetMetros || 0);
+  setChecked("qe-gangsheet-blanco-solido", !!item.gangSheetBlancoSolido);
+  onQuoteEstampadoModoChange();
+  renderQuoteEstampadosList();
+  openModal("modal-quote-estampados");
+}
+function toggleQuoteAreaDtfEspecial(isChecked) {
+  const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
+  if (!item) return;
+  item.dtfEspecial = isChecked;
+  renderQuoteItems();
+}
+function onQuoteEstampadoModoChange() {
+  const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
+  if (!item) return;
+  item.modoCosteo = val("qe-modo-costeo");
+  const esGangSheet = item.modoCosteo === "gangsheet";
+  document.getElementById("qe-area-wrap").style.display = esGangSheet ? "none" : "block";
+  document.getElementById("qe-gangsheet-wrap").style.display = esGangSheet ? "flex" : "none";
+  renderQuoteItems();
+}
+function updateQuoteEstampadoField(estId, field, value) {
+  const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
+  if (!item) return;
+  const e = (item.estampados || []).find(x => x.id === estId);
+  if (e) e[field] = parseFloat(value) || 0;
+  item.costoEstampadoManual = null;
+  renderQuoteEstampadosList();
+  renderQuoteItems();
+}
+function updateQuoteGangSheetField(field, value) {
+  const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
+  if (!item) return;
+  item[field] = field === "gangSheetBlancoSolido" ? value : (parseFloat(value) || 0);
+  renderQuoteItems();
+}
+function renderQuoteEstampadosList() {
+  const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
+  const container = document.getElementById("qe-estampados-list");
+  if (!item || !container) return;
+  container.innerHTML = (item.estampados || []).map((e, idx) => `
+    <div class="estampado-row">
+      <span class="estampado-row-label">#${idx + 1}</span>
+      <input type="number" min="0" step="0.1" placeholder="Ancho cm" value="${e.anchoCm}" onchange="updateQuoteEstampadoField('${e.id}','anchoCm',this.value)">
+      <span>×</span>
+      <input type="number" min="0" step="0.1" placeholder="Largo cm" value="${e.largoCm}" onchange="updateQuoteEstampadoField('${e.id}','largoCm',this.value)">
+    </div>`).join("");
+  const totalEl = document.getElementById("qe-estampados-total");
+  if (totalEl) totalEl.textContent = areaTotalCm2(item.estampados).toFixed(1) + " cm²";
 }
 function onQuoteArtistChange() {
   const artistaId = val("q-artista");
@@ -883,12 +1208,13 @@ function renderQuoteItems() {
 
   body.innerHTML = quoteItems.map(item => {
     const cEst = getCostoEstampadoEfectivo(item);
-    const cTotalUnit = item.costoPlayera + cEst;
+    const cTotalUnit = costoUnitarioItem(item);
     const gananciaUnit = item.precioVenta - cTotalUnit;
-    const cEstCellHtml = item.numEstampados > 1
-      ? `<input type="number" min="0" step="0.01" value="${cEst}" title="Costo del estampado (editable, hay más de un estampado)"
-           onchange="updateQuoteItemField('${item.rowId}','costoEstampadoManual',this.value)" style="width:85px;">`
-      : `<span class="readonly-cell">${fmt(cEst)}</span>`;
+    const esGangSheet = item.modoCosteo === "gangsheet";
+    const numEstampados = (item.estampados || []).length;
+    const impresionLabel = esGangSheet
+      ? `🧻 ${item.gangSheetMetros || 0} m${item.gangSheetBlancoSolido ? " (blanco)" : ""}`
+      : `📐 ${numEstampados}× · ${areaTotalCm2(item.estampados).toFixed(0)} cm²`;
     return `
     <tr>
       <td>
@@ -898,7 +1224,12 @@ function renderQuoteItems() {
         </select>
         ${!item.playeraId ? `<input type="text" placeholder="Nombre" value="${escapeHtml(item.nombre)}" style="margin-top:4px;" onchange="updateQuoteItemField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta" style="margin-top:4px;">${escapeHtml(item.nombre)}</div>`}
       </td>
-      <td><input type="text" value="${escapeHtml(item.talla)}" onchange="updateQuoteItemField('${item.rowId}','talla',this.value)"></td>
+      <td>
+        <select onchange="updateQuoteItemField('${item.rowId}','tipo',this.value)" style="min-width:110px;">
+          ${TIPOS_PRENDA.map(t => `<option value="${t}" ${item.tipo===t?"selected":""}>${t}</option>`).join("")}
+        </select>
+      </td>
+      <td><input type="text" value="${escapeHtml(item.talla)}" onchange="updateQuoteItemField('${item.rowId}','talla',this.value)" style="width:60px;"></td>
       <td>
         <select onchange="updateQuoteItemField('${item.rowId}','colorId',this.value)">
           <option value="">—</option>
@@ -906,32 +1237,47 @@ function renderQuoteItems() {
         </select>
       </td>
       <td><input type="number" min="1" step="1" value="${item.cantidad}" onchange="updateQuoteItemField('${item.rowId}','cantidad',this.value)" style="width:60px;"></td>
-      <td><input type="number" min="0" step="0.01" value="${item.anchoCm}" onchange="updateQuoteItemField('${item.rowId}','anchoCm',this.value)" style="width:70px;"></td>
-      <td><input type="number" min="0" step="0.01" value="${item.largoCm}" onchange="updateQuoteItemField('${item.rowId}','largoCm',this.value)" style="width:70px;"></td>
-      <td><input type="number" min="1" step="1" value="${item.numEstampados}" onchange="updateQuoteItemField('${item.rowId}','numEstampados',this.value)" style="width:60px;"></td>
-      <td><input type="number" min="0" step="0.01" value="${item.costoPlayera}" onchange="updateQuoteItemField('${item.rowId}','costoPlayera',this.value)" style="width:80px;"></td>
-      <td>${cEstCellHtml}</td>
+      <td style="text-align:center;" title="Prenda del cliente (costo de playera $0.00)">
+        <input type="checkbox" ${item.prendaCliente ? "checked" : ""} onchange="toggleQuoteItemFlag('${item.rowId}','prendaCliente', this.checked)">
+      </td>
+      <td><input type="number" min="0" step="0.01" value="${item.costoPlayera}" ${item.prendaCliente ? "disabled" : ""} onchange="updateQuoteItemField('${item.rowId}','costoPlayera',this.value)" style="width:80px;"></td>
+      <td>
+        <button class="area-edit-btn" onclick="openModalQuoteEstampados('${item.rowId}')" title="Editar impresión (áreas o Gang Sheet)">${impresionLabel}</button>
+        <div class="card-meta">${fmt(cEst)}</div>
+      </td>
       <td><input type="number" min="0" step="0.01" value="${item.precioVenta}" onchange="updateQuoteItemField('${item.rowId}','precioVenta',this.value)" style="width:85px;"></td>
       <td class="readonly-cell" style="color:${gananciaUnit>=0?'var(--color-success)':'var(--color-danger)'}">${fmt(gananciaUnit * item.cantidad)}</td>
       <td><button class="remove-row" onclick="removeQuoteItem('${item.rowId}')" title="Quitar">✕</button></td>
     </tr>`;
   }).join("");
 
+  renderServiciosExtra();
   updateQuoteSummary();
 }
 function computeQuoteTotals() {
-  let totalVenta = 0, totalCosto = 0;
+  let ventaBruta = 0, totalCosto = 0;
   quoteItems.forEach(item => {
-    const cEst = getCostoEstampadoEfectivo(item);
-    const cTotalUnit = item.costoPlayera + cEst;
-    totalVenta += item.precioVenta * item.cantidad;
-    totalCosto += cTotalUnit * item.cantidad;
+    const costoUnit = costoUnitarioItem(item);
+    ventaBruta += item.precioVenta * item.cantidad;
+    totalCosto += costoUnit * item.cantidad;
   });
+  const sumServiciosExtra = quoteServiciosExtra.reduce((s, i) => s + (i.monto || 0), 0);
+  ventaBruta += sumServiciosExtra;
+  const descuentoPct = Math.min(15, Math.max(0, num("q-descuento-pct") || 0));
+  const montoDescuento = ventaBruta * (descuentoPct / 100);
+  const ventaConDescuento = ventaBruta - montoDescuento;
+  const esUrgente = checked("q-urgente");
+  const recargoUrgentePct = esUrgente ? (AppState.settings.recargoUrgentePct || 0) : 0;
+  const montoUrgente = ventaConDescuento * (recargoUrgentePct / 100);
+  const totalVenta = ventaConDescuento + montoUrgente;
   const ganancia = totalVenta - totalCosto;
   const comision = currentQuoteCommission();
   const parteArtista = ganancia * (comision.pctArtista / 100);
   const parteEstudio = ganancia * (comision.pctEstudio / 100);
-  return { totalVenta, totalCosto, ganancia, parteArtista, parteEstudio, comision };
+  return {
+    ventaBruta, totalVenta, totalCosto, ganancia, parteArtista, parteEstudio, comision, sumServiciosExtra,
+    descuentoPct, montoDescuento, esUrgente, recargoUrgentePct, montoUrgente
+  };
 }
 function updateQuoteSummary() {
   const t = computeQuoteTotals();
@@ -940,21 +1286,81 @@ function updateQuoteSummary() {
   document.getElementById("sum-ganancia").textContent = fmt(t.ganancia);
   document.getElementById("sum-artista").textContent = fmt(t.parteArtista);
   document.getElementById("sum-estudio").textContent = fmt(t.parteEstudio);
+  const sumServiciosExtraEl = document.getElementById("sum-servicios-extra");
+  if (sumServiciosExtraEl) sumServiciosExtraEl.textContent = fmt(t.sumServiciosExtra);
+  const sumDescuentoEl = document.getElementById("sum-descuento");
+  if (sumDescuentoEl) sumDescuentoEl.textContent = "− " + fmt(t.montoDescuento);
+  const sumUrgenteEl = document.getElementById("sum-urgente");
+  if (sumUrgenteEl) sumUrgenteEl.textContent = "+ " + fmt(t.montoUrgente);
+  const urgenteCard = document.getElementById("sum-urgente-card");
+  if (urgenteCard) urgenteCard.style.display = t.esUrgente ? "flex" : "none";
   const artistName = t.comision.nombre || "Sin artista";
   document.getElementById("sum-artista-label").textContent = `Parte de ${artistName} (${t.comision.pctArtista}%)`;
   document.getElementById("sum-estudio-label").textContent = `Parte del estudio (${t.comision.pctEstudio}%)`;
   document.getElementById("sum-artista-card").style.display = t.comision.pctArtista > 0 ? "flex" : "none";
 }
+
+/* -----------------------------------------------------------------
+   SERVICIOS EXTRA DE LA COTIZACIÓN (planchado especial, empaque,
+   envío, etc.) — se suman al total de venta de la cotización actual.
+----------------------------------------------------------------- */
+function openModalServicioExtra(id) {
+  setVal("se-id", id || "");
+  document.getElementById("modal-servicio-extra-title").textContent = id ? "Editar servicio extra" : "Nuevo servicio extra";
+  if (id) {
+    const s = quoteServiciosExtra.find(x => x.id === id);
+    setVal("se-concepto", s.concepto); setVal("se-monto", s.monto);
+  } else {
+    setVal("se-concepto", ""); setVal("se-monto", 0);
+  }
+  openModal("modal-servicio-extra");
+}
+function saveServicioExtra() {
+  const concepto = val("se-concepto").trim();
+  if (!concepto) return showToast("Ponle un concepto al servicio extra.", "error");
+  const id = val("se-id");
+  const data = { concepto, monto: parseFloat(num("se-monto")) || 0 };
+  if (id) {
+    Object.assign(quoteServiciosExtra.find(x => x.id === id), data);
+  } else {
+    quoteServiciosExtra.push(Object.assign({ id: uid() }, data));
+  }
+  closeModal("modal-servicio-extra");
+  renderServiciosExtra();
+  updateQuoteSummary();
+  showToast("Servicio extra guardado.");
+}
+function deleteServicioExtra(id) {
+  quoteServiciosExtra = quoteServiciosExtra.filter(x => x.id !== id);
+  renderServiciosExtra();
+  updateQuoteSummary();
+}
+function renderServiciosExtra() {
+  const body = document.getElementById("quote-servicios-extra-body");
+  if (!body) return;
+  const empty = document.getElementById("quote-servicios-extra-empty");
+  if (empty) empty.style.display = quoteServiciosExtra.length ? "none" : "block";
+  body.innerHTML = quoteServiciosExtra.map(s => `
+    <tr>
+      <td>${escapeHtml(s.concepto)}</td>
+      <td>${fmt(s.monto)}</td>
+      <td><button class="remove-row" onclick="deleteServicioExtra('${s.id}')" title="Quitar">✕</button></td>
+    </tr>`).join("");
+}
 function resetQuoteForm() {
   quoteItems = [];
+  quoteServiciosExtra = [];
+  quoteTagsOperativos = [];
   setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-vendedor", "");
   setVal("q-fecha", new Date().toISOString().slice(0,10));
   setVal("q-artista", ""); setVal("q-comision-pct", 0); setVal("q-notas", "");
   setVal("q-tipo-venta", "Menudeo");
+  setVal("q-descuento-pct", 0); setChecked("q-urgente", false);
   setChecked("q-venta-nula", false); setVal("q-venta-nula-motivo", "");
   document.getElementById("q-comision-custom-wrap").style.display = "none";
   document.getElementById("q-venta-nula-motivo-wrap").style.display = "none";
   document.getElementById("venta-nula-banner").style.display = "none";
+  renderQuoteTagsOperativos();
   renderQuoteItems();
 }
 function saveQuote() {
@@ -974,9 +1380,15 @@ function saveQuote() {
     ventaNulaMotivo: val("q-venta-nula-motivo"),
     notas: val("q-notas"),
     items: JSON.parse(JSON.stringify(quoteItems)),
+    serviciosExtra: JSON.parse(JSON.stringify(quoteServiciosExtra)),
+    ventaBruta: t.ventaBruta,
+    descuentoPct: t.descuentoPct, montoDescuento: t.montoDescuento,
+    urgente: t.esUrgente, recargoUrgentePct: t.recargoUrgentePct, montoUrgente: t.montoUrgente,
     totalVenta: t.totalVenta, totalCosto: t.totalCosto, ganancia: t.ganancia,
     parteArtista: t.parteArtista, parteEstudio: t.parteEstudio,
     comisionNombre: t.comision.nombre, pctArtista: t.comision.pctArtista, pctEstudio: t.comision.pctEstudio,
+    tagsOperativos: JSON.parse(JSON.stringify(quoteTagsOperativos)),
+    estadoProduccion: editingId ? ((AppState.cotizaciones.find(c => c.id === editingId) || {}).estadoProduccion || "Por hacer") : "Por hacer",
     estado: editingId ? (AppState.cotizaciones.find(c=>c.id===editingId)||{}).estado || "Pendiente" : "Pendiente"
   };
   if (editingId) {
@@ -999,7 +1411,7 @@ function exportQuotePDF() {
   const html = buildQuoteHTML({
     folio: val("quote-editing-id") ? "Edición" : "Nueva",
     cliente: val("q-cliente") || "Cliente sin nombre", fecha: val("q-fecha"), vendedor: val("q-vendedor"),
-    items: quoteItems, notas: val("q-notas"), ventaNula: checked("q-venta-nula"),
+    items: quoteItems, serviciosExtra: quoteServiciosExtra, notas: val("q-notas"), ventaNula: checked("q-venta-nula"),
     tipoVenta: val("q-tipo-venta"), ...t
   });
   const container = document.getElementById("pdf-template");
@@ -1009,14 +1421,14 @@ function exportQuotePDF() {
 function buildQuoteHTML(q) {
   const rows = q.items.map(item => {
     return `<tr>
-      <td>${escapeHtml(item.nombre || "—")}</td><td>${escapeHtml(item.talla)}</td><td>${colorNombre(item.colorId)}</td>
+      <td>${escapeHtml(item.nombre || "—")}${item.tipo ? ` <span style="color:#888;">(${escapeHtml(item.tipo)})</span>` : ""}</td><td>${escapeHtml(item.talla)}</td><td>${colorNombre(item.colorId)}</td>
       <td>${item.cantidad}</td><td>${fmt(item.precioVenta)}</td><td>${fmt(item.precioVenta*item.cantidad)}</td>
     </tr>`;
   }).join("");
   return `
   <div style="font-family:Arial,sans-serif;color:#222;padding:10px;">
     <div style="display:flex;justify-content:space-between;border-bottom:3px solid #c0242c;padding-bottom:10px;margin-bottom:16px;">
-      <div><h1 style="margin:0;color:#c0242c;">LUCXSTUDIO</h1><p style="margin:2px 0;font-size:12px;">Cotización de playeras ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}</p></div>
+      <div><h1 style="margin:0;color:#c0242c;">LUCXSTUDIO</h1><p style="margin:2px 0;font-size:12px;">Cotización de playeras ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}${q.urgente || q.esUrgente ? " — 🚀 Pedido urgente" : ""}</p></div>
       <div style="text-align:right;font-size:12px;"><b>Folio:</b> ${q.folio}<br><b>Fecha:</b> ${q.fecha}</div>
     </div>
     <p style="font-size:13px;"><b>Cliente:</b> ${escapeHtml(q.cliente)} &nbsp;&nbsp; <b>Vendedor:</b> ${escapeHtml(q.vendedor||"—")}</p>
@@ -1025,8 +1437,15 @@ function buildQuoteHTML(q) {
       <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Producto</th><th>Talla</th><th>Color</th><th>Cant.</th><th>Precio c/u</th><th>Subtotal</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
+    ${q.serviciosExtra && q.serviciosExtra.length ? `
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
+      <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Servicio extra</th><th>Monto</th></tr></thead>
+      <tbody>${q.serviciosExtra.map(s => `<tr><td>${escapeHtml(s.concepto)}</td><td>${fmt(s.monto)}</td></tr>`).join("")}</tbody>
+    </table>` : ""}
     <div style="margin-top:16px;text-align:right;font-size:13px;">
       <p>Total costo producción: ${fmt(q.totalCosto)}</p>
+      ${q.montoDescuento ? `<p>Subtotal: ${fmt(q.ventaBruta)}</p><p style="color:#c0242c;">Descuento (${q.descuentoPct}%): − ${fmt(q.montoDescuento)}</p>` : ""}
+      ${q.montoUrgente ? `<p style="color:#c0242c;">Recargo por urgencia (${q.recargoUrgentePct}%): + ${fmt(q.montoUrgente)}</p>` : ""}
       <p style="font-size:16px;font-weight:bold;color:#c0242c;">Total de venta: ${fmt(q.totalVenta)}</p>
       <p>Ganancia total: ${fmt(q.ganancia)}</p>
     </div>
@@ -1051,17 +1470,25 @@ function renderCotizacionesGuardadas() {
   });
   const grid = document.getElementById("cotizaciones-grid");
   document.getElementById("cotizaciones-empty-hint").style.display = list.length ? "none" : "block";
-  grid.innerHTML = list.map(c => `
+  grid.innerHTML = list.map(c => {
+    const semaforo = semaforoCotizacion(c);
+    const tagsOpHtml = (c.tagsOperativos || []).map(tid => {
+      const e = AppState.etiquetasOperativas.find(x => x.id === tid);
+      return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
+    }).join("");
+    return `
     <div class="card">
       <div class="card-top">
-        <span class="card-title">${escapeHtml(c.folio)}</span>
+        <span class="card-title"><span class="semaforo-dot semaforo-${semaforo.color}" title="${semaforo.label}"></span>${escapeHtml(c.folio)}</span>
         <span class="card-badge ${c.estado==='Pagado'?'badge-stock':c.estado==='Entregado'?'badge-alta':c.estado==='Confirmado'?'badge-media':'badge-baja'}">${c.estado}</span>
       </div>
-      <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length} prenda(s)</div>
+      <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length} prenda(s) · 🚦 ${escapeHtml(c.estadoProduccion || "Por hacer")}</div>
       <div class="card-tags">
         <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
         ${bazarIdsDe(c).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>` : ""}
+        ${c.urgente ? `<span class="card-badge badge-agotado">🚀 Urgente</span>` : ""}
         ${c.ventaNula ? `<span class="card-badge badge-agotado">🎁 Venta nula</span>` : ""}
+        ${tagsOpHtml}
       </div>
       <div class="card-row"><span>Total de venta</span><span>${fmt(c.totalVenta)}</span></div>
       <div class="card-row"><span>Ganancia</span><span>${fmt(c.ganancia)}</span></div>
@@ -1070,7 +1497,8 @@ function renderCotizacionesGuardadas() {
         <button onclick="openModalAsignarBazar('${c.id}')">🏪 Bazar</button>
         <button onclick="duplicateCotizacion('${c.id}')">📄 Duplicar</button>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 let viewingCotizacionId = null;
 function viewCotizacion(id) {
@@ -1078,17 +1506,30 @@ function viewCotizacion(id) {
   const c = AppState.cotizaciones.find(x => x.id === id);
   document.getElementById("ver-cot-title").textContent = c.folio + " — " + c.cliente;
   const rows = c.items.map(item => {
-    return `<div class="card-row"><span>${escapeHtml(item.nombre||"—")} (${escapeHtml(item.talla)}, ${colorNombre(item.colorId)}) ×${item.cantidad}</span><span>${fmt(item.precioVenta*item.cantidad)}</span></div>`;
+    const flags = [item.prendaCliente ? "🎁 prenda cliente" : "", item.dtfEspecial ? "✨ DTF especial" : "", item.modoCosteo === "gangsheet" ? "🧻 gang sheet" : ""].filter(Boolean).join(" · ");
+    return `<div class="card-row"><span>${escapeHtml(item.nombre||"—")} (${escapeHtml(item.tipo||"")}, ${escapeHtml(item.talla)}, ${colorNombre(item.colorId)}) ×${item.cantidad}${flags ? " — " + flags : ""}</span><span>${fmt(item.precioVenta*item.cantidad)}</span></div>`;
+  }).join("");
+  const serviciosExtraRows = (c.serviciosExtra && c.serviciosExtra.length)
+    ? c.serviciosExtra.map(s => `<div class="card-row"><span>➕ ${escapeHtml(s.concepto)}</span><span>${fmt(s.monto)}</span></div>`).join("")
+    : "";
+  const tagsOpHtml = (c.tagsOperativos || []).map(tid => {
+    const e = AppState.etiquetasOperativas.find(x => x.id === tid);
+    return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
   }).join("");
   document.getElementById("ver-cot-body").innerHTML = `
     <div class="card-meta" style="margin-bottom:10px;">Fecha: ${c.fecha} · Vendedor: ${escapeHtml(c.vendedor||"—")} · Artista: ${escapeHtml(c.comisionNombre||"Sin artista")}</div>
     <div class="card-tags" style="margin-bottom:10px;">
       <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
       <span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>
+      ${c.urgente ? `<span class="card-badge badge-agotado">🚀 Pedido urgente</span>` : ""}
       ${c.ventaNula ? `<span class="card-badge badge-agotado">🎁 Venta nula${c.ventaNulaMotivo ? ": " + escapeHtml(c.ventaNulaMotivo) : ""}</span>` : ""}
+      ${tagsOpHtml}
     </div>
     ${rows}
+    ${serviciosExtraRows}
     <div class="card-row"><span>Total costo</span><span>${fmt(c.totalCosto)}</span></div>
+    ${c.montoDescuento ? `<div class="card-row"><span>Descuento (${c.descuentoPct}%)</span><span>− ${fmt(c.montoDescuento)}</span></div>` : ""}
+    ${c.montoUrgente ? `<div class="card-row"><span>Recargo urgencia (${c.recargoUrgentePct}%)</span><span>+ ${fmt(c.montoUrgente)}</span></div>` : ""}
     <div class="card-row"><span><b>Total venta</b></span><span><b>${fmt(c.totalVenta)}</b></span></div>
     <div class="card-row"><span>Ganancia total</span><span>${fmt(c.ganancia)}</span></div>
     <div class="card-row"><span>Parte artista (${c.pctArtista}%)</span><span>${fmt(c.parteArtista)}</span></div>
@@ -1096,6 +1537,8 @@ function viewCotizacion(id) {
     ${c.notas ? `<p class="card-meta" style="margin-top:10px;">${escapeHtml(c.notas)}</p>` : ""}
   `;
   setVal("ver-cot-estado-select", c.estado);
+  const produccionSel = document.getElementById("ver-cot-produccion-select");
+  if (produccionSel) setVal("ver-cot-produccion-select", c.estadoProduccion || "Por hacer");
   openModal("modal-ver-cotizacion");
 }
 function updateCotizacionEstado() {
@@ -1104,19 +1547,45 @@ function updateCotizacionEstado() {
   saveState(); renderCotizacionesGuardadas();
   showToast("Estado actualizado.");
 }
+// Cambia la etapa de producción de una cotización (usado tanto desde el modal "Ver
+// cotización" como desde las tarjetas del tablero Kanban de Producción).
+function updateCotizacionProduccion(id, nuevaEtapa) {
+  const c = AppState.cotizaciones.find(x => x.id === id);
+  if (!c) return;
+  c.estadoProduccion = nuevaEtapa;
+  saveState();
+  renderCotizacionesGuardadas();
+  renderProduccionKanban();
+}
+// Envoltura para el selector dentro del modal "Ver cotización": no se puede referenciar
+// directamente la variable de módulo `viewingCotizacionId` desde un atributo HTML inline.
+function updateCotizacionProduccionDesdeModal() {
+  updateCotizacionProduccion(viewingCotizacionId, val("ver-cot-produccion-select"));
+}
 function editCotizacion() {
   const c = AppState.cotizaciones.find(x => x.id === viewingCotizacionId);
   quoteItems = JSON.parse(JSON.stringify(c.items));
-  quoteItems.forEach(it => { if (it.costoEstampadoManual === undefined) it.costoEstampadoManual = null; });
+  quoteItems.forEach(it => {
+    if (it.costoEstampadoManual === undefined) it.costoEstampadoManual = null;
+    if (it.prendaCliente === undefined) it.prendaCliente = false;
+    if (it.dtfEspecial === undefined) it.dtfEspecial = false;
+    if (!it.tipo) it.tipo = "Playera";
+    if (!it.estampados) it.estampados = [{ id: uid(), anchoCm: 0, largoCm: 0 }];
+    if (!it.modoCosteo) it.modoCosteo = "area";
+  });
+  quoteServiciosExtra = JSON.parse(JSON.stringify(c.serviciosExtra || []));
+  quoteTagsOperativos = JSON.parse(JSON.stringify(c.tagsOperativos || []));
   setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-fecha", c.fecha);
   setVal("q-vendedor", c.vendedor); setVal("q-artista", c.artistaId || "");
   setVal("q-comision-pct", c.comisionPctPersonalizado || 0); setVal("q-notas", c.notas || "");
   setVal("q-tipo-venta", c.tipoVenta || "Menudeo");
+  setVal("q-descuento-pct", c.descuentoPct || 0); setChecked("q-urgente", !!c.urgente);
   setChecked("q-venta-nula", !!c.ventaNula); setVal("q-venta-nula-motivo", c.ventaNulaMotivo || "");
   document.getElementById("q-comision-custom-wrap").style.display = c.artistaId === "__custom__" ? "block" : "none";
   document.getElementById("q-venta-nula-motivo-wrap").style.display = c.ventaNula ? "block" : "none";
   document.getElementById("venta-nula-banner").style.display = c.ventaNula ? "block" : "none";
   closeModal("modal-ver-cotizacion");
+  renderQuoteTagsOperativos();
   renderQuoteItems();
   switchPage("cotizador");
 }
@@ -1136,10 +1605,102 @@ function deleteCotizacion() {
 }
 
 /* =================================================================
+   PRODUCCIÓN — SEMÁFORO KANBAN
+   Tablero de columnas por etapa de producción; cada tarjeta trae un
+   punto de color (semáforo) calculado a partir de la fecha del
+   pedido y si es urgente.
+================================================================= */
+function renderProduccionKanban() {
+  const board = document.getElementById("produccion-board");
+  if (!board) return;
+  const cotizaciones = AppState.cotizaciones.filter(c => !c.ventaNula);
+  board.innerHTML = ETAPAS_PRODUCCION.map(etapa => {
+    const enEtapa = cotizaciones.filter(c => (c.estadoProduccion || "Por hacer") === etapa);
+    const cards = enEtapa.map(c => {
+      const semaforo = semaforoCotizacion(c);
+      const tagsOpHtml = (c.tagsOperativos || []).map(tid => {
+        const e = AppState.etiquetasOperativas.find(x => x.id === tid);
+        return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
+      }).join("");
+      return `
+        <div class="kanban-card">
+          <div class="kanban-card-top">
+            <span class="semaforo-dot semaforo-${semaforo.color}" title="${semaforo.label}"></span>
+            <span class="card-title" style="font-size:var(--fs-sm);cursor:pointer;" onclick="viewCotizacion('${c.id}')">${escapeHtml(c.folio)}</span>
+          </div>
+          <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha}</div>
+          ${tagsOpHtml ? `<div class="card-tags">${tagsOpHtml}</div>` : ""}
+          <select onchange="updateCotizacionProduccion('${c.id}', this.value)" style="width:100%;margin-top:6px;">
+            ${ETAPAS_PRODUCCION.map(e => `<option value="${e}" ${e===etapa?"selected":""}>${e}</option>`).join("")}
+          </select>
+        </div>`;
+    }).join("") || `<p class="empty-hint">Sin pedidos aquí.</p>`;
+    return `
+      <div class="kanban-column">
+        <div class="kanban-column-header">${escapeHtml(etapa)} <span class="card-badge badge-media">${enEtapa.length}</span></div>
+        <div class="kanban-column-body">${cards}</div>
+      </div>`;
+  }).join("");
+}
+
+/* =================================================================
+   HISTORIAL DE CLIENTES
+================================================================= */
+let viewingClienteKey = null;
+function renderClientes() {
+  const grid = document.getElementById("clientes-grid");
+  if (!grid) return;
+  const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
+  const clientes = agruparClientes().filter(cl => !searchTerm || cl.nombre.toLowerCase().includes(searchTerm));
+  document.getElementById("clientes-empty-hint").style.display = clientes.length ? "none" : "block";
+  grid.innerHTML = clientes.map(cl => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">👤 ${escapeHtml(cl.nombre)}</span>
+      </div>
+      <div class="card-row"><span>Pedidos</span><span>${cl.pedidos}</span></div>
+      <div class="card-row"><span>Total gastado</span><span>${fmt(cl.totalGastado)}</span></div>
+      <div class="card-row"><span>Última compra</span><span>${cl.ultimaFecha || "—"}</span></div>
+      <div class="card-actions">
+        <button onclick="openModalClienteDetalle('${cl.nombre.replace(/'/g, "\\'")}')">📜 Ver historial</button>
+      </div>
+    </div>`).join("");
+}
+function openModalClienteDetalle(nombre) {
+  viewingClienteKey = nombre.toLowerCase();
+  document.getElementById("modal-cliente-detalle-title").textContent = "👤 " + nombre;
+  const pedidos = AppState.cotizaciones.filter(c => ((c.cliente || "Cliente sin nombre").trim() || "Cliente sin nombre").toLowerCase() === viewingClienteKey);
+  document.getElementById("modal-cliente-detalle-body").innerHTML = pedidos.map(c => `
+    <div class="card-row">
+      <span>${escapeHtml(c.folio)} · ${c.fecha} · ${c.estado}${c.ventaNula ? " · 🎁 venta nula" : ""}</span>
+      <span>${fmt(c.totalVenta)} <button onclick="viewCotizacion('${c.id}')" style="margin-left:6px;">👁️</button></span>
+    </div>`).join("") || `<p class="empty-hint">Este cliente no tiene cotizaciones.</p>`;
+  openModal("modal-cliente-detalle");
+}
+
+/* =================================================================
+   HISTORIAL DE ARTES (diseños más vendidos)
+================================================================= */
+function renderHistorialArtes() {
+  const body = document.getElementById("artes-table-body");
+  if (!body) return;
+  const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
+  const artes = agruparArtes().filter(a => !searchTerm || a.nombre.toLowerCase().includes(searchTerm));
+  document.getElementById("artes-empty-hint").style.display = artes.length ? "none" : "block";
+  body.innerHTML = artes.map(a => `
+    <tr>
+      <td>${escapeHtml(a.nombre)}</td>
+      <td>${a.piezas}</td>
+      <td>${fmt(a.totalVendido)}</td>
+      <td style="color:${a.ganancia>=0?'var(--color-success)':'var(--color-danger)'}">${fmt(a.ganancia)}</td>
+    </tr>`).join("");
+}
+
+/* =================================================================
    BÚSQUEDA GLOBAL
 ================================================================= */
 document.getElementById("global-search").addEventListener("input", () => {
-  renderPlayeras(); renderStickers(); renderCotizacionesGuardadas();
+  renderPlayeras(); renderStickers(); renderCotizacionesGuardadas(); renderClientes(); renderHistorialArtes();
 });
 
 /* =================================================================
@@ -1304,6 +1865,11 @@ function openModalAsignarBazar(cotizacionId) {
   setChecked("ab-venta-nula", !!(c && c.ventaNula));
   closeModal("modal-ver-cotizacion");
   openModal("modal-asignar-bazar");
+}
+// Envoltura para el botón "🏪 Asignar a bazar" del modal "Ver cotización": no se puede
+// referenciar directamente la variable de módulo `viewingCotizacionId` desde HTML inline.
+function openModalAsignarBazarDesdeVista() {
+  openModalAsignarBazar(viewingCotizacionId);
 }
 function openModalAsignarPlayeraBazar(playeraId) {
   if (!playeraId) return;
@@ -1598,8 +2164,10 @@ export function renderAll() {
   refreshAllSelects();
   renderColores();
   renderEtiquetas();
+  renderEtiquetasOperativas();
   renderTallaEtiquetas();
   renderArtistas();
+  renderProveedores();
   renderBazares();
   renderAjustes();
   renderPlayeras();
@@ -1618,17 +2186,24 @@ export function renderAll() {
 Object.assign(window, {
   adjustTallaEtiqueta, addQuoteItem, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
-  deleteEtiqueta, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteSticker, deleteTallaEtiqueta,
-  duplicateCotizacion, editCotizacion, exportQuotePDF, goToBazarDetalle,
-  onArtistModeChange, onHeaderBazarChange, onQuoteArtistChange, onQuoteItemProductChange,
+  deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
+  deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
+  duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, goToBazarDetalle,
+  onArtistModeChange, onHeaderBazarChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
+  onPrendaClienteChange, onQuoteArtistChange, onQuoteEstampadoModoChange, onQuoteItemProductChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,
-  openModalArtista, openModalAsignarBazar, openModalAsignarPlayeraBazar, openModalBazar,
-  openModalBazarDesdeAsignacion, openModalColor, openModalEtiqueta, openModalGrafica,
-  openModalIngresoExtra, openModalPlayera, openModalSticker, openModalTallaEtiqueta,
+  openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalBazar,
+  openModalBazarDesdeAsignacion, openModalClienteDetalle, openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica,
+  openModalIngresoExtra, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
+  openModalSticker, openModalTallaEtiqueta,
   removeQuoteItem, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
-  resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveColor, saveEtiqueta,
-  saveGrafica, saveIngresoExtra, savePlayera, saveQuote, saveSettings, saveSticker,
+  resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveColor, saveEtiqueta, saveEtiquetaOp,
+  saveGrafica, saveIngresoExtra, savePlayera, saveProveedor, saveQuote, saveServicioExtra,
+  saveSettings, saveSticker,
   saveTallaEtiqueta, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
-  toggleGraficaInventarioOptions, updateCotizacionEstado, updatePlayeraPreview, updateQuoteItemField,
+  toggleGraficaInventarioOptions, toggleQuoteAreaDtfEspecial, toggleQuoteItemFlag, toggleQuoteTagOperativo,
+  updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
+  updatePlayeraEstampadoField, updatePlayeraPreview,
+  updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteSummary,
   viewCotizacion
 });

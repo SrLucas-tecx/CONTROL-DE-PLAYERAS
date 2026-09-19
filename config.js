@@ -12,7 +12,13 @@ export function defaultState() {
   return {
     settings: {
       dtfPrecioMetro: 190,
+      dtfPrecioMetroEspecial: 260,
       dtfAnchoRolloCm: 58,
+      sobrecargo2XLMonto: 15,
+      stockMinimoDefault: 2,
+      gangSheetPrecioMetro: 190,
+      gangSheetBlancoSolidoPrecioMetro: 230,
+      recargoUrgentePct: 20,
       moneda: "MXN"
     },
     colores: [
@@ -43,9 +49,30 @@ export function defaultState() {
     bazares: [],
     cotizaciones: [],
     graficas: [],
+    proveedores: [],
+    etiquetasOperativas: [
+      { id: "eo1", nombre: "Urgente", color: "#e3363d" },
+      { id: "eo2", nombre: "Retrabajo", color: "#e0a23a" },
+      { id: "eo3", nombre: "Cliente VIP", color: "#c56bdb" },
+      { id: "eo4", nombre: "Pendiente de pago", color: "#8b8b93" }
+    ],
     recommendedChartStyles: {}
   };
 }
+
+/* ---------------------------------------------------------------
+   TIPOS DE PRENDA (compartido entre inventario y cotizador)
+--------------------------------------------------------------- */
+export const TIPOS_PRENDA = [
+  "Playera", "Playera Oversize", "Manga larga", "Sudadera", "Cuello V Mujer",
+  "Cuello V Hombre", "Sudadera sin capucha", "Playera de tirantes",
+  "Playera sin mangas", "Corte de Relog", "Niños", "Bolsa Sorpresa"
+];
+
+/* ---------------------------------------------------------------
+   PRODUCCIÓN (semáforo Kanban)
+--------------------------------------------------------------- */
+export const ETAPAS_PRODUCCION = ["Por hacer", "En DTF", "Armando", "Listo", "Entregado"];
 
 /* ---------------------------------------------------------------
    ARTISTAS / COMISIONES

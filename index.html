@@ -27,6 +27,11 @@
       <button class="nav-item active" data-page="cotizador">🧮 Cotizador rápido</button>
       <button class="nav-item" data-page="cotizaciones">📁 Cotizaciones guardadas</button>
 
+      <div class="nav-group-label">Producción</div>
+      <button class="nav-item" data-page="produccion">🚦 Semáforo Kanban</button>
+      <button class="nav-item" data-page="clientes">👥 Clientes</button>
+      <button class="nav-item" data-page="artes">🎨 Historial de artes</button>
+
       <div class="nav-group-label">Inventario</div>
       <button class="nav-item" data-page="playeras">👕 Playeras</button>
       <button class="nav-item" data-page="stickers">✂️ Estampados / Stickers</button>
@@ -34,6 +39,7 @@
       <div class="nav-group-label">Catálogo</div>
       <button class="nav-item" data-page="etiquetas">🏷️ Etiquetas y colores</button>
       <button class="nav-item" data-page="artistas">🎨 Artistas y comisiones</button>
+      <button class="nav-item" data-page="proveedores">🚚 Proveedores</button>
       <button class="nav-item" data-page="bazares">🏪 Mis Bazares</button>
 
       <div class="nav-group-label">Reportes</div>
@@ -139,6 +145,26 @@
               <input type="text" id="q-venta-nula-motivo" class="form-input" placeholder="Ej. regalo de cumpleaños">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Descuento (0% – 15%)</label>
+              <input type="number" id="q-descuento-pct" class="form-input" min="0" max="15" step="1" value="0" oninput="updateQuoteSummary()">
+            </div>
+            <div class="form-group" style="flex:2;min-width:260px;">
+              <label class="form-label">&nbsp;</label>
+              <div class="form-switch" style="background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3);">
+                <span class="switch-label">🚀 Pedido urgente (aplica el recargo configurado en Ajustes)</span>
+                <label class="switch">
+                  <input type="checkbox" id="q-urgente" onchange="updateQuoteSummary()">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Etiquetas operativas</label>
+            <div id="q-tags-operativos-container" class="tag-checkbox-list"></div>
+          </div>
           <p class="cost-preview" style="margin-bottom:0;">🏪 Este cotizador ya no asigna el bazar. Cuando guardes la cotización, ve a “Cotizaciones guardadas” y usa el botón <b>🏪 Asignar a bazar</b> para ligarla al bazar donde la vendiste.</p>
         </div>
 
@@ -152,14 +178,13 @@
             <thead>
               <tr>
                 <th style="min-width:170px;">Producto</th>
+                <th>Tipo de prenda</th>
                 <th>Talla</th>
                 <th>Color</th>
                 <th>Cant.</th>
-                <th>Ancho cm</th>
-                <th>Largo cm</th>
-                <th># Est.</th>
+                <th title="Prenda del cliente">🎁 Prenda cliente</th>
                 <th>Costo playera</th>
-                <th>Costo estampado</th>
+                <th>Impresión (área / Gang Sheet)</th>
                 <th>Precio venta c/u</th>
                 <th>Ganancia</th>
                 <th></th>
@@ -176,6 +201,20 @@
           </div>
         </div>
 
+        <div class="section-header" style="justify-content:space-between;margin-top:24px;">
+          <h2 class="section-title">Servicios extra</h2>
+          <button class="btn-secondary" onclick="openModalServicioExtra()">+ Agregar servicio extra</button>
+        </div>
+        <div class="bazar-table-wrap">
+          <table class="bazar-table">
+            <thead>
+              <tr><th>Concepto</th><th>Monto</th><th>Acciones</th></tr>
+            </thead>
+            <tbody id="quote-servicios-extra-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-hint" id="quote-servicios-extra-empty">Sin servicios extra en esta cotización (planchado especial, empaque, envío, etc.).</p>
+
         <div class="quote-summary">
           <div class="summary-card">
             <span class="summary-label">Total de venta</span>
@@ -184,6 +223,18 @@
           <div class="summary-card">
             <span class="summary-label">Costo de producción</span>
             <span class="summary-value" id="sum-costo">$0.00</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Servicios extra</span>
+            <span class="summary-value" id="sum-servicios-extra">$0.00</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Descuento</span>
+            <span class="summary-value" id="sum-descuento">− $0.00</span>
+          </div>
+          <div class="summary-card" id="sum-urgente-card" style="display:none;">
+            <span class="summary-label">🚀 Recargo urgencia</span>
+            <span class="summary-value" id="sum-urgente">+ $0.00</span>
           </div>
           <div class="summary-card accent">
             <span class="summary-label">Ganancia total</span>
@@ -240,6 +291,54 @@
         <p class="empty-hint" id="cotizaciones-empty-hint">Todavía no guardas ninguna cotización.</p>
       </section>
       <!-- ======================= /COTIZACIONES GUARDADAS ======================= -->
+
+
+      <!-- ======================= PRODUCCIÓN (SEMÁFORO KANBAN) ======================= -->
+      <section id="page-produccion" class="page-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Semáforo Kanban de producción</h2>
+            <p class="section-sub">🟢 A tiempo o entregado · 🟡 En proceso (con algo de antigüedad) · 🔴 Urgente o atrasado (3+ días).</p>
+          </div>
+        </div>
+        <div id="produccion-board" class="kanban-board"></div>
+      </section>
+      <!-- ======================= /PRODUCCIÓN ======================= -->
+
+
+      <!-- ======================= CLIENTES ======================= -->
+      <section id="page-clientes" class="page-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Clientes</h2>
+            <p class="section-sub">Historial de compras agrupado por cliente, de mayor a menor gasto total.</p>
+          </div>
+        </div>
+        <div id="clientes-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="clientes-empty-hint">Todavía no tienes cotizaciones con cliente registrado.</p>
+      </section>
+      <!-- ======================= /CLIENTES ======================= -->
+
+
+      <!-- ======================= HISTORIAL DE ARTES ======================= -->
+      <section id="page-artes" class="page-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Historial de artes</h2>
+            <p class="section-sub">Qué diseños se han vendido más, en cotizaciones y en bazares.</p>
+          </div>
+        </div>
+        <div class="bazar-table-wrap">
+          <table class="bazar-table">
+            <thead>
+              <tr><th>Diseño</th><th>Piezas vendidas</th><th>Total vendido</th><th>Ganancia</th></tr>
+            </thead>
+            <tbody id="artes-table-body"></tbody>
+          </table>
+        </div>
+        <p class="empty-hint" id="artes-empty-hint">Todavía no hay ventas registradas.</p>
+      </section>
+      <!-- ======================= /HISTORIAL DE ARTES ======================= -->
 
 
       <!-- ======================= INVENTARIO PLAYERAS ======================= -->
@@ -335,6 +434,15 @@
         </div>
         <div id="talla-etiquetas-list" class="cards-grid"></div>
 
+        <div class="section-header" style="justify-content:space-between;margin-top:32px;">
+          <div>
+            <h2 class="section-title">Etiquetas operativas</h2>
+            <p class="section-sub">Úsalas en las cotizaciones para marcar cosas como Urgente, Retrabajo o Cliente VIP.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalEtiquetaOp()">+ Nueva etiqueta operativa</button>
+        </div>
+        <div id="etiquetas-operativas-grid" class="chips-grid"></div>
+
       </section>
       <!-- ======================= /ETIQUETAS Y COLORES ======================= -->
 
@@ -351,6 +459,20 @@
         <div id="artistas-grid" class="cards-grid"></div>
       </section>
       <!-- ======================= /ARTISTAS ======================= -->
+
+
+      <!-- ======================= PROVEEDORES ======================= -->
+      <section id="page-proveedores" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Proveedores</h2>
+            <p class="section-sub">Tu catálogo de proveedores de tela, DTF, empaques y demás insumos.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalProveedor()">+ Nuevo proveedor</button>
+        </div>
+        <div id="proveedores-grid" class="cards-grid"></div>
+      </section>
+      <!-- ======================= /PROVEEDORES ======================= -->
 
 
       <!-- ======================= BAZARES / LUGARES DE VENTA ======================= -->
@@ -390,7 +512,7 @@
             <p class="section-sub" id="bd-meta">—</p>
           </div>
           <div style="display:flex;gap:8px;">
-            <button class="btn-secondary" onclick="openModalBazar(activeBazarId)">✏️ Editar</button>
+            <button class="btn-secondary" onclick="editActiveBazar()">✏️ Editar</button>
             <button class="btn-danger" onclick="deleteBazarFromDetalle()">🗑️ Eliminar</button>
           </div>
         </div>
@@ -608,6 +730,10 @@
               <input type="number" id="set-dtf-precio" class="form-input" min="0" step="0.01">
             </div>
             <div class="form-group">
+              <label class="form-label">Costo del metro de DTF especial ($)</label>
+              <input type="number" id="set-dtf-precio-especial" class="form-input" min="0" step="0.01">
+            </div>
+            <div class="form-group">
               <label class="form-label">Ancho del rollo de DTF (cm)</label>
               <input type="number" id="set-dtf-ancho" class="form-input" min="1" step="0.1">
             </div>
@@ -617,6 +743,31 @@
             </div>
           </div>
           <p class="cost-preview">Costo actual por cm²: <b id="preview-costo-cm2">$0.0000</b> — una impresión de 30×40 cm te cuesta <b id="preview-costo-ejemplo">$0.00</b></p>
+          <p class="cost-preview">DTF especial: una impresión de 30×40 cm te cuesta <b id="preview-costo-especial-ejemplo">$0.00</b></p>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label class="form-label">Sobrecargo por talla 2XL o mayor ($)</label>
+              <input type="number" id="set-sobrecargo-2xl" class="form-input" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Alerta de stock mínimo (default)</label>
+              <input type="number" id="set-stock-minimo-default" class="form-input" min="0" step="1">
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label class="form-label">Gang Sheet — precio por metro ($)</label>
+              <input type="number" id="set-gangsheet-precio" class="form-input" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gang Sheet blanco sólido — precio por metro ($)</label>
+              <input type="number" id="set-gangsheet-blanco-precio" class="form-input" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Recargo por pedido urgente (%)</label>
+              <input type="number" id="set-recargo-urgente" class="form-input" min="0" step="1">
+            </div>
+          </div>
           <button class="btn-primary" onclick="saveSettings()">Guardar ajustes</button>
         </div>
 
@@ -679,7 +830,7 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Talla</label>
-          <input type="text" id="p-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G, XG">
+          <input type="text" id="p-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G, XG" oninput="updatePlayeraPreview()">
           <datalist id="talla-list">
             <option value="CH"><option value="MD"><option value="G"><option value="XG"><option value="XXG">
           </datalist>
@@ -692,6 +843,31 @@
           <label class="form-label">Stock (piezas)</label>
           <input type="number" id="p-stock" class="form-input" min="0" value="1">
         </div>
+        <div class="form-group">
+          <label class="form-label">Stock mínimo (alerta)</label>
+          <input type="number" id="p-stock-minimo" class="form-input" min="0" value="0">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <div class="form-switch">
+            <span class="switch-label">🎁 Prenda del cliente (costo de playera $0.00)</span>
+            <label class="switch">
+              <input type="checkbox" id="p-prenda-cliente" onchange="onPrendaClienteChange()">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="form-switch">
+            <span class="switch-label">✨ DTF especial</span>
+            <label class="switch">
+              <input type="checkbox" id="p-dtf-especial" onchange="updatePlayeraPreview()">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <div class="form-row">
@@ -700,18 +876,35 @@
           <input type="number" id="p-costo-playera" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
         </div>
         <div class="form-group">
-          <label class="form-label"># de estampados</label>
-          <input type="number" id="p-num-estampados" class="form-input" min="1" value="1" oninput="updatePlayeraPreview()">
+          <label class="form-label">Modo de costeo de impresión</label>
+          <select id="p-modo-costeo" class="form-select" onchange="onPlayeraModoCosteoChange()">
+            <option value="area">Por área (DTF)</option>
+            <option value="gangsheet">Gang Sheet (por metro)</option>
+          </select>
         </div>
       </div>
-      <div class="form-row">
+
+      <div id="p-area-wrap">
         <div class="form-group">
-          <label class="form-label">Ancho del estampado (cm)</label>
-          <input type="number" id="p-ancho" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+          <label class="form-label"># de estampados</label>
+          <input type="number" id="p-num-estampados" class="form-input" min="1" value="1" onchange="onPlayeraNumEstampadosChange()" style="max-width:120px;">
+        </div>
+        <div id="p-estampados-list" class="estampados-list"></div>
+      </div>
+
+      <div id="p-gangsheet-wrap" class="form-row" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Metros lineales de Gang Sheet</label>
+          <input type="number" id="p-gangsheet-metros" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
         </div>
         <div class="form-group">
-          <label class="form-label">Largo del estampado (cm)</label>
-          <input type="number" id="p-largo" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+          <div class="form-switch">
+            <span class="switch-label">🧻 Blanco sólido</span>
+            <label class="switch">
+              <input type="checkbox" id="p-gangsheet-blanco-solido" onchange="updatePlayeraPreview()">
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -795,6 +988,10 @@
           <label class="form-label">Stock</label>
           <input type="number" id="s-stock" class="form-input" min="0" value="1">
         </div>
+        <div class="form-group">
+          <label class="form-label">Stock mínimo (alerta)</label>
+          <input type="number" id="s-stock-minimo" class="form-input" min="0" value="0">
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -868,6 +1065,45 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-etiqueta">Cancelar</button>
       <button class="btn-primary" onclick="saveEtiqueta()">Guardar etiqueta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ETIQUETA OPERATIVA -->
+<div class="modal-overlay" id="modal-etiqueta-op">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-etiqueta-op-title">Nueva etiqueta operativa</h2>
+      <button class="modal-close" data-modal="modal-etiqueta-op">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="eo-id">
+      <div class="form-group">
+        <label class="form-label">Nombre de la etiqueta</label>
+        <input type="text" id="eo-nombre" class="form-input" placeholder="Ej. Urgente, Retrabajo, Cliente VIP...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Color de la etiqueta</label>
+        <input type="color" id="eo-color" class="form-input" style="height:44px;padding:4px;" value="#e3363d">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-etiqueta-op">Cancelar</button>
+      <button class="btn-primary" onclick="saveEtiquetaOp()">Guardar etiqueta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: HISTORIAL DE UN CLIENTE -->
+<div class="modal-overlay" id="modal-cliente-detalle">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-cliente-detalle-title">Cliente</h2>
+      <button class="modal-close" data-modal="modal-cliente-detalle">✕</button>
+    </div>
+    <div class="modal-body" id="modal-cliente-detalle-body"></div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-cliente-detalle">Cerrar</button>
     </div>
   </div>
 </div>
@@ -947,6 +1183,39 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-artista">Cancelar</button>
       <button class="btn-primary" onclick="saveArtista()">Guardar artista</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PROVEEDOR -->
+<div class="modal-overlay" id="modal-proveedor">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-proveedor-title">Nuevo proveedor</h2>
+      <button class="modal-close" data-modal="modal-proveedor">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="prov-id">
+      <div class="form-group">
+        <label class="form-label">Nombre del proveedor</label>
+        <input type="text" id="prov-nombre" class="form-input" placeholder="Ej. Telas del Centro">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Qué provee</label>
+        <input type="text" id="prov-producto" class="form-input" placeholder="Ej. Playeras, DTF, bolsas...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contacto</label>
+        <input type="text" id="prov-contacto" class="form-input" placeholder="Teléfono / WhatsApp">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="prov-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-proveedor">Cancelar</button>
+      <button class="btn-primary" onclick="saveProveedor()">Guardar proveedor</button>
     </div>
   </div>
 </div>
@@ -1066,6 +1335,92 @@
   </div>
 </div>
 
+<!-- MODAL: SERVICIO EXTRA (COTIZADOR) -->
+<div class="modal-overlay" id="modal-servicio-extra">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-servicio-extra-title">Nuevo servicio extra</h2>
+      <button class="modal-close" data-modal="modal-servicio-extra">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="se-id">
+      <div class="form-group">
+        <label class="form-label">Concepto</label>
+        <input type="text" id="se-concepto" class="form-input" list="se-concepto-list" placeholder="Ej. Envío, empaque especial, urgencia">
+        <datalist id="se-concepto-list">
+          <option value="Envío"><option value="Empaque especial"><option value="Servicio urgente">
+        </datalist>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Monto ($)</label>
+        <input type="number" id="se-monto" class="form-input" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-servicio-extra">Cancelar</button>
+      <button class="btn-primary" onclick="saveServicioExtra()">Guardar servicio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: IMPRESIÓN DE UNA PRENDA DEL COTIZADOR (ÁREAS MÚLTIPLES / GANG SHEET) -->
+<div class="modal-overlay" id="modal-quote-estampados">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-quote-estampados-title">Impresión de la prenda</h2>
+      <button class="modal-close" data-modal="modal-quote-estampados">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Modo de costeo</label>
+        <select id="qe-modo-costeo" class="form-select" onchange="onQuoteEstampadoModoChange()">
+          <option value="area">Por área (DTF, uno o varios estampados)</option>
+          <option value="gangsheet">Gang Sheet (por metro lineal)</option>
+        </select>
+      </div>
+
+      <div id="qe-area-wrap">
+        <div class="form-group">
+          <div class="form-switch">
+            <span class="switch-label">✨ DTF especial</span>
+            <label class="switch">
+              <input type="checkbox" id="qe-dtf-especial" onchange="toggleQuoteAreaDtfEspecial(this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label"># de estampados</label>
+          <input type="number" id="qe-num-estampados" class="form-input" min="1" value="1"
+            onchange="updateQuoteEstampadosCountFromModal(this.value)" style="max-width:120px;">
+        </div>
+        <p class="section-sub">Cada estampado puede tener su propio tamaño — el costo se calcula sumando todas las áreas.</p>
+        <div id="qe-estampados-list" class="estampados-list"></div>
+        <p class="estampados-total">Área total: <b id="qe-estampados-total">0.0 cm²</b></p>
+      </div>
+
+      <div id="qe-gangsheet-wrap" class="form-row" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Metros lineales de Gang Sheet</label>
+          <input type="number" id="qe-gangsheet-metros" class="form-input" min="0" step="0.01" onchange="updateQuoteGangSheetField('gangSheetMetros', this.value)">
+        </div>
+        <div class="form-group">
+          <div class="form-switch">
+            <span class="switch-label">🧻 Blanco sólido</span>
+            <label class="switch">
+              <input type="checkbox" id="qe-gangsheet-blanco-solido" onchange="updateQuoteGangSheetField('gangSheetBlancoSolido', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" data-modal="modal-quote-estampados">Listo</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: GRÁFICA PERSONALIZADA -->
 <div class="modal-overlay" id="modal-grafica">
   <div class="modal-box modal-box-sm">
@@ -1144,7 +1499,14 @@
         <option value="Pagado">💰 Pagado</option>
         <option value="Entregado">📦 Entregado</option>
       </select>
-      <button class="btn-secondary" onclick="openModalAsignarBazar(viewingCotizacionId)">🏪 Asignar a bazar</button>
+      <select class="filter-select" id="ver-cot-produccion-select" onchange="updateCotizacionProduccionDesdeModal()">
+        <option value="Por hacer">🚦 Por hacer</option>
+        <option value="En DTF">🚦 En DTF</option>
+        <option value="Armando">🚦 Armando</option>
+        <option value="Listo">🚦 Listo</option>
+        <option value="Entregado">🚦 Entregado</option>
+      </select>
+      <button class="btn-secondary" onclick="openModalAsignarBazarDesdeVista()">🏪 Asignar a bazar</button>
       <button class="btn-secondary" onclick="editCotizacion()">✏️ Editar</button>
       <button class="btn-danger" onclick="deleteCotizacion()">🗑️ Eliminar</button>
       <button class="btn-secondary" data-modal="modal-ver-cotizacion">Cerrar</button>

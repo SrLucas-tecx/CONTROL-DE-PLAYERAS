@@ -22,24 +22,63 @@ export function escapeHtml(str) {
    costo_cm2 = precio_metro_dtf / (100 * ancho_rollo_cm)
    costo_estampado = ancho * largo * costo_cm2 * num_estampados
 --------------------------------------------------------------- */
-export function costoPorCm2() {
+export function costoPorCm2(especial) {
   const s = AppState.settings;
   if (!s.dtfAnchoRolloCm) return 0;
-  return s.dtfPrecioMetro / (100 * s.dtfAnchoRolloCm);
+  const precio = especial ? (s.dtfPrecioMetroEspecial || s.dtfPrecioMetro) : s.dtfPrecioMetro;
+  return precio / (100 * s.dtfAnchoRolloCm);
 }
-export function costoEstampado(anchoCm, largoCm, numEstampados) {
-  return (anchoCm || 0) * (largoCm || 0) * costoPorCm2() * (numEstampados || 1);
+// Área total (cm²) de una lista de estampados [{anchoCm, largoCm}, ...] — permite que cada
+// estampado de una misma prenda tenga su propio tamaño (p.ej. uno chico al frente y uno grande atrás).
+export function areaTotalCm2(estampados) {
+  return (estampados || []).reduce((sum, e) => sum + (e.anchoCm || 0) * (e.largoCm || 0), 0);
+}
+export function costoEstampado(estampados, especial) {
+  return areaTotalCm2(estampados) * costoPorCm2(especial);
+}
+// Costo de un Gang Sheet: se cobra por metro lineal (el blanco sólido usa un precio más alto
+// porque consume mucha más tinta blanca).
+export function costoGangSheet(metros, blancoSolido) {
+  const s = AppState.settings;
+  const precio = blancoSolido ? (s.gangSheetBlancoSolidoPrecioMetro || 0) : (s.gangSheetPrecioMetro || 0);
+  return (metros || 0) * precio;
+}
+// Sobrecargo por talla 2XL o mayor (en esta tienda: XXG, XXXG... o 2XL, 3XL, XXL...).
+export function sobrecargoTalla(talla) {
+  if (!talla) return 0;
+  const t = String(talla).trim().toUpperCase();
+  const esGrandeExtra = /^(XX+G|XX+L|[2-9]X(G|L))$/.test(t);
+  return esGrandeExtra ? (AppState.settings.sobrecargo2XLMonto || 0) : 0;
+}
+// Costo de impresión de una prenda/item, respetando su modo de costeo:
+// "area" (DTF por área, normal o especial) o "gangsheet" (por metro lineal).
+export function costoImpresion(obj) {
+  if (obj.modoCosteo === "gangsheet") {
+    return costoGangSheet(obj.gangSheetMetros, obj.gangSheetBlancoSolido);
+  }
+  return costoEstampado(obj.estampados, obj.dtfEspecial);
 }
 export function costoTotalPlayera(playera) {
-  return (playera.costoPlayera || 0) + costoEstampado(playera.anchoCm || 0, playera.largoCm || 0, playera.numEstampados || 1);
+  const costoBase = playera.prendaCliente ? 0 : (playera.costoPlayera || 0);
+  return costoBase + costoImpresion(playera) + sobrecargoTalla(playera.talla);
 }
-// Devuelve el costo de estampado a usar: si hay más de un estampado y el usuario lo editó
-// manualmente, se respeta ese valor; si no, se calcula con la fórmula de área × costo DTF.
+// Devuelve el costo de impresión a usar para una prenda del cotizador: si hay más de un
+// estampado (modo área) y el usuario lo editó manualmente, se respeta ese valor; si no, se
+// calcula con la fórmula de área × costo DTF, o con el costo de Gang Sheet si aplica.
 export function getCostoEstampadoEfectivo(item) {
-  if (item.numEstampados > 1 && item.costoEstampadoManual !== null && item.costoEstampadoManual !== undefined) {
-    return item.costoEstampadoManual;
+  if (item.modoCosteo !== "gangsheet") {
+    const numEstampados = (item.estampados || []).length;
+    if (numEstampados > 1 && item.costoEstampadoManual !== null && item.costoEstampadoManual !== undefined) {
+      return item.costoEstampadoManual;
+    }
   }
-  return costoEstampado(item.anchoCm, item.largoCm, item.numEstampados);
+  return costoImpresion(item);
+}
+// Costo unitario completo de una prenda del cotizador: costo de playera (0 si es prenda del
+// cliente) + costo de impresión efectivo + sobrecargo de talla 2XL+.
+export function costoUnitarioItem(item) {
+  const costoBase = item.prendaCliente ? 0 : (item.costoPlayera || 0);
+  return costoBase + getCostoEstampadoEfectivo(item) + sobrecargoTalla(item.talla);
 }
 
 /* ---------------------------------------------------------------
@@ -187,4 +226,69 @@ export function datosInventarioGrafica(dimension, metrica) {
   const labels = Object.keys(grupos);
   const metricLabels = { stock: "Piezas", costo: "Costo ($)", ventas: "Venta potencial ($)", ganancia: "Ganancia potencial ($)" };
   return { labels, values: labels.map(label => grupos[label]), label: metricLabels[metrica] || "Inventario" };
+}
+
+/* ---------------------------------------------------------------
+   PRODUCCIÓN: SEMÁFORO
+   Verde = a tiempo o entregado, Amarillo = con antigüedad, Rojo =
+   urgente o atrasado (3+ días sin completarse).
+--------------------------------------------------------------- */
+export function semaforoCotizacion(c) {
+  if (c.estadoProduccion === "Entregado") return { color: "green", label: "Entregado" };
+  const hoy = new Date();
+  const fecha = new Date((c.fecha || "") + "T00:00:00");
+  const diffDias = isNaN(fecha.getTime()) ? 0 : Math.floor((hoy - fecha) / (1000 * 60 * 60 * 24));
+  if (c.urgente || diffDias >= 3) return { color: "red", label: c.urgente ? "Urgente" : "Atrasado" };
+  if (diffDias >= 1) return { color: "yellow", label: "En proceso" };
+  return { color: "green", label: "A tiempo" };
+}
+
+/* ---------------------------------------------------------------
+   HISTORIAL DE CLIENTES
+   Agrupa las cotizaciones por nombre de cliente (sin distinguir
+   mayúsculas/espacios) para ver su historial de compras.
+--------------------------------------------------------------- */
+export function agruparClientes() {
+  const grupos = {};
+  AppState.cotizaciones.forEach(c => {
+    const nombre = (c.cliente || "Cliente sin nombre").trim() || "Cliente sin nombre";
+    const key = nombre.toLowerCase();
+    if (!grupos[key]) grupos[key] = { nombre, pedidos: 0, totalGastado: 0, ultimaFecha: c.fecha || "", cotizacionIds: [] };
+    grupos[key].pedidos += 1;
+    if (!c.ventaNula) grupos[key].totalGastado += c.totalVenta || 0;
+    if ((c.fecha || "") > grupos[key].ultimaFecha) grupos[key].ultimaFecha = c.fecha;
+    grupos[key].cotizacionIds.push(c.id);
+  });
+  return Object.values(grupos).sort((a, b) => b.totalGastado - a.totalGastado);
+}
+
+/* ---------------------------------------------------------------
+   HISTORIAL DE ARTES (diseños)
+   Agrupa por nombre de diseño lo vendido en cotizaciones y las
+   playeras marcadas como "Vendida" directamente en un bazar.
+--------------------------------------------------------------- */
+export function agruparArtes() {
+  const grupos = {};
+  const agregar = (nombre, piezas, monto, ganancia) => {
+    const key = (nombre || "Sin nombre").trim() || "Sin nombre";
+    if (!grupos[key]) grupos[key] = { nombre: key, piezas: 0, totalVendido: 0, ganancia: 0 };
+    grupos[key].piezas += piezas;
+    grupos[key].totalVendido += monto;
+    grupos[key].ganancia += ganancia;
+  };
+  AppState.cotizaciones.filter(c => !c.ventaNula).forEach(c => {
+    (c.items || []).forEach(item => {
+      const costoUnit = costoUnitarioItem(item);
+      const monto = (item.precioVenta || 0) * (item.cantidad || 0);
+      const ganancia = ((item.precioVenta || 0) - costoUnit) * (item.cantidad || 0);
+      agregar(item.nombre, item.cantidad || 0, monto, ganancia);
+    });
+  });
+  AppState.playeras.forEach(p => {
+    if ((p.bazarEstado || "Disponible") !== "Vendida") return;
+    const monto = (p.precioVenta || 0) * (p.stock || 0);
+    const ganancia = ((p.precioVenta || 0) - costoTotalPlayera(p)) * (p.stock || 0);
+    agregar(p.nombre, p.stock || 0, monto, ganancia);
+  });
+  return Object.values(grupos).sort((a, b) => b.totalVendido - a.totalVendido);
 }
