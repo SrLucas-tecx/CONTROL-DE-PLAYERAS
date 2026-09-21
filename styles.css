@@ -383,10 +383,19 @@ ul{list-style:none;}
 .sticker-count-label{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted);}
 .sticker-count-value{font-family:var(--font-display);font-size:clamp(1.5rem, 2vw + 1rem, 2.6rem);font-weight:800;line-height:1.1;word-break:break-word;}
 .sticker-count-sub{font-size:var(--fs-xs);color:var(--color-text-muted);line-height:1.4;}
+.sticker-count-net{padding:var(--space-4);}
+.sticker-count-net .sticker-count-value{font-size:clamp(1.45rem, 1.4vw + .75rem, 2.1rem);white-space:nowrap;}
 .size-chico .sticker-count-value{color:var(--color-gray);}
 .size-mediano .sticker-count-value{color:var(--color-warning);}
 .size-grande .sticker-count-value{color:var(--color-accent);}
 .size-total{background:var(--color-surface-alt);}
+
+/* ============ AHORRO / META DE COMPRA ============ */
+.savings-label{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--color-text-muted);font-weight:700;margin-top:4px;}
+.savings-bar{width:100%;height:10px;border-radius:var(--radius-full);background:var(--color-surface-alt);border:1px solid var(--color-border);overflow:hidden;margin:4px 0 2px;}
+.savings-bar-fill{height:100%;background:var(--color-accent);border-radius:var(--radius-full);transition:width .3s ease;}
+.savings-bar-fill.complete{background:var(--color-success);}
+.badge-comprada{background:var(--color-success-soft);color:var(--color-success);}
 
 /* ============ SETTINGS ============ */
 .settings-card{
@@ -505,6 +514,21 @@ ul{list-style:none;}
 .modal-box .btn-primary:hover{background:var(--color-accent-dark);}
 .modal-box .btn-secondary{background:var(--color-surface-alt);border:1px solid var(--color-border);color:var(--color-text);}
 .modal-box .btn-secondary:hover{border-color:var(--color-gray);background:rgba(255,255,255,.04);}
+.bazar-expenses-section{margin-top:var(--space-5);padding-top:var(--space-4);border-top:1px solid var(--color-border);}
+.bazar-expenses-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-2);}
+.bazar-expenses-heading .form-label{margin-bottom:0;}
+.add-expense-btn{padding:8px 11px;font-size:var(--fs-xs);}
+.bazar-expenses-list{display:flex;flex-direction:column;gap:var(--space-2);}
+.bazar-expense-row{display:grid;grid-template-columns:minmax(0,1fr) 168px 100px 34px;gap:var(--space-2);align-items:center;}
+.bazar-expense-row .form-input,.bazar-expense-row .form-select{min-width:0;}
+.bazar-expense-remove{width:34px;height:34px;border-radius:var(--radius-sm);color:var(--color-danger);font-weight:800;background:var(--color-danger-soft);}
+.bazar-expense-remove:hover{background:var(--color-danger);color:#fff;}
+.bazar-expenses-empty{font-size:var(--fs-xs);color:var(--color-text-muted);padding:var(--space-2) 0;}
+.bazar-expenses-hint{font-size:var(--fs-xs);color:var(--color-text-muted);margin:var(--space-2) 0 0;line-height:1.5;}
+.bazar-expenses-total{display:flex;flex-direction:column;gap:6px;margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px dashed var(--color-border);}
+.bazar-expenses-breakdown{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.bazar-expenses-total-row{display:flex;justify-content:space-between;align-items:center;font-size:var(--fs-sm);font-weight:700;}
+.bazar-expenses-total-row strong{font-family:var(--font-display);font-size:var(--fs-lg);color:var(--color-accent);}
 .modal-box .modal-body .upload-zone{
   display:grid;place-items:center;min-height:220px;border:2px dashed var(--color-border);background:var(--color-surface-alt);
   border-radius:20px;color:var(--color-text-muted);text-align:center;padding:28px;
@@ -539,6 +563,11 @@ ul{list-style:none;}
   .sticker-count-row{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 @media (max-width:560px){
+  .bazar-expense-row{grid-template-columns:minmax(0,1fr) 34px;grid-template-areas:"name remove" "tipo tipo" "amount amount";row-gap:6px;}
+  .bazar-expense-row .bazar-expense-name{grid-area:name;}
+  .bazar-expense-row .bazar-expense-remove{grid-area:remove;}
+  .bazar-expense-row .bazar-expense-tipo{grid-area:tipo;}
+  .bazar-expense-row .bazar-expense-amount{grid-area:amount;}
   .section-header{align-items:stretch;}
   .section-header > div,
   .section-header > div:last-child{width:100%;}

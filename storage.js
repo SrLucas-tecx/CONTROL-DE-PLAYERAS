@@ -80,6 +80,7 @@ export function getSectionData(section) {
     cotizaciones: { cotizaciones: AppState.cotizaciones },
     inventario: { playeras: AppState.playeras, stickers: AppState.stickers },
     catalogo: { colores: AppState.colores, etiquetas: AppState.etiquetas, tallaEtiquetas: AppState.tallaEtiquetas, artistas: AppState.artistas, proveedores: AppState.proveedores, etiquetasOperativas: AppState.etiquetasOperativas },
+    finanzas: { gastos: AppState.gastos, comprasPendientes: AppState.comprasPendientes },
     bazares: { bazares: AppState.bazares },
     reportes: { graficas: AppState.graficas },
     ajustes: { settings: AppState.settings }

@@ -42,6 +42,10 @@
       <button class="nav-item" data-page="proveedores">🚚 Proveedores</button>
       <button class="nav-item" data-page="bazares">🏪 Mis Bazares</button>
 
+      <div class="nav-group-label">Finanzas</div>
+      <button class="nav-item" data-page="gastos">💸 Gastos generales</button>
+      <button class="nav-item" data-page="compras">🎯 Próximas compras</button>
+
       <div class="nav-group-label">Reportes</div>
       <button class="nav-item" data-page="estadisticas">📊 Estadísticas</button>
 
@@ -475,6 +479,46 @@
       <!-- ======================= /PROVEEDORES ======================= -->
 
 
+      <!-- ======================= GASTOS GENERALES DEL NEGOCIO ======================= -->
+      <section id="page-gastos" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Gastos generales del negocio</h2>
+            <p class="section-sub">Materiales, herramientas, renta, servicios y demás gastos que no son de una cotización específica.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalGasto()">+ Nuevo gasto</button>
+        </div>
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">Gastado este mes</span>
+            <span class="sticker-count-value" id="gastos-total-mes">$0</span>
+            <span class="sticker-count-sub">suma del mes en curso</span>
+          </div>
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Gastado en total</span>
+            <span class="sticker-count-value" id="gastos-total-general">$0</span>
+            <span class="sticker-count-sub">histórico de todos los gastos</span>
+          </div>
+        </div>
+        <div id="gastos-grid" class="cards-grid"></div>
+      </section>
+      <!-- ======================= /GASTOS GENERALES ======================= -->
+
+
+      <!-- ======================= PRÓXIMAS COMPRAS (WISHLIST CON META) ======================= -->
+      <section id="page-compras" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Próximas compras</h2>
+            <p class="section-sub">Cosas que quieres comprar a futuro (removedor de DTF, un apache profesional, etc.) con su link y una meta de ahorro.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalCompra()">+ Nueva compra pendiente</button>
+        </div>
+        <div id="compras-grid" class="cards-grid"></div>
+      </section>
+      <!-- ======================= /PRÓXIMAS COMPRAS ======================= -->
+
+
       <!-- ======================= BAZARES / LUGARES DE VENTA ======================= -->
       <section id="page-bazares" class="page-section">
         <div class="section-header" style="justify-content:space-between;">
@@ -491,7 +535,7 @@
                 <th>Bazar (nombre + lugar)</th>
                 <th>Cotizaciones</th>
                 <th>Total vendido</th>
-                <th>Ganancia</th>
+                <th>Ganancia real</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -524,9 +568,9 @@
             <span class="sticker-count-sub">sin contar ventas nulas</span>
           </div>
           <div class="sticker-count-card size-grande">
-            <span class="sticker-count-label">Ganancia de ventas</span>
+            <span class="sticker-count-label">📊 Ganancia estimada</span>
             <span class="sticker-count-value" id="bd-ganancia">$0</span>
-            <span class="sticker-count-sub">solo playeras/estampados</span>
+            <span class="sticker-count-sub">por costeo de catálogo · solo referencia</span>
           </div>
           <div class="sticker-count-card size-mediano">
             <span class="sticker-count-label">Cotizaciones</span>
@@ -539,19 +583,19 @@
             <span class="sticker-count-sub">costo perdido por regalos</span>
           </div>
           <div class="sticker-count-card">
-            <span class="sticker-count-label">Costo del bazar</span>
+            <span class="sticker-count-label">Costo real del bazar</span>
             <span class="sticker-count-value" id="bd-costo-bazar" style="color:var(--color-danger);">$0</span>
-            <span class="sticker-count-sub">renta, mesa, transporte...</span>
+            <span class="sticker-count-sub" id="bd-costo-bazar-sub">puesto, producción y evento</span>
           </div>
           <div class="sticker-count-card">
             <span class="sticker-count-label">+ Ingresos extra</span>
             <span class="sticker-count-value" id="bd-ingresos-extra" style="color:var(--color-success);">$0</span>
             <span class="sticker-count-sub">juegos, rifas, propinas...</span>
           </div>
-          <div class="sticker-count-card" style="background:var(--color-accent-soft);border-color:var(--color-accent);">
-            <span class="sticker-count-label">Ganancia neta</span>
+          <div class="sticker-count-card sticker-count-net" style="background:var(--color-accent-soft);border-color:var(--color-accent);">
+            <span class="sticker-count-label">💰 Ganancia real (efectivo)</span>
             <span class="sticker-count-value" id="bd-ganancia-neta">$0</span>
-            <span class="sticker-count-sub">ventas + extra − costo del bazar</span>
+            <span class="sticker-count-sub">ventas + extra − costo real del bazar</span>
           </div>
         </div>
 
@@ -1220,6 +1264,88 @@
   </div>
 </div>
 
+<!-- MODAL: NUEVO / EDITAR GASTO GENERAL -->
+<div class="modal-overlay" id="modal-gasto">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-gasto-title">Nuevo gasto</h2>
+      <button class="modal-close" data-modal="modal-gasto">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="gasto-id">
+      <div class="form-group">
+        <label class="form-label">Concepto</label>
+        <input type="text" id="gasto-concepto" class="form-input" placeholder="Ej. Rollo de DTF blanco">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Categoría</label>
+          <select id="gasto-categoria" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monto</label>
+          <input type="number" id="gasto-monto" class="form-input" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input type="date" id="gasto-fecha" class="form-input">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Link (opcional)</label>
+        <input type="url" id="gasto-link" class="form-input" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="gasto-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-gasto">Cancelar</button>
+      <button class="btn-primary" onclick="saveGasto()">Guardar gasto</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVA / EDITAR COMPRA PENDIENTE -->
+<div class="modal-overlay" id="modal-compra">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-compra-title">Nueva compra pendiente</h2>
+      <button class="modal-close" data-modal="modal-compra">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="compra-id">
+      <div class="form-group">
+        <label class="form-label">Qué quieres comprar</label>
+        <input type="text" id="compra-nombre" class="form-input" placeholder="Ej. Removedor de DTF / Apache profesional">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Link del producto (opcional)</label>
+        <input type="url" id="compra-link" class="form-input" placeholder="https://...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Meta de dinero</label>
+          <input type="number" id="compra-meta" class="form-input" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ahorrado hasta ahora</label>
+          <input type="number" id="compra-ahorrado" class="form-input" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="compra-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-compra">Cancelar</button>
+      <button class="btn-primary" onclick="saveCompra()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: BAZAR / LUGAR DE VENTA -->
 <div class="modal-overlay" id="modal-bazar">
   <div class="modal-box modal-box-sm">
@@ -1235,17 +1361,46 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Lugar</label>
-          <input type="text" id="b-lugar" class="form-input" placeholder="Ej. Toluca, Edo. Méx.">
+            <label class="form-label">Lugar</label>
+            <input type="text" id="b-lugar" class="form-input" placeholder="Ej. Toluca, Edo. Méx.">
         </div>
         <div class="form-group">
-          <label class="form-label">Fecha</label>
-          <input type="date" id="b-fecha" class="form-input">
+            <label class="form-label">Inicia el</label>
+            <input type="date" id="b-fecha" class="form-input" onchange="onBazarFechaInicioChange()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Finaliza el</label>
+            <input type="date" id="b-fecha-fin" class="form-input">
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Costo del bazar (renta, mesa, transporte, etc.) ($)</label>
-        <input type="number" id="b-costo" class="form-input" min="0" step="0.01" placeholder="0.00">
+        <label class="form-label">Precio base del bazar ($)</label>
+        <input type="number" id="b-costo" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateBazarCostTotal()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ya pagado / apartado ($)</label>
+        <input type="number" id="b-pagado" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateBazarCostTotal()">
+        <p class="form-help">Captura lo que ya entregaste para restarlo del costo total.</p>
+      </div>
+      <div class="bazar-expenses-section">
+        <div class="bazar-expenses-heading">
+          <label class="form-label">Gastos adicionales</label>
+          <button type="button" class="btn-secondary add-expense-btn" onclick="addBazarExpense()" title="Agregar gasto">＋ Agregar gasto</button>
+        </div>
+        <div id="bazar-expenses-list" class="bazar-expenses-list"></div>
+        <p id="bazar-expenses-empty" class="bazar-expenses-empty">Sin gastos adicionales.</p>
+        <p class="bazar-expenses-hint">Clasifica cada gasto: 🧵 <strong>Producción</strong> es material/DTF que compraste para las piezas (aunque ya lo hayas costeado por playera, aquí anota lo que <em>en verdad pagaste</em>); 🎪 <strong>Evento</strong> es el costo de estar en el bazar. Los dos siempre se suman al total real — la etiqueta es solo para que veas el desglose.</p>
+        <div class="bazar-expenses-total">
+          <div class="bazar-expenses-breakdown" id="b-costo-breakdown">Puesto: $0.00 · 🧵 Producción: $0.00 · 🎪 Evento: $0.00</div>
+          <div class="bazar-expenses-total-row">
+            <span>Total real del bazar</span>
+            <strong id="b-costo-total">$0.00</strong>
+          </div>
+          <div class="bazar-expenses-total-row">
+            <span>Saldo pendiente</span>
+            <strong id="b-costo-pendiente">$0.00</strong>
+          </div>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Notas</label>
@@ -1287,7 +1442,7 @@
         <label class="form-label">Estado de la playera</label>
         <select id="ab-status" class="form-select">
           <option value="Disponible">🟢 Disponible / se quedó</option>
-          <option value="Vendida">✅ Vendida</option>
+          <option value="Vendida"> Vendida✅</option>
           <option value="Venta nula">🎁 Venta nula / cortesía</option>
         </select>
       </div>

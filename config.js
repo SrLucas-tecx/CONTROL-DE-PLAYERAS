@@ -50,6 +50,8 @@ export function defaultState() {
     cotizaciones: [],
     graficas: [],
     proveedores: [],
+    gastos: [],
+    comprasPendientes: [],
     etiquetasOperativas: [
       { id: "eo1", nombre: "Urgente", color: "#e3363d" },
       { id: "eo2", nombre: "Retrabajo", color: "#e0a23a" },
@@ -67,6 +69,28 @@ export const TIPOS_PRENDA = [
   "Playera", "Playera Oversize", "Manga larga", "Sudadera", "Cuello V Mujer",
   "Cuello V Hombre", "Sudadera sin capucha", "Playera de tirantes",
   "Playera sin mangas", "Corte de Relog", "Niños", "Bolsa Sorpresa"
+];
+
+/* ---------------------------------------------------------------
+   GASTOS GENERALES DEL NEGOCIO
+--------------------------------------------------------------- */
+export const GASTOS_CATEGORIAS = [
+  "Materiales", "DTF / Insumos de impresión", "Herramientas y equipo",
+  "Renta", "Servicios", "Transporte", "Empaque", "Publicidad", "Otro"
+];
+
+/* ---------------------------------------------------------------
+   TIPOS DE GASTO DE UN BAZAR
+   "produccion" = material/DTF/playeras que compraste para hacer las
+   piezas (aunque ya estén costeadas por área en cada playera, aquí
+   se anota lo que REALMENTE pagaste, para tu control de efectivo).
+   "evento" = costo de estar en el bazar (puesto, transporte, etc).
+   Ambos se suman siempre al costo real del bazar; la etiqueta es
+   solo para que veas el desglose, nunca deja de contarse ninguno.
+--------------------------------------------------------------- */
+export const GASTOS_BAZAR_TIPOS = [
+  { id: "produccion", label: "🧵 Producción (material / DTF)" },
+  { id: "evento", label: "🎪 Evento (puesto / transporte)" }
 ];
 
 /* ---------------------------------------------------------------
@@ -95,6 +119,7 @@ export const SECTION_LABELS = {
   cotizaciones: "Cotizaciones",
   inventario: "Inventario",
   catalogo: "Catalogo",
+  finanzas: "Gastos y compras pendientes",
   bazares: "Bazares",
   reportes: "Reportes",
   ajustes: "Ajustes"

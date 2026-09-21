@@ -2,14 +2,15 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES } from "./config.js";
+import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
-  bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia,
-  datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes
+  bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente,
+  datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
@@ -27,6 +28,12 @@ function val(id) { const el = document.getElementById(id); return el ? el.value 
 function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
 function checked(id) { const el = document.getElementById(id); return el ? el.checked : false; }
 function setChecked(id, v) { const el = document.getElementById(id); if (el) el.checked = !!v; }
+
+function rangoBazarFecha(bazar) {
+  const inicio = bazar.fecha || bazar.fechaInicio || "—";
+  const fin = bazar.fechaFin || inicio;
+  return inicio === fin ? inicio : `${inicio} al ${fin}`;
+}
 
 export function showToast(message, type = "success") {
   const box = document.getElementById("toast");
@@ -59,6 +66,8 @@ const PAGE_TITLES = {
   etiquetas: "Etiquetas y colores",
   artistas: "Artistas y comisiones",
   proveedores: "Proveedores",
+  gastos: "Gastos generales",
+  compras: "Próximas compras",
   bazares: "Mis Bazares",
   "bazar-detalle": "Detalle de bazar",
   estadisticas: "Estadísticas",
@@ -501,6 +510,160 @@ function renderProveedores() {
     </div>`).join("") || `<p class="empty-hint">Aún no registras proveedores.</p>`;
 }
 
+/* ---------------------------------------------------------------
+   GASTOS GENERALES DEL NEGOCIO
+--------------------------------------------------------------- */
+function fillGastoCategoriaSelect() {
+  const sel = document.getElementById("gasto-categoria");
+  if (!sel) return;
+  sel.innerHTML = GASTOS_CATEGORIAS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+}
+function openModalGasto(id) {
+  fillGastoCategoriaSelect();
+  setVal("gasto-id", id || "");
+  document.getElementById("modal-gasto-title").textContent = id ? "Editar gasto" : "Nuevo gasto";
+  if (id) {
+    const g = AppState.gastos.find(x => x.id === id);
+    setVal("gasto-concepto", g.concepto); setVal("gasto-categoria", g.categoria || "Otro");
+    setVal("gasto-monto", g.monto || 0); setVal("gasto-fecha", g.fecha || "");
+    setVal("gasto-link", g.link || ""); setVal("gasto-notas", g.notas || "");
+  } else {
+    setVal("gasto-concepto", ""); setVal("gasto-categoria", "Materiales"); setVal("gasto-monto", "");
+    setVal("gasto-fecha", new Date().toISOString().slice(0, 10)); setVal("gasto-link", ""); setVal("gasto-notas", "");
+  }
+  openModal("modal-gasto");
+}
+function saveGasto() {
+  const concepto = val("gasto-concepto").trim();
+  if (!concepto) return showToast("Ponle un nombre al gasto.", "error");
+  const id = val("gasto-id");
+  const data = {
+    concepto, categoria: val("gasto-categoria"), monto: num("gasto-monto"),
+    fecha: val("gasto-fecha"), link: val("gasto-link").trim(), notas: val("gasto-notas")
+  };
+  if (id) {
+    Object.assign(AppState.gastos.find(x => x.id === id), data);
+  } else {
+    AppState.gastos.push(Object.assign({ id: uid() }, data));
+  }
+  saveState(); closeModal("modal-gasto"); renderGastos();
+  showToast("Gasto guardado.");
+}
+function deleteGasto(id) {
+  if (!confirm("¿Eliminar este gasto?")) return;
+  AppState.gastos = AppState.gastos.filter(x => x.id !== id);
+  saveState(); renderGastos();
+}
+function renderGastos() {
+  const grid = document.getElementById("gastos-grid");
+  if (!grid) return;
+  const totalMesEl = document.getElementById("gastos-total-mes");
+  const totalGeneralEl = document.getElementById("gastos-total-general");
+  if (totalMesEl) totalMesEl.textContent = fmt(totalGastosMesActual(AppState.gastos));
+  if (totalGeneralEl) totalGeneralEl.textContent = fmt(totalGastos(AppState.gastos));
+  const ordenados = [...AppState.gastos].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  grid.innerHTML = ordenados.map(g => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">${escapeHtml(g.concepto)}</span>
+        <span class="card-badge badge-alta">${escapeHtml(g.categoria || "Otro")}</span>
+      </div>
+      <div class="card-row"><span>Monto</span><span>${fmt(g.monto)}</span></div>
+      ${g.fecha ? `<div class="card-meta">📅 ${escapeHtml(g.fecha)}</div>` : ""}
+      ${g.link ? `<div class="card-meta">🔗 <a href="${escapeHtml(g.link)}" target="_blank" rel="noopener">Ver enlace</a></div>` : ""}
+      ${g.notas ? `<div class="card-meta">${escapeHtml(g.notas)}</div>` : ""}
+      <div class="card-actions">
+        <button onclick="openModalGasto('${g.id}')">✏️ Editar</button>
+        <button class="danger" onclick="deleteGasto('${g.id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`).join("") || `<p class="empty-hint">Aún no registras gastos generales.</p>`;
+}
+
+/* ---------------------------------------------------------------
+   PRÓXIMAS COMPRAS (wishlist con link y meta de ahorro)
+--------------------------------------------------------------- */
+function openModalCompra(id) {
+  setVal("compra-id", id || "");
+  document.getElementById("modal-compra-title").textContent = id ? "Editar compra pendiente" : "Nueva compra pendiente";
+  if (id) {
+    const c = AppState.comprasPendientes.find(x => x.id === id);
+    setVal("compra-nombre", c.nombre); setVal("compra-link", c.link || "");
+    setVal("compra-meta", c.metaMonto || 0); setVal("compra-ahorrado", c.ahorrado || 0);
+    setVal("compra-notas", c.notas || "");
+  } else {
+    setVal("compra-nombre", ""); setVal("compra-link", ""); setVal("compra-meta", "");
+    setVal("compra-ahorrado", 0); setVal("compra-notas", "");
+  }
+  openModal("modal-compra");
+}
+function saveCompra() {
+  const nombre = val("compra-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre a la compra.", "error");
+  const id = val("compra-id");
+  const data = {
+    nombre, link: val("compra-link").trim(), metaMonto: num("compra-meta"),
+    ahorrado: num("compra-ahorrado"), notas: val("compra-notas")
+  };
+  if (id) {
+    Object.assign(AppState.comprasPendientes.find(x => x.id === id), data);
+  } else {
+    AppState.comprasPendientes.push(Object.assign({ id: uid(), comprada: false }, data));
+  }
+  saveState(); closeModal("modal-compra"); renderComprasPendientes();
+  showToast("Compra pendiente guardada.");
+}
+function deleteCompra(id) {
+  if (!confirm("¿Eliminar esta compra pendiente?")) return;
+  AppState.comprasPendientes = AppState.comprasPendientes.filter(x => x.id !== id);
+  saveState(); renderComprasPendientes();
+}
+function addAhorroCompra(id) {
+  const c = AppState.comprasPendientes.find(x => x.id === id);
+  if (!c) return;
+  const entrada = prompt("¿Cuánto quieres agregar al ahorro?", "0");
+  if (entrada === null) return;
+  const monto = parseFloat(entrada) || 0;
+  if (monto <= 0) return;
+  c.ahorrado = (c.ahorrado || 0) + monto;
+  saveState(); renderComprasPendientes();
+  showToast("Ahorro actualizado.");
+}
+function toggleCompraComprada(id) {
+  const c = AppState.comprasPendientes.find(x => x.id === id);
+  if (!c) return;
+  c.comprada = !c.comprada;
+  saveState(); renderComprasPendientes();
+}
+function renderComprasPendientes() {
+  const grid = document.getElementById("compras-grid");
+  if (!grid) return;
+  const ordenadas = [...AppState.comprasPendientes].sort((a, b) => (a.comprada === b.comprada) ? 0 : (a.comprada ? 1 : -1));
+  grid.innerHTML = ordenadas.map(c => {
+    const pct = progresoCompra(c);
+    const falta = faltanteCompra(c);
+    return `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">${escapeHtml(c.nombre)}</span>
+        ${c.comprada ? `<span class="card-badge badge-comprada">✅ Comprada</span>` : ""}
+      </div>
+      ${c.link ? `<div class="card-meta">🔗 <a href="${escapeHtml(c.link)}" target="_blank" rel="noopener">Ver producto</a></div>` : ""}
+      ${c.metaMonto ? `
+        <div class="savings-label"><span>${fmt(c.ahorrado || 0)} ahorrado</span><span>Meta: ${fmt(c.metaMonto)}</span></div>
+        <div class="savings-bar"><div class="savings-bar-fill${pct >= 100 ? " complete" : ""}" style="width:${pct}%;"></div></div>
+        <div class="card-meta">${pct >= 100 ? "🎉 ¡Meta alcanzada!" : `Faltan ${fmt(falta)} (${pct}%)`}</div>
+      ` : ""}
+      ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
+      <div class="card-actions">
+        ${c.metaMonto ? `<button onclick="addAhorroCompra('${c.id}')">💰 Agregar ahorro</button>` : ""}
+        <button onclick="toggleCompraComprada('${c.id}')">${c.comprada ? "↩️ Reabrir" : "✅ Marcar comprada"}</button>
+        <button onclick="openModalCompra('${c.id}')">✏️ Editar</button>
+        <button class="danger" onclick="deleteCompra('${c.id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`;
+  }).join("") || `<p class="empty-hint">Aún no tienes compras pendientes por registrar.</p>`;
+}
+
 /* =================================================================
    AJUSTES DE COSTOS (DTF)
 ================================================================= */
@@ -553,21 +716,102 @@ function openModalBazar(id) {
   document.getElementById("modal-bazar-title").textContent = id ? "Editar bazar / lugar" : "Nuevo bazar / lugar";
   if (id) {
     const b = AppState.bazares.find(x => x.id === id);
-    setVal("b-nombre", b.nombre); setVal("b-lugar", b.lugar); setVal("b-fecha", b.fecha);
-    setVal("b-costo", b.costoBazar || 0); setVal("b-notas", b.notas || "");
+    const fechaInicio = b.fechaInicio || b.fecha || new Date().toISOString().slice(0,10);
+    setVal("b-nombre", b.nombre); setVal("b-lugar", b.lugar); setVal("b-fecha", fechaInicio); setVal("b-fecha-fin", b.fechaFin || fechaInicio);
+    setVal("b-costo", b.costoBaseBazar ?? b.costoBazar ?? 0); setVal("b-pagado", b.montoPagadoBazar || 0); setVal("b-notas", b.notas || "");
+    renderBazarExpenses(b.gastos || []);
   } else {
-    setVal("b-nombre", ""); setVal("b-lugar", ""); setVal("b-fecha", new Date().toISOString().slice(0,10));
-    setVal("b-costo", 0); setVal("b-notas", "");
+    const fechaHoy = new Date().toISOString().slice(0,10);
+    setVal("b-nombre", ""); setVal("b-lugar", ""); setVal("b-fecha", fechaHoy); setVal("b-fecha-fin", fechaHoy);
+    setVal("b-costo", 0); setVal("b-pagado", 0); setVal("b-notas", ""); renderBazarExpenses([]);
   }
+  updateBazarCostTotal();
   openModal("modal-bazar");
+}
+function onBazarFechaInicioChange() {
+  const inicio = val("b-fecha");
+  const fin = document.getElementById("b-fecha-fin");
+  if (fin && (!fin.value || fin.value < inicio)) fin.value = inicio;
+}
+function getBazarExpensesFromForm() {
+  return [...document.querySelectorAll("#bazar-expenses-list .bazar-expense-row")]
+    .map(row => ({
+      id: row.dataset.id || uid(),
+      nombre: row.querySelector(".bazar-expense-name").value.trim(),
+      monto: Number.parseFloat(row.querySelector(".bazar-expense-amount").value) || 0,
+      tipo: row.querySelector(".bazar-expense-tipo").value || "evento"
+    }))
+    .filter(gasto => gasto.nombre || gasto.monto > 0);
+}
+function renderBazarExpenses(gastos) {
+  const list = document.getElementById("bazar-expenses-list");
+  const empty = document.getElementById("bazar-expenses-empty");
+  const opcionesTipo = GASTOS_BAZAR_TIPOS.map(t => `<option value="${t.id}">${escapeHtml(t.label)}</option>`).join("");
+  list.innerHTML = (gastos || []).map(gasto => `
+    <div class="bazar-expense-row" data-id="${escapeHtml(gasto.id || uid())}">
+      <input type="text" class="form-input bazar-expense-name" value="${escapeHtml(gasto.nombre || "")}" placeholder="Nombre del gasto">
+      <select class="form-select bazar-expense-tipo" onchange="updateBazarCostTotal()">${opcionesTipo}</select>
+      <input type="number" class="form-input bazar-expense-amount" value="${gasto.monto || 0}" min="0" step="0.01" placeholder="Monto" oninput="updateBazarCostTotal()">
+      <button type="button" class="bazar-expense-remove" onclick="removeBazarExpense(this)" title="Quitar gasto">✕</button>
+    </div>`).join("");
+  // el <select> no respeta el atributo value al inyectarse por innerHTML, así que se fija aparte
+  [...list.querySelectorAll(".bazar-expense-row")].forEach((row, i) => {
+    const tipo = (gastos && gastos[i] && gastos[i].tipo) || "evento";
+    row.querySelector(".bazar-expense-tipo").value = tipo;
+  });
+  empty.style.display = gastos && gastos.length ? "none" : "block";
+}
+function addBazarExpense() {
+  const gastos = getBazarExpensesFromForm();
+  gastos.push({ id: uid(), nombre: "", monto: 0, tipo: "evento" });
+  renderBazarExpenses(gastos);
+  const names = document.querySelectorAll("#bazar-expenses-list .bazar-expense-name");
+  names[names.length - 1]?.focus();
+  updateBazarCostTotal();
+}
+function removeBazarExpense(button) {
+  const row = button.closest(".bazar-expense-row");
+  row.remove();
+  const list = document.getElementById("bazar-expenses-list");
+  document.getElementById("bazar-expenses-empty").style.display = list.children.length ? "none" : "block";
+  updateBazarCostTotal();
+}
+// Suma TODO lo capturado (base + producción + evento) — este es el costo real
+// en efectivo del bazar. El desglose por tipo es solo para que el usuario vea
+// cuánto de eso fue material/DTF y cuánto fue del evento en sí; nada se excluye.
+function updateBazarCostTotal() {
+  const base = Number.parseFloat(num("b-costo")) || 0;
+  const rows = [...document.querySelectorAll("#bazar-expenses-list .bazar-expense-row")];
+  let produccion = 0, evento = 0;
+  rows.forEach(row => {
+    const monto = Number.parseFloat(row.querySelector(".bazar-expense-amount").value) || 0;
+    const tipo = row.querySelector(".bazar-expense-tipo").value;
+    if (tipo === "produccion") produccion += monto; else evento += monto;
+  });
+  const total = base + produccion + evento;
+  const pagado = Math.max(0, num("b-pagado"));
+  const totalEl = document.getElementById("b-costo-total");
+  const pendienteEl = document.getElementById("b-costo-pendiente");
+  const breakdownEl = document.getElementById("b-costo-breakdown");
+  if (totalEl) totalEl.textContent = fmt(total);
+  if (pendienteEl) pendienteEl.textContent = fmt(Math.max(0, total - pagado));
+  if (breakdownEl) {
+    breakdownEl.textContent = `Puesto: ${fmt(base)} · 🧵 Producción: ${fmt(produccion)} · 🎪 Evento: ${fmt(evento)}`;
+  }
 }
 function saveBazar() {
   const nombre = val("b-nombre").trim();
   if (!nombre) return showToast("Ponle un nombre al bazar.", "error");
   const id = val("b-id");
+  const fechaInicio = val("b-fecha");
+  const fechaFin = val("b-fecha-fin") || fechaInicio;
+  if (fechaFin < fechaInicio) return showToast("La fecha final no puede ser anterior a la fecha de inicio.", "error");
+  const gastos = getBazarExpensesFromForm();
+  const costoBaseBazar = Number.parseFloat(num("b-costo")) || 0;
   const data = {
-    nombre, lugar: val("b-lugar"), fecha: val("b-fecha"),
-    costoBazar: parseFloat(num("b-costo")) || 0, notas: val("b-notas")
+    nombre, lugar: val("b-lugar"), fecha: fechaInicio, fechaInicio, fechaFin,
+    costoBaseBazar, montoPagadoBazar: Math.max(0, num("b-pagado")), gastos,
+    costoBazar: costoBaseBazar + gastos.reduce((total, gasto) => total + gasto.monto, 0), notas: val("b-notas")
   };
   let newId = id;
   if (id) {
@@ -642,15 +886,19 @@ function renderBazares() {
   document.getElementById("bazares-empty-hint").style.display = AppState.bazares.length ? "none" : "block";
   body.innerHTML = AppState.bazares.map(b => {
     const stats = getBazarVentasYGanancia(b.id);
-    const costoBazar = b.costoBazar || 0;
+    const costoReal = costoBazarReal(b);
+    const saldoPendiente = saldoBazarPendiente(b);
+    const desglose = gastosBazarPorTipo(b);
     const sumIngresosExtra = (b.ingresosExtra || []).reduce((s, i) => s + (i.monto || 0), 0);
-    const gananciaNeta = stats.gananciaVentas + sumIngresosExtra - costoBazar;
+    // Ganancia real = dinero que de verdad entró y salió del bolsillo (nunca usa el
+    // costeo estimado por catálogo de cada playera, para no volver a contar el DTF/tela dos veces).
+    const gananciaNeta = stats.totalVendido + sumIngresosExtra - costoReal;
     const esActivo = activeBazarId === b.id;
     return `
     <tr class="${esActivo ? "is-active" : ""}">
       <td>
         <div class="bazar-name-cell">🏪 ${escapeHtml(b.nombre)} ${esActivo ? `<span class="card-badge badge-alta">Activo</span>` : ""}</div>
-        <div class="card-meta">${escapeHtml(b.lugar || "—")} · ${b.fecha || "—"}${costoBazar ? ` · Costo: ${fmt(costoBazar)}` : ""}</div>
+        <div class="card-meta">${escapeHtml(b.lugar || "—")} · ${rangoBazarFecha(b)}${costoReal ? ` · Costo real: ${fmt(costoReal)} · Pendiente: ${fmt(saldoPendiente)} (🧵 ${fmt(desglose.produccion)} · 🎪 ${fmt(desglose.evento)})` : ""}</div>
       </td>
       <td>${stats.cotsCount}</td>
       <td>${fmt(stats.totalVendido)}</td>
@@ -870,6 +1118,20 @@ function renderPlayeras() {
     if (searchTerm && !p.nombre.toLowerCase().includes(searchTerm)) return false;
     return true;
   });
+  const prioridadColor = nombre => {
+    const color = nombre.trim().toLocaleLowerCase();
+    if (color === "negro") return 0;
+    if (color === "blanco") return 1;
+    return 2;
+  };
+  list.sort((a, b) => {
+    const colorA = colorNombre(a.colorId);
+    const colorB = colorNombre(b.colorId);
+    const prioridad = prioridadColor(colorA) - prioridadColor(colorB);
+    if (prioridad !== 0) return prioridad;
+    const porColor = colorA.localeCompare(colorB, "es", { sensitivity: "base" });
+    return porColor || a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" });
+  });
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
   grid.innerHTML = list.map(p => {
@@ -906,7 +1168,7 @@ function renderPlayeras() {
       <div class="card-tags">
         <span class="card-badge ${estadoBadgeClass(p.estado)}">${p.estado}</span>
         <span class="card-badge ${prioridadBadgeClass(p.prioridad)}">${p.prioridad}</span>
-        ${bazarEstado ? `<span class="card-badge ${bazarEstadoBadgeClass(bazarEstado)}">${bazarEstado === "Vendida" ? "✅ Vendida" : bazarEstado === "Venta nula" ? "🎁 Venta nula" : "🟢 En bazar"}</span>` : ""}
+        ${bazarEstado ? `<span class="card-badge ${bazarEstadoBadgeClass(bazarEstado)}">${bazarEstado === "Vendida" ? " Vendida✅" : bazarEstado === "Venta nula" ? "🎁 Venta nula" : "🟢 En bazar"}</span>` : ""}
         ${bazarIdsDe(p).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(p))}</span>` : ""}
         ${p.prendaCliente ? `<span class="card-badge badge-media">🎁 Prenda del cliente</span>` : ""}
         ${esGangSheet ? `<span class="card-badge badge-alta">🧻 Gang Sheet</span>` : (p.dtfEspecial ? `<span class="card-badge badge-alta">✨ DTF especial</span>` : "")}
@@ -1712,7 +1974,7 @@ function renderBazarDetalle() {
   const b = AppState.bazares.find(x => x.id === activeBazarId);
   if (!b) { switchPage("bazares"); return; }
   document.getElementById("bd-nombre").textContent = "🏪 " + b.nombre;
-  document.getElementById("bd-meta").textContent = `${b.lugar || "—"} · ${b.fecha || "—"}${b.notas ? " · " + b.notas : ""}`;
+  document.getElementById("bd-meta").textContent = `${b.lugar || "—"} · ${rangoBazarFecha(b)}${b.notas ? " · " + b.notas : ""}`;
 
   const todas = AppState.cotizaciones.filter(c => bazarTiene(c, b.id));
   const validas = todas.filter(c => !c.ventaNula);
@@ -1734,12 +1996,20 @@ function renderBazarDetalle() {
   }, 0);
   const totalVendido = validas.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras;
   const perdidaCotsNulas = nulas.reduce((s, c) => s + (c.totalCosto || 0), 0);
+  // Ganancia ESTIMADA por catálogo: suma del margen que cada playera/cotización trae
+  // calculado por su costeo de área DTF. Es solo referencia para comparar diseños,
+  // nunca se resta contra el costo del bazar (eso causaba el doble conteo).
   const gananciaVentas = validas.reduce((s, c) => s + c.ganancia, 0) + gananciaVentasPlayeras - perdidaCotsNulas - perdidaPlayerasNulas;
   const totalRegalado = perdidaCotsNulas + perdidaPlayerasNulas;
-  const costoBazar = b.costoBazar || 0;
+  const desglose = gastosBazarPorTipo(b);
+  const costoReal = costoBazarReal(b);
+  const saldoPendiente = saldoBazarPendiente(b);
   const ingresosExtra = b.ingresosExtra || [];
   const sumIngresosExtra = ingresosExtra.reduce((s, i) => s + (i.monto || 0), 0);
-  const gananciaNeta = gananciaVentas + sumIngresosExtra - costoBazar;
+  // Ganancia REAL en efectivo: lo que de verdad entró (ventas + extra) menos lo que
+  // de verdad salió de tu bolsillo (puesto + producción + evento). No usa el costeo
+  // estimado de cada playera, así que nunca duplica el gasto de DTF/tela.
+  const gananciaNeta = totalVendido + sumIngresosExtra - costoReal;
   const playerasVendidas = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") === "Vendida");
   const playerasDisponibles = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") !== "Vendida");
 
@@ -1747,7 +2017,8 @@ function renderBazarDetalle() {
   document.getElementById("bd-ganancia").textContent = fmt(gananciaVentas);
   document.getElementById("bd-cotizaciones").textContent = todas.length + playerasAsignadas.length;
   document.getElementById("bd-regalado").textContent = fmt(totalRegalado);
-  document.getElementById("bd-costo-bazar").textContent = fmt(costoBazar);
+  document.getElementById("bd-costo-bazar").textContent = fmt(costoReal);
+  document.getElementById("bd-costo-bazar-sub").textContent = `Pagado/apartado ${fmt(b.montoPagadoBazar || 0)} · Saldo pendiente ${fmt(saldoPendiente)} · Puesto ${fmt(b.costoBaseBazar || 0)} · 🧵 Producción ${fmt(desglose.produccion)} · 🎪 Evento ${fmt(desglose.evento)}`;
   document.getElementById("bd-ingresos-extra").textContent = fmt(sumIngresosExtra);
   document.getElementById("bd-ganancia-neta").textContent = fmt(gananciaNeta);
 
@@ -1761,7 +2032,7 @@ function renderBazarDetalle() {
       const montoTotal = (p.precioVenta || 0) * (p.stock || 0);
       const resultadoTotal = (esNula ? -costoTotalUnit : gananciaUnit) * (p.stock || 0);
       const estadoBadge = esVendida || esNula ? "badge-agotado" : "badge-stock";
-      const estadoLabel = esVendida ? "✅ Vendida" : esNula ? "🎁 Venta nula" : "🟢 Disponible";
+      const estadoLabel = esVendida ? " Vendida✅" : esNula ? "🎁 Venta nula" : "🟢 Disponible";
       return `
         <div class="card">
           <div class="card-top">
@@ -2168,6 +2439,8 @@ export function renderAll() {
   renderTallaEtiquetas();
   renderArtistas();
   renderProveedores();
+  renderGastos();
+  renderComprasPendientes();
   renderBazares();
   renderAjustes();
   renderPlayeras();
@@ -2188,6 +2461,7 @@ Object.assign(window, {
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
   deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
+  deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, goToBazarDetalle,
   onArtistModeChange, onHeaderBazarChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteEstampadoModoChange, onQuoteItemProductChange,
@@ -2195,11 +2469,12 @@ Object.assign(window, {
   openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalBazar,
   openModalBazarDesdeAsignacion, openModalClienteDetalle, openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica,
   openModalIngresoExtra, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
-  openModalSticker, openModalTallaEtiqueta,
+  openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra,
+  addBazarExpense, removeBazarExpense, updateBazarCostTotal,
   removeQuoteItem, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
   resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveColor, saveEtiqueta, saveEtiquetaOp,
   saveGrafica, saveIngresoExtra, savePlayera, saveProveedor, saveQuote, saveServicioExtra,
-  saveSettings, saveSticker,
+  saveSettings, saveSticker, saveGasto, saveCompra,
   saveTallaEtiqueta, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
   toggleGraficaInventarioOptions, toggleQuoteAreaDtfEspecial, toggleQuoteItemFlag, toggleQuoteTagOperativo,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,

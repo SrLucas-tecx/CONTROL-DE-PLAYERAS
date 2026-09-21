@@ -118,6 +118,26 @@ export function bazarNombre(bazarId) {
   const b = AppState.bazares.find(x => x.id === bazarId);
   return b ? b.nombre : "Sin bazar asignado";
 }
+// Desglosa los gastos adicionales de un bazar por tipo (producción vs evento),
+// SIN excluir ninguno del total: la etiqueta es solo informativa, todo cuenta
+// como dinero real que salió de tu bolsillo para ese bazar.
+export function gastosBazarPorTipo(bazar) {
+  const gastos = (bazar && bazar.gastos) || [];
+  const produccion = gastos.filter(g => g.tipo === "produccion").reduce((s, g) => s + (g.monto || 0), 0);
+  const evento = gastos.filter(g => g.tipo !== "produccion").reduce((s, g) => s + (g.monto || 0), 0);
+  return { produccion, evento, total: produccion + evento };
+}
+// Costo REAL en efectivo de un bazar: precio base del puesto + TODOS los
+// gastos adicionales (producción + evento). Se calcula siempre a partir de
+// los datos crudos del bazar (nunca de un campo cacheado) para que jamás
+// quede desfasado de lo que el usuario realmente capturó.
+export function costoBazarReal(bazar) {
+  const base = (bazar && bazar.costoBaseBazar) || 0;
+  return base + gastosBazarPorTipo(bazar).total;
+}
+export function saldoBazarPendiente(bazar) {
+  return Math.max(0, costoBazarReal(bazar) - ((bazar && bazar.montoPagadoBazar) || 0));
+}
 export function bazarIdsDe(registro) {
   return registro.bazarIds || (registro.bazarId ? [registro.bazarId] : []);
 }
@@ -241,6 +261,39 @@ export function semaforoCotizacion(c) {
   if (c.urgente || diffDias >= 3) return { color: "red", label: c.urgente ? "Urgente" : "Atrasado" };
   if (diffDias >= 1) return { color: "yellow", label: "En proceso" };
   return { color: "green", label: "A tiempo" };
+}
+
+/* ---------------------------------------------------------------
+   GASTOS GENERALES DEL NEGOCIO
+--------------------------------------------------------------- */
+export function totalGastos(gastos) {
+  return (gastos || []).reduce((s, g) => s + (g.monto || 0), 0);
+}
+export function totalGastosMesActual(gastos) {
+  const ym = new Date().toISOString().slice(0, 7);
+  return (gastos || []).filter(g => (g.fecha || "").startsWith(ym)).reduce((s, g) => s + (g.monto || 0), 0);
+}
+export function totalGastosPorCategoria(gastos) {
+  const grupos = {};
+  (gastos || []).forEach(g => {
+    const cat = g.categoria || "Otro";
+    grupos[cat] = (grupos[cat] || 0) + (g.monto || 0);
+  });
+  return grupos;
+}
+
+/* ---------------------------------------------------------------
+   PRÓXIMAS COMPRAS (wishlist con meta de ahorro)
+--------------------------------------------------------------- */
+// % de la meta de ahorro ya reunido para una compra pendiente (0-100, sin pasarse de 100).
+export function progresoCompra(item) {
+  const meta = item.metaMonto || 0;
+  if (!meta) return 0;
+  return Math.min(100, Math.round(((item.ahorrado || 0) / meta) * 100));
+}
+// Cuánto falta por ahorrar para alcanzar la meta (nunca negativo).
+export function faltanteCompra(item) {
+  return Math.max(0, (item.metaMonto || 0) - (item.ahorrado || 0));
 }
 
 /* ---------------------------------------------------------------
