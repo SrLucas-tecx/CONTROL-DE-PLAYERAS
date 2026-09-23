@@ -5,7 +5,7 @@
 import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
-  fmt, escapeHtml, costoTotalPlayera, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
+  fmt, escapeHtml, costoTotalPlayera, costoEstampado, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente,
@@ -1192,23 +1192,38 @@ function openModalSticker(id) {
   document.getElementById("modal-sticker-title").textContent = id ? "Editar estampado" : "Nuevo estampado";
   if (id) {
     const s = AppState.stickers.find(x => x.id === id);
-    setVal("s-nombre", s.nombre); setVal("s-tamano", s.tamano); setVal("s-costo", s.costo);
+    setVal("s-nombre", s.nombre); setVal("s-tamano", s.tamano); setVal("s-ancho", s.anchoCm || 0); setVal("s-largo", s.largoCm || 0); setVal("s-costo", s.costo);
+    setVal("s-precio-venta", s.precioVenta || 0);
     setVal("s-stock", s.stock); setVal("s-stock-minimo", s.stockMinimo ?? AppState.settings.stockMinimoDefault ?? 0);
     setVal("s-prioridad", s.prioridad); setVal("s-estado", s.estado);
     setVal("s-notas", s.notas || "");
   } else {
-    setVal("s-nombre", ""); setVal("s-tamano", "Chico"); setVal("s-costo", 10);
+    setVal("s-nombre", ""); setVal("s-tamano", "Chico"); setVal("s-ancho", 5); setVal("s-largo", 5); setVal("s-costo", 0); setVal("s-precio-venta", 0);
     setVal("s-stock", 1); setVal("s-stock-minimo", AppState.settings.stockMinimoDefault || 0);
     setVal("s-prioridad", "Media"); setVal("s-estado", "En stock"); setVal("s-notas", "");
   }
+  updateStickerCostPreview();
   openModal("modal-sticker");
+}
+function updateStickerCostPreview() {
+  const ancho = num("s-ancho");
+  const largo = num("s-largo");
+  const costo = ancho > 0 && largo > 0 ? costoEstampado([{ anchoCm: ancho, largoCm: largo }], false) : 0;
+  const costoInput = document.getElementById("s-costo");
+  if (costoInput && ancho > 0 && largo > 0) costoInput.value = costo.toFixed(2);
+  const preview = document.getElementById("s-costo-preview");
+  if (preview) preview.textContent = ancho > 0 && largo > 0 ? `Costo de producción calculado: ${fmt(costo)}` : "Captura ancho y largo para calcular el costo de producción.";
 }
 function saveSticker() {
   const nombre = val("s-nombre").trim();
   if (!nombre) return showToast("Ponle un nombre al estampado.", "error");
   const id = val("s-id");
+  const anchoCm = Math.round(num("s-ancho") * 100) / 100;
+  const largoCm = Math.round(num("s-largo") * 100) / 100;
+  const costoCalculado = Math.round((anchoCm > 0 && largoCm > 0 ? costoEstampado([{ anchoCm, largoCm }], false) : num("s-costo")) * 100) / 100;
   const data = {
-    nombre, tamano: val("s-tamano"), costo: parseFloat(num("s-costo")) || 0,
+    nombre, tamano: val("s-tamano"), anchoCm, largoCm, costo: costoCalculado,
+    precioVenta: Math.round(num("s-precio-venta") * 100) / 100,
     stock: parseInt(num("s-stock")) || 0, stockMinimo: parseInt(num("s-stock-minimo")) || 0,
     prioridad: val("s-prioridad"), estado: val("s-estado"),
     notas: val("s-notas")
@@ -1225,6 +1240,17 @@ function deleteSticker(id) {
   if (!confirm("¿Eliminar este estampado?")) return;
   AppState.stickers = AppState.stickers.filter(x => x.id !== id);
   saveState(); renderStickers();
+}
+function quoteStickerFromInventory(id) {
+  const sticker = AppState.stickers.find(item => item.id === id);
+  if (!sticker) return;
+  quoteStickerItems.push({
+    rowId: uid(), stickerId: sticker.id, nombre: sticker.nombre, tamano: sticker.tamano,
+    costo: sticker.costo || 0, cantidad: 1, precioVenta: sticker.precioVenta || sticker.costo || 0
+  });
+  switchPage("cotizador");
+  renderQuoteItems();
+  showToast("Sticker agregado al cotizador.");
 }
 function setStickerSizeFilter(size, btn) {
   uiFilters.stickerSize = size;
@@ -1257,6 +1283,8 @@ function renderStickers() {
         <span class="card-badge badge-media">${s.tamano}</span>
       </div>
       <div class="card-row"><span>Costo</span><span>${fmt(s.costo)}</span></div>
+      <div class="card-row"><span>Precio de venta</span><span>${fmt(s.precioVenta)}</span></div>
+      <div class="card-row"><span>Ganancia</span><span style="color:${(s.precioVenta || 0) - (s.costo || 0) >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt((s.precioVenta || 0) - (s.costo || 0))}</span></div>
       <div class="card-row"><span>Stock</span><span>${s.stock} pza(s)</span></div>
       <div class="card-tags">
         <span class="card-badge ${estadoBadgeClass(s.estado)}">${s.estado}</span>
@@ -1265,6 +1293,7 @@ function renderStickers() {
       </div>
       ${s.notas ? `<div class="card-meta">${escapeHtml(s.notas)}</div>` : ""}
       <div class="card-actions">
+        <button onclick="quoteStickerFromInventory('${s.id}')">🧮 Cotizar</button>
         <button onclick="openModalSticker('${s.id}')">✏️ Editar</button>
         <button class="danger" onclick="deleteSticker('${s.id}')">🗑️ Eliminar</button>
       </div>
@@ -1276,6 +1305,7 @@ function renderStickers() {
    COTIZADOR RÁPIDO
 ================================================================= */
 let quoteItems = [];
+let quoteStickerItems = [];
 let quoteServiciosExtra = [];
 let quoteTagsOperativos = [];
 let editingQuoteItemRowId = null;
@@ -1305,6 +1335,41 @@ function blankQuoteItem() {
 }
 function addQuoteItem() {
   quoteItems.push(blankQuoteItem());
+  renderQuoteItems();
+}
+function addQuoteSticker() {
+  const sticker = AppState.stickers.find(s => (s.stock || 0) > 0) || AppState.stickers[0];
+  quoteStickerItems.push({
+    rowId: uid(), stickerId: sticker ? sticker.id : "", nombre: sticker ? sticker.nombre : "",
+    tamano: sticker ? sticker.tamano : "Chico", anchoCm: sticker ? (sticker.anchoCm || 0) : 0,
+    largoCm: sticker ? (sticker.largoCm || 0) : 0, costo: sticker ? sticker.costo : 0,
+    cantidad: 1, precioVenta: sticker ? (sticker.precioVenta || sticker.costo) : 0
+  });
+  renderQuoteItems();
+}
+function removeQuoteSticker(rowId) {
+  quoteStickerItems = quoteStickerItems.filter(item => item.rowId !== rowId);
+  renderQuoteItems();
+}
+function updateQuoteStickerField(rowId, field, value) {
+  const item = quoteStickerItems.find(sticker => sticker.rowId === rowId);
+  if (!item) return;
+  if (field === "stickerId") {
+    const sticker = AppState.stickers.find(s => s.id === value);
+    item.stickerId = value; item.nombre = sticker ? sticker.nombre : "";
+    item.tamano = sticker ? sticker.tamano : "Chico"; item.anchoCm = sticker ? (sticker.anchoCm || 0) : 0;
+    item.largoCm = sticker ? (sticker.largoCm || 0) : 0; item.costo = sticker ? sticker.costo : 0;
+    item.precioVenta = sticker ? (sticker.precioVenta || sticker.costo) : 0;
+  } else if (["cantidad", "anchoCm", "largoCm", "precioVenta"].includes(field)) {
+    item[field] = Math.max(0, Math.round((Number.parseFloat(value) || 0) * 100) / 100);
+    if (field === "anchoCm" || field === "largoCm") {
+      item.costo = item.anchoCm > 0 && item.largoCm > 0
+        ? Math.round(costoEstampado([{ anchoCm: item.anchoCm, largoCm: item.largoCm }], false) * 100) / 100
+        : 0;
+    }
+  } else {
+    item[field] = value;
+  }
   renderQuoteItems();
 }
 function removeQuoteItem(rowId) {
@@ -1463,9 +1528,10 @@ function currentQuoteCommission() {
 }
 function renderQuoteItems() {
   const body = document.getElementById("quote-items-body");
-  document.getElementById("quote-empty-hint").style.display = quoteItems.length ? "none" : "block";
+  const hasQuoteContent = quoteItems.length || quoteStickerItems.length;
+  document.getElementById("quote-empty-hint").style.display = hasQuoteContent ? "none" : "block";
   const addSpace = document.getElementById("quote-add-space");
-  if (addSpace) addSpace.style.display = quoteItems.length ? "none" : "flex";
+  if (addSpace) addSpace.style.display = hasQuoteContent ? "none" : "flex";
   const playeraOptions = AppState.playeras.map(p => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join("");
 
   body.innerHTML = quoteItems.map(item => {
@@ -1513,6 +1579,32 @@ function renderQuoteItems() {
     </tr>`;
   }).join("");
 
+  const stickerBody = document.getElementById("quote-stickers-body");
+  const stickerEmpty = document.getElementById("quote-stickers-empty");
+  if (stickerBody) {
+    const stickerOptions = AppState.stickers.map(sticker => `<option value="${sticker.id}">${escapeHtml(sticker.nombre)}</option>`).join("");
+    stickerBody.innerHTML = quoteStickerItems.map(item => `
+      <tr>
+        <td>
+          <select onchange="updateQuoteStickerField('${item.rowId}','stickerId',this.value)"><option value="">— Manual / personalizado —</option>${stickerOptions}</select>
+          ${!item.stickerId ? `<input type="text" placeholder="Nombre del sticker" value="${escapeHtml(item.nombre)}" style="margin-top:4px;" onchange="updateQuoteStickerField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta" style="margin-top:4px;">${escapeHtml(item.nombre)}</div>`}
+        </td>
+        <td>${!item.stickerId ? `<select onchange="updateQuoteStickerField('${item.rowId}','tamano',this.value)"><option ${item.tamano === "Chico" ? "selected" : ""}>Chico</option><option ${item.tamano === "Mediano" ? "selected" : ""}>Mediano</option><option ${item.tamano === "Grande" ? "selected" : ""}>Grande</option></select>` : escapeHtml(item.tamano)}</td>
+        <td><input type="number" min="0" step="0.01" value="${Number(item.anchoCm || 0).toFixed(2)}" onchange="updateQuoteStickerField('${item.rowId}','anchoCm',this.value)"></td>
+        <td><input type="number" min="0" step="0.01" value="${Number(item.largoCm || 0).toFixed(2)}" onchange="updateQuoteStickerField('${item.rowId}','largoCm',this.value)"></td>
+        <td><input type="number" min="1" step="1" value="${item.cantidad}" onchange="updateQuoteStickerField('${item.rowId}','cantidad',this.value)"></td>
+        <td><input type="number" min="0" step="0.01" value="${Number(item.costo || 0).toFixed(2)}" readonly></td>
+        <td><input type="number" min="0" step="0.01" value="${Number(item.precioVenta || 0).toFixed(2)}" onchange="updateQuoteStickerField('${item.rowId}','precioVenta',this.value)"></td>
+        <td class="readonly-cell" style="color:${item.precioVenta - item.costo >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${fmt((item.precioVenta - item.costo) * item.cantidad)}</td>
+        <td><button class="remove-row" onclick="removeQuoteSticker('${item.rowId}')" title="Quitar">✕</button></td>
+      </tr>`).join("");
+    quoteStickerItems.forEach(item => {
+      const select = stickerBody.querySelector(`select[onchange*="${item.rowId}"]`);
+      if (select) select.value = item.stickerId;
+    });
+    if (stickerEmpty) stickerEmpty.style.display = quoteStickerItems.length ? "none" : "block";
+  }
+
   renderServiciosExtra();
   updateQuoteSummary();
 }
@@ -1522,6 +1614,10 @@ function computeQuoteTotals() {
     const costoUnit = costoUnitarioItem(item);
     ventaBruta += item.precioVenta * item.cantidad;
     totalCosto += costoUnit * item.cantidad;
+  });
+  quoteStickerItems.forEach(item => {
+    ventaBruta += item.precioVenta * item.cantidad;
+    totalCosto += item.costo * item.cantidad;
   });
   const sumServiciosExtra = quoteServiciosExtra.reduce((s, i) => s + (i.monto || 0), 0);
   ventaBruta += sumServiciosExtra;
@@ -1611,6 +1707,7 @@ function renderServiciosExtra() {
 }
 function resetQuoteForm() {
   quoteItems = [];
+  quoteStickerItems = [];
   quoteServiciosExtra = [];
   quoteTagsOperativos = [];
   setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-vendedor", "");
@@ -1626,7 +1723,7 @@ function resetQuoteForm() {
   renderQuoteItems();
 }
 function saveQuote() {
-  if (!quoteItems.length) return showToast("Agrega al menos una prenda.", "error");
+  if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker.", "error");
   const t = computeQuoteTotals();
   const editingId = val("quote-editing-id");
   const data = {
@@ -1642,6 +1739,7 @@ function saveQuote() {
     ventaNulaMotivo: val("q-venta-nula-motivo"),
     notas: val("q-notas"),
     items: JSON.parse(JSON.stringify(quoteItems)),
+    stickers: JSON.parse(JSON.stringify(quoteStickerItems)),
     serviciosExtra: JSON.parse(JSON.stringify(quoteServiciosExtra)),
     ventaBruta: t.ventaBruta,
     descuentoPct: t.descuentoPct, montoDescuento: t.montoDescuento,
@@ -1668,12 +1766,12 @@ function saveQuote() {
   switchPage("cotizaciones");
 }
 function exportQuotePDF() {
-  if (!quoteItems.length) return showToast("Agrega al menos una prenda antes de exportar.", "error");
+  if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker antes de exportar.", "error");
   const t = computeQuoteTotals();
   const html = buildQuoteHTML({
     folio: val("quote-editing-id") ? "Edición" : "Nueva",
     cliente: val("q-cliente") || "Cliente sin nombre", fecha: val("q-fecha"), vendedor: val("q-vendedor"),
-    items: quoteItems, serviciosExtra: quoteServiciosExtra, notas: val("q-notas"), ventaNula: checked("q-venta-nula"),
+    items: quoteItems, stickers: quoteStickerItems, serviciosExtra: quoteServiciosExtra, notas: val("q-notas"), ventaNula: checked("q-venta-nula"),
     tipoVenta: val("q-tipo-venta"), ...t
   });
   const container = document.getElementById("pdf-template");
@@ -1687,17 +1785,21 @@ function buildQuoteHTML(q) {
       <td>${item.cantidad}</td><td>${fmt(item.precioVenta)}</td><td>${fmt(item.precioVenta*item.cantidad)}</td>
     </tr>`;
   }).join("");
+  const stickerRows = (q.stickers || []).map(sticker => `<tr>
+      <td>${escapeHtml(sticker.nombre || "Sticker")} <span style="color:#888;">(${escapeHtml(sticker.tamano || "—")})</span></td><td>—</td><td>—</td>
+      <td>${sticker.cantidad}</td><td>${fmt(sticker.precioVenta)}</td><td>${fmt(sticker.precioVenta * sticker.cantidad)}</td>
+    </tr>`).join("");
   return `
   <div style="font-family:Arial,sans-serif;color:#222;padding:10px;">
     <div style="display:flex;justify-content:space-between;border-bottom:3px solid #c0242c;padding-bottom:10px;margin-bottom:16px;">
-      <div><h1 style="margin:0;color:#c0242c;">LUCXSTUDIO</h1><p style="margin:2px 0;font-size:12px;">Cotización de playeras ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}${q.urgente || q.esUrgente ? " — 🚀 Pedido urgente" : ""}</p></div>
+      <div><h1 style="margin:0;color:#c0242c;">LUCXSTUDIO</h1><p style="margin:2px 0;font-size:12px;">Cotización de playeras y stickers ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}${q.urgente || q.esUrgente ? " — 🚀 Pedido urgente" : ""}</p></div>
       <div style="text-align:right;font-size:12px;"><b>Folio:</b> ${q.folio}<br><b>Fecha:</b> ${q.fecha}</div>
     </div>
     <p style="font-size:13px;"><b>Cliente:</b> ${escapeHtml(q.cliente)} &nbsp;&nbsp; <b>Vendedor:</b> ${escapeHtml(q.vendedor||"—")}</p>
     ${q.ventaNula ? `<p style="font-size:12px;background:#fdeeee;border:1px dashed #c0242c;padding:6px;">🎁 Cotización marcada como venta nula (regalo / cortesía).</p>` : ""}
     <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
       <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Producto</th><th>Talla</th><th>Color</th><th>Cant.</th><th>Precio c/u</th><th>Subtotal</th></tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${rows}${stickerRows}</tbody>
     </table>
     ${q.serviciosExtra && q.serviciosExtra.length ? `
     <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
@@ -1744,7 +1846,7 @@ function renderCotizacionesGuardadas() {
         <span class="card-title"><span class="semaforo-dot semaforo-${semaforo.color}" title="${semaforo.label}"></span>${escapeHtml(c.folio)}</span>
         <span class="card-badge ${c.estado==='Pagado'?'badge-stock':c.estado==='Entregado'?'badge-alta':c.estado==='Confirmado'?'badge-media':'badge-baja'}">${c.estado}</span>
       </div>
-      <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length} prenda(s) · 🚦 ${escapeHtml(c.estadoProduccion || "Por hacer")}</div>
+      <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length + (c.stickers || []).length} artículo(s) · 🚦 ${escapeHtml(c.estadoProduccion || "Por hacer")}</div>
       <div class="card-tags">
         <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
         ${bazarIdsDe(c).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>` : ""}
@@ -1771,6 +1873,7 @@ function viewCotizacion(id) {
     const flags = [item.prendaCliente ? "🎁 prenda cliente" : "", item.dtfEspecial ? "✨ DTF especial" : "", item.modoCosteo === "gangsheet" ? "🧻 gang sheet" : ""].filter(Boolean).join(" · ");
     return `<div class="card-row"><span>${escapeHtml(item.nombre||"—")} (${escapeHtml(item.tipo||"")}, ${escapeHtml(item.talla)}, ${colorNombre(item.colorId)}) ×${item.cantidad}${flags ? " — " + flags : ""}</span><span>${fmt(item.precioVenta*item.cantidad)}</span></div>`;
   }).join("");
+  const stickerRows = (c.stickers || []).map(sticker => `<div class="card-row"><span>✂️ ${escapeHtml(sticker.nombre || "Sticker")} (${escapeHtml(sticker.tamano || "—")}) ×${sticker.cantidad}</span><span>${fmt(sticker.precioVenta * sticker.cantidad)}</span></div>`).join("");
   const serviciosExtraRows = (c.serviciosExtra && c.serviciosExtra.length)
     ? c.serviciosExtra.map(s => `<div class="card-row"><span>➕ ${escapeHtml(s.concepto)}</span><span>${fmt(s.monto)}</span></div>`).join("")
     : "";
@@ -1788,6 +1891,7 @@ function viewCotizacion(id) {
       ${tagsOpHtml}
     </div>
     ${rows}
+    ${stickerRows}
     ${serviciosExtraRows}
     <div class="card-row"><span>Total costo</span><span>${fmt(c.totalCosto)}</span></div>
     ${c.montoDescuento ? `<div class="card-row"><span>Descuento (${c.descuentoPct}%)</span><span>− ${fmt(c.montoDescuento)}</span></div>` : ""}
@@ -1827,6 +1931,8 @@ function updateCotizacionProduccionDesdeModal() {
 function editCotizacion() {
   const c = AppState.cotizaciones.find(x => x.id === viewingCotizacionId);
   quoteItems = JSON.parse(JSON.stringify(c.items));
+  quoteStickerItems = JSON.parse(JSON.stringify(c.stickers || []));
+  quoteStickerItems.forEach(sticker => { if (!sticker.rowId) sticker.rowId = uid(); });
   quoteItems.forEach(it => {
     if (it.costoEstampadoManual === undefined) it.costoEstampadoManual = null;
     if (it.prendaCliente === undefined) it.prendaCliente = false;
@@ -2492,7 +2598,7 @@ export function renderAll() {
    funciones ya no son globales por defecto.
 ================================================================= */
 Object.assign(window, {
-  adjustTallaEtiqueta, addQuoteItem, confirmResetAll,
+  adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
   deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
@@ -2504,9 +2610,9 @@ Object.assign(window, {
   openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalBazar,
   openModalBazarDesdeAsignacion, openModalClienteDetalle, openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica,
   openModalIngresoExtra, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
-  openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra,
+  openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
   addBazarExpense, removeBazarExpense, updateBazarCostTotal,
-  removeQuoteItem, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
+  removeQuoteItem, removeQuoteSticker, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
   resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveColor, saveEtiqueta, saveEtiquetaOp,
   saveGrafica, saveIngresoExtra, savePlayera, saveProveedor, saveQuote, saveServicioExtra,
   saveSettings, saveSticker, saveGasto, saveCompra,
@@ -2514,6 +2620,6 @@ Object.assign(window, {
   toggleGraficaInventarioOptions, toggleQuoteAreaDtfEspecial, toggleQuoteItemFlag, toggleQuoteTagOperativo,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
   updatePlayeraEstampadoField, updatePlayeraPreview,
-  updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteSummary,
+  updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
   viewCotizacion
 });

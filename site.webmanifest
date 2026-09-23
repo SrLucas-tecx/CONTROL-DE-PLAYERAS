@@ -1,0 +1,17 @@
+{
+  "name": "LUCXSTUDIO - Control de Playeras",
+  "short_name": "LUCXSTUDIO",
+  "description": "Control de inventario, cotizaciones y bazares de LUCXSTUDIO.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#121214",
+  "theme_color": "#e3363d",
+  "icons": [
+    {
+      "src": "OJITOS-crop.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
