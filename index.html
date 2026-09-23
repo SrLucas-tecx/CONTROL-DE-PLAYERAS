@@ -630,10 +630,46 @@
         </div>
 
         <div class="section-header" style="margin-top:32px;">
-          <h2 class="section-title">Menudeo vs. mayoreo en este bazar</h2>
+          <h2 class="section-title">Resumen de playeras de este bazar</h2>
         </div>
-        <div class="settings-card" style="max-width:480px;">
-          <canvas id="chart-bazar-tipo" height="220"></canvas>
+        <div class="bazar-metrics-row">
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Unidades vendidas</span>
+            <span class="sticker-count-value" id="bd-unidades-vendidas">0</span>
+            <span class="sticker-count-sub">playeras marcadas como vendidas</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">Unidades restantes</span>
+            <span class="sticker-count-value" id="bd-unidades-disponibles">0</span>
+            <span class="sticker-count-sub">incluye disponibles y venta nula</span>
+          </div>
+          <div class="sticker-count-card size-grande">
+            <span class="sticker-count-label">Rotación del inventario</span>
+            <span class="sticker-count-value" id="bd-rotacion">0%</span>
+            <span class="sticker-count-sub">qué parte del stock ya salió</span>
+          </div>
+          <div class="sticker-count-card size-chico">
+            <span class="sticker-count-label">Valor pendiente</span>
+            <span class="sticker-count-value" id="bd-valor-disponible">$0</span>
+            <span class="sticker-count-sub">venta potencial de lo que queda</span>
+          </div>
+        </div>
+        <div class="bazar-charts-grid">
+          <div class="settings-card">
+            <h3 class="section-title" style="font-size:1.05rem;">Playeras vendidas</h3>
+            <canvas id="chart-bazar-vendidas" height="220"></canvas>
+            <p class="empty-hint" id="chart-bazar-vendidas-empty" style="display:none;">Aún no hay playeras vendidas.</p>
+          </div>
+          <div class="settings-card">
+            <h3 class="section-title" style="font-size:1.05rem;">Playeras que quedan</h3>
+            <canvas id="chart-bazar-disponibles" height="220"></canvas>
+            <p class="empty-hint" id="chart-bazar-disponibles-empty" style="display:none;">No quedan playeras disponibles.</p>
+          </div>
+          <div class="settings-card">
+            <h3 class="section-title" style="font-size:1.05rem;">Etiquetas más vendidas</h3>
+            <canvas id="chart-bazar-etiquetas" height="220"></canvas>
+            <p class="empty-hint" id="chart-bazar-etiquetas-empty" style="display:none;">Las playeras vendidas aún no tienen etiquetas.</p>
+          </div>
         </div>
 
         <div class="section-header" style="margin-top:32px;justify-content:space-between;">

@@ -1969,7 +1969,9 @@ document.getElementById("global-search").addEventListener("input", () => {
    DETALLE DE UN BAZAR (métricas y gráficas de un solo bazar)
 ================================================================= */
 let chartBazarFecha = null;
-let chartBazarTipo = null;
+let chartBazarVendidas = null;
+let chartBazarDisponibles = null;
+let chartBazarEtiquetas = null;
 function renderBazarDetalle() {
   const b = AppState.bazares.find(x => x.id === activeBazarId);
   if (!b) { switchPage("bazares"); return; }
@@ -2012,6 +2014,11 @@ function renderBazarDetalle() {
   const gananciaNeta = totalVendido + sumIngresosExtra - costoReal;
   const playerasVendidas = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") === "Vendida");
   const playerasDisponibles = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") !== "Vendida");
+  const unidadesVendidas = playerasVendidas.reduce((s, p) => s + (p.stock || 0), 0);
+  const unidadesDisponibles = playerasDisponibles.reduce((s, p) => s + (p.stock || 0), 0);
+  const unidadesTotales = unidadesVendidas + unidadesDisponibles;
+  const rotacion = unidadesTotales ? Math.round((unidadesVendidas / unidadesTotales) * 100) : 0;
+  const valorDisponible = playerasDisponibles.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0);
 
   document.getElementById("bd-total-vendido").textContent = fmt(totalVendido);
   document.getElementById("bd-ganancia").textContent = fmt(gananciaVentas);
@@ -2021,6 +2028,10 @@ function renderBazarDetalle() {
   document.getElementById("bd-costo-bazar-sub").textContent = `Pagado/apartado ${fmt(b.montoPagadoBazar || 0)} · Saldo pendiente ${fmt(saldoPendiente)} · Puesto ${fmt(b.costoBaseBazar || 0)} · 🧵 Producción ${fmt(desglose.produccion)} · 🎪 Evento ${fmt(desglose.evento)}`;
   document.getElementById("bd-ingresos-extra").textContent = fmt(sumIngresosExtra);
   document.getElementById("bd-ganancia-neta").textContent = fmt(gananciaNeta);
+  document.getElementById("bd-unidades-vendidas").textContent = unidadesVendidas;
+  document.getElementById("bd-unidades-disponibles").textContent = unidadesDisponibles;
+  document.getElementById("bd-rotacion").textContent = `${rotacion}%`;
+  document.getElementById("bd-valor-disponible").textContent = fmt(valorDisponible);
 
   const renderPlayerasEnBazar = (containerId, emptyId, items, esVendida) => {
     const grid = document.getElementById(containerId);
@@ -2090,15 +2101,39 @@ function renderBazarDetalle() {
     });
   }
 
-  // Menudeo vs mayoreo dentro de este bazar
-  const totalMenudeo = validas.filter(c => c.tipoVenta !== "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
-  const totalMayoreo = validas.filter(c => c.tipoVenta === "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
-  if (chartBazarTipo) chartBazarTipo.destroy();
-  chartBazarTipo = new Chart(document.getElementById("chart-bazar-tipo"), {
-    type: "doughnut",
-    data: { labels: ["Menudeo", "Mayoreo"], datasets: [{ data: [totalMenudeo, totalMayoreo], backgroundColor: ["#8b8b93", "#e3363d"] }] },
-    options: { responsive: true, plugins: { legend: { position: "bottom" } } }
-  });
+  const renderBazarChart = (chart, canvasId, emptyId, labels, values, label, color) => {
+    const canvas = document.getElementById(canvasId);
+    const empty = document.getElementById(emptyId);
+    if (chart) chart.destroy();
+    canvas.style.display = labels.length ? "block" : "none";
+    empty.style.display = labels.length ? "none" : "block";
+    if (!labels.length) return null;
+    return new Chart(canvas, {
+      type: "bar",
+      data: { labels, datasets: [{ label, data: values, backgroundColor: color, borderRadius: 6 }] },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+  };
+
+  const nombresPlayeras = items => items.map(p => p.nombre || p.tipo || "Sin nombre");
+  const vendidasLabels = nombresPlayeras(playerasVendidas);
+  const vendidasValores = playerasVendidas.map(p => p.stock || 0);
+  const disponiblesLabels = nombresPlayeras(playerasDisponibles);
+  const disponiblesValores = playerasDisponibles.map(p => p.stock || 0);
+  const etiquetasVendidas = {};
+  playerasVendidas.forEach(p => (p.tags || []).forEach(tagId => {
+    const etiqueta = AppState.etiquetas.find(e => e.id === tagId);
+    const nombre = etiqueta ? etiqueta.nombre : "Sin etiqueta";
+    etiquetasVendidas[nombre] = (etiquetasVendidas[nombre] || 0) + (p.stock || 0);
+  }));
+  const etiquetasOrdenadas = Object.entries(etiquetasVendidas).sort((a, b) => b[1] - a[1]);
+  chartBazarVendidas = renderBazarChart(chartBazarVendidas, "chart-bazar-vendidas", "chart-bazar-vendidas-empty", vendidasLabels, vendidasValores, "Playeras vendidas", "#e3363d");
+  chartBazarDisponibles = renderBazarChart(chartBazarDisponibles, "chart-bazar-disponibles", "chart-bazar-disponibles-empty", disponiblesLabels, disponiblesValores, "Playeras disponibles", "#8b8b93");
+  chartBazarEtiquetas = renderBazarChart(chartBazarEtiquetas, "chart-bazar-etiquetas", "chart-bazar-etiquetas-empty", etiquetasOrdenadas.map(([nombre]) => nombre), etiquetasOrdenadas.map(([, cantidad]) => cantidad), "Etiquetas vendidas", "#e0a23a");
 
   // Lista de cotizaciones de este bazar
   const grid = document.getElementById("bd-cotizaciones-grid");
