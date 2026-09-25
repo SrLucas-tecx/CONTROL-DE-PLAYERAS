@@ -60,7 +60,21 @@ export function costoImpresion(obj) {
 }
 export function costoTotalPlayera(playera) {
   const costoBase = playera.prendaCliente ? 0 : (playera.costoPlayera || 0);
-  return costoBase + costoImpresion(playera) + sobrecargoTalla(playera.talla);
+  return costoBase + costoImpresionEfectivoPlayera(playera) + sobrecargoTalla(playera.talla);
+}
+// Si la playera (o el sticker) está ligada a un gasto real (p.ej. "1 metro de DTF"
+// repartido entre las piezas que de verdad salieron de ahí), se usa ese costo real en vez
+// del estimado por área — sin tocar el costo de la prenda en sí, que sigue siendo editable
+// aparte.
+export function costoImpresionEfectivoPlayera(playera) {
+  return (playera.costoImpresionManual !== null && playera.costoImpresionManual !== undefined)
+    ? playera.costoImpresionManual
+    : costoImpresion(playera);
+}
+// Costo real por pieza al repartir el monto de un gasto entre las piezas (playeras y/o
+// stickers) ligadas a él.
+export function montoPorPiezaLigada(monto, cantidadPiezas) {
+  return cantidadPiezas > 0 ? monto / cantidadPiezas : 0;
 }
 // Devuelve el costo de impresión a usar para una prenda del cotizador: si hay más de un
 // estampado (modo área) y el usuario lo editó manualmente, se respeta ese valor; si no, se
@@ -79,6 +93,16 @@ export function getCostoEstampadoEfectivo(item) {
 export function costoUnitarioItem(item) {
   const costoBase = item.prendaCliente ? 0 : (item.costoPlayera || 0);
   return costoBase + getCostoEstampadoEfectivo(item) + sobrecargoTalla(item.talla);
+}
+// Reparto de la ganancia de UNA playera del inventario entre su artista y el estudio.
+// El % se aplica siempre sobre la ganancia (precioVenta − costoTotal), nunca sobre el
+// precio de venta — así un diseño que vendes con poco margen no le "cuesta" de más al
+// estudio solo por tener un % de comisión alto.
+export function comisionPlayera(playera) {
+  const pctArtista = Math.max(0, Math.min(100, playera.pctArtista || 0));
+  const ganancia = (playera.precioVenta || 0) - costoTotalPlayera(playera);
+  const parteArtista = ganancia * (pctArtista / 100);
+  return { pctArtista, pctEstudio: 100 - pctArtista, ganancia, parteArtista, parteEstudio: ganancia - parteArtista };
 }
 
 /* ---------------------------------------------------------------

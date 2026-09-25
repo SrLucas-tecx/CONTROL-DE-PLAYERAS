@@ -1045,6 +1045,18 @@
         <div id="p-tags-container" class="tag-checkbox-list"></div>
       </div>
 
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Artista</label>
+          <select id="p-artista" class="form-select" onchange="onPlayeraArtistChange()"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">% Comisión del artista (sobre la ganancia)</label>
+          <input type="number" id="p-pct-artista" class="form-input" min="0" max="100" step="1" oninput="updatePlayeraPreview()">
+        </div>
+      </div>
+      <p class="cost-preview" id="p-comision-preview">Parte artista: $0.00 — Parte estudio: $0.00</p>
+
       <div class="form-group">
         <label class="form-label">Notas</label>
         <textarea id="p-notas" class="form-textarea" placeholder="Opcional"></textarea>
@@ -1332,7 +1344,7 @@
 
 <!-- MODAL: NUEVO / EDITAR GASTO GENERAL -->
 <div class="modal-overlay" id="modal-gasto">
-  <div class="modal-box modal-box-sm">
+  <div class="modal-box">
     <div class="modal-header">
       <h2 class="modal-title" id="modal-gasto-title">Nuevo gasto</h2>
       <button class="modal-close" data-modal="modal-gasto">✕</button>
@@ -1350,7 +1362,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Monto</label>
-          <input type="number" id="gasto-monto" class="form-input" min="0" step="0.01" placeholder="0.00">
+          <input type="number" id="gasto-monto" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateGastoLigarPreview()">
         </div>
         <div class="form-group">
           <label class="form-label">Fecha</label>
@@ -1361,6 +1373,22 @@
         <label class="form-label">Link (opcional)</label>
         <input type="url" id="gasto-link" class="form-input" placeholder="https://...">
       </div>
+
+      <div class="form-group">
+        <div class="form-switch">
+          <span class="switch-label">🔗 Ligar playeras o stickers a este gasto (ej. los que salieron de este metro de DTF)</span>
+          <label class="switch">
+            <input type="checkbox" id="gasto-ligar-toggle" onchange="toggleGastoLigarPlayeras(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <p class="section-sub" style="margin:4px 0 0;">Marca qué playeras o stickers (de diversos tamaños) salieron de esta compra. A cada uno se le asignará como costo real el monto dividido entre los que elijas — reemplaza al costo estimado por área, sin tocar el costo de la prenda.</p>
+      </div>
+      <div id="gasto-ligar-wrap" style="display:none;">
+        <div id="gasto-ligar-list" class="gasto-ligar-list"></div>
+        <p class="cost-preview" id="gasto-ligar-preview">Selecciona playeras o stickers para ver el costo real por pieza.</p>
+      </div>
+
       <div class="form-group">
         <label class="form-label">Notas</label>
         <textarea id="gasto-notas" class="form-textarea" placeholder="Opcional"></textarea>

@@ -6,7 +6,7 @@ import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, costoEstampado, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
-  areaTotalCm2, costoImpresion,
+  areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
@@ -518,41 +518,140 @@ function fillGastoCategoriaSelect() {
   if (!sel) return;
   sel.innerHTML = GASTOS_CATEGORIAS.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
 }
+// Une playeras y stickers (de diversos tamaños) en un solo checklist ligable a un gasto,
+// usando ids compuestos "p:<id>" / "s:<id>" para no chocar entre las dos colecciones.
+function piezasLigablesDisponibles() {
+  const playeras = AppState.playeras.map(p => ({ tipo: "playera", id: p.id, key: `p:${p.id}`, nombre: p.nombre, detalle: `${p.talla || "—"} · ${colorNombre(p.colorId)}`, gastoVinculadoId: p.gastoVinculadoId }));
+  const stickers = AppState.stickers.map(s => ({ tipo: "sticker", id: s.id, key: `s:${s.id}`, nombre: s.nombre, detalle: `🏷️ Sticker ${s.tamano}`, gastoVinculadoId: s.gastoVinculadoId }));
+  return [...playeras, ...stickers].sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+function renderGastoLigarPlayerasList(gastoIdActual, seleccionadas) {
+  const list = document.getElementById("gasto-ligar-list");
+  if (!list) return;
+  const piezas = piezasLigablesDisponibles();
+  list.innerHTML = piezas.map(pieza => {
+    const ligadaAOtro = pieza.gastoVinculadoId && pieza.gastoVinculadoId !== gastoIdActual;
+    return `
+    <label class="gasto-ligar-item">
+      <input type="checkbox" class="gasto-ligar-cb" value="${pieza.key}" ${seleccionadas.includes(pieza.key) ? "checked" : ""} onchange="updateGastoLigarPreview()">
+      <span>${escapeHtml(pieza.nombre)} · ${pieza.detalle}</span>
+      ${ligadaAOtro ? `<span class="card-meta">🔗 se reasignará (ligada a otro gasto)</span>` : ""}
+    </label>`;
+  }).join("") || `<p class="empty-hint">Aún no tienes playeras ni stickers en el inventario.</p>`;
+}
+function toggleGastoLigarPlayeras(isChecked) {
+  document.getElementById("gasto-ligar-wrap").style.display = isChecked ? "block" : "none";
+  updateGastoLigarPreview();
+}
+function updateGastoLigarPreview() {
+  const preview = document.getElementById("gasto-ligar-preview");
+  if (!preview) return;
+  const seleccionadas = [...document.querySelectorAll(".gasto-ligar-cb:checked")];
+  const monto = num("gasto-monto") || 0;
+  if (!seleccionadas.length) {
+    preview.textContent = "Selecciona playeras o stickers para ver el costo real por pieza.";
+    return;
+  }
+  const porPieza = montoPorPiezaLigada(monto, seleccionadas.length);
+  preview.innerHTML = `${fmt(monto)} ÷ ${seleccionadas.length} pieza(s) = <b>${fmt(porPieza)}</b> de costo real de impresión por pieza.`;
+}
 function openModalGasto(id) {
   fillGastoCategoriaSelect();
   setVal("gasto-id", id || "");
   document.getElementById("modal-gasto-title").textContent = id ? "Editar gasto" : "Nuevo gasto";
+  let ligadas = [];
   if (id) {
     const g = AppState.gastos.find(x => x.id === id);
     setVal("gasto-concepto", g.concepto); setVal("gasto-categoria", g.categoria || "Otro");
     setVal("gasto-monto", g.monto || 0); setVal("gasto-fecha", g.fecha || "");
     setVal("gasto-link", g.link || ""); setVal("gasto-notas", g.notas || "");
+    ligadas = g.piezasLigadas || [];
   } else {
     setVal("gasto-concepto", ""); setVal("gasto-categoria", "Materiales"); setVal("gasto-monto", "");
     setVal("gasto-fecha", new Date().toISOString().slice(0, 10)); setVal("gasto-link", ""); setVal("gasto-notas", "");
   }
+  setChecked("gasto-ligar-toggle", ligadas.length > 0);
+  document.getElementById("gasto-ligar-wrap").style.display = ligadas.length > 0 ? "block" : "none";
+  renderGastoLigarPlayerasList(id || "", ligadas);
+  updateGastoLigarPreview();
   openModal("modal-gasto");
+}
+// Quita el costo real vinculado de una playera o un sticker (vuelve a usar el estimado).
+function desvincularCostoRealDePieza(tipo, id) {
+  if (tipo === "playera") {
+    const p = AppState.playeras.find(x => x.id === id);
+    if (p) { p.costoImpresionManual = null; p.gastoVinculadoId = ""; }
+  } else {
+    const s = AppState.stickers.find(x => x.id === id);
+    if (s) {
+      s.costo = s.anchoCm > 0 && s.largoCm > 0 ? Math.round(costoEstampado([{ anchoCm: s.anchoCm, largoCm: s.largoCm }], false) * 100) / 100 : 0;
+      s.gastoVinculadoId = "";
+    }
+  }
+}
+// Wrapper para el botón "🔓 Desvincular" de las tarjetas: además de limpiar la pieza, la
+// quita de piezasLigadas del gasto para que ambos lados cuadren.
+function desvincularCostoRealDePiezaBoton(tipo, id) {
+  const key = `${tipo === "playera" ? "p" : "s"}:${id}`;
+  const pieza = tipo === "playera" ? AppState.playeras.find(x => x.id === id) : AppState.stickers.find(x => x.id === id);
+  const gasto = pieza && pieza.gastoVinculadoId ? AppState.gastos.find(g => g.id === pieza.gastoVinculadoId) : null;
+  if (gasto) gasto.piezasLigadas = (gasto.piezasLigadas || []).filter(k => k !== key);
+  desvincularCostoRealDePieza(tipo, id);
+  saveState(); renderPlayeras(); renderStickers(); renderGastos();
+  showToast("Costo real desvinculado — vuelve a usar el estimado por área.");
 }
 function saveGasto() {
   const concepto = val("gasto-concepto").trim();
   if (!concepto) return showToast("Ponle un nombre al gasto.", "error");
-  const id = val("gasto-id");
+  const id = val("gasto-id") || uid();
+  const existing = AppState.gastos.find(x => x.id === id);
+  const monto = num("gasto-monto");
+  const ligar = checked("gasto-ligar-toggle");
+  const seleccionadas = ligar ? [...document.querySelectorAll(".gasto-ligar-cb:checked")].map(cb => cb.value) : [];
   const data = {
-    concepto, categoria: val("gasto-categoria"), monto: num("gasto-monto"),
-    fecha: val("gasto-fecha"), link: val("gasto-link").trim(), notas: val("gasto-notas")
+    concepto, categoria: val("gasto-categoria"), monto,
+    fecha: val("gasto-fecha"), link: val("gasto-link").trim(), notas: val("gasto-notas"),
+    piezasLigadas: seleccionadas
   };
-  if (id) {
-    Object.assign(AppState.gastos.find(x => x.id === id), data);
+  if (existing) {
+    // Desliga las piezas que ya no quedaron seleccionadas.
+    (existing.piezasLigadas || []).forEach(key => {
+      if (seleccionadas.includes(key)) return;
+      const [tipoKey, pid] = key.split(":");
+      const tipo = tipoKey === "p" ? "playera" : "sticker";
+      const pieza = tipo === "playera" ? AppState.playeras.find(x => x.id === pid) : AppState.stickers.find(x => x.id === pid);
+      if (pieza && pieza.gastoVinculadoId === id) desvincularCostoRealDePieza(tipo, pid);
+    });
+    Object.assign(existing, data);
   } else {
-    AppState.gastos.push(Object.assign({ id: uid() }, data));
+    AppState.gastos.push(Object.assign({ id }, data));
   }
-  saveState(); closeModal("modal-gasto"); renderGastos();
-  showToast("Gasto guardado.");
+  // Aplica el costo real (monto ÷ piezas) a cada playera/sticker seleccionado.
+  const porPieza = montoPorPiezaLigada(monto, seleccionadas.length);
+  seleccionadas.forEach(key => {
+    const [tipoKey, pid] = key.split(":");
+    if (tipoKey === "p") {
+      const p = AppState.playeras.find(x => x.id === pid);
+      if (p) { p.costoImpresionManual = porPieza; p.gastoVinculadoId = id; }
+    } else {
+      const s = AppState.stickers.find(x => x.id === pid);
+      if (s) { s.costo = Math.round(porPieza * 100) / 100; s.gastoVinculadoId = id; }
+    }
+  });
+  saveState(); closeModal("modal-gasto"); renderGastos(); renderPlayeras(); renderStickers();
+  showToast(seleccionadas.length ? `Gasto guardado — costo real aplicado a ${seleccionadas.length} pieza(s).` : "Gasto guardado.");
 }
 function deleteGasto(id) {
   if (!confirm("¿Eliminar este gasto?")) return;
+  const g = AppState.gastos.find(x => x.id === id);
+  (g?.piezasLigadas || []).forEach(key => {
+    const [tipoKey, pid] = key.split(":");
+    const tipo = tipoKey === "p" ? "playera" : "sticker";
+    const pieza = tipo === "playera" ? AppState.playeras.find(x => x.id === pid) : AppState.stickers.find(x => x.id === pid);
+    if (pieza && pieza.gastoVinculadoId === id) desvincularCostoRealDePieza(tipo, pid);
+  });
   AppState.gastos = AppState.gastos.filter(x => x.id !== id);
-  saveState(); renderGastos();
+  saveState(); renderGastos(); renderPlayeras(); renderStickers();
 }
 function renderGastos() {
   const grid = document.getElementById("gastos-grid");
@@ -562,7 +661,9 @@ function renderGastos() {
   if (totalMesEl) totalMesEl.textContent = fmt(totalGastosMesActual(AppState.gastos));
   if (totalGeneralEl) totalGeneralEl.textContent = fmt(totalGastos(AppState.gastos));
   const ordenados = [...AppState.gastos].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
-  grid.innerHTML = ordenados.map(g => `
+  grid.innerHTML = ordenados.map(g => {
+    const ligadas = g.piezasLigadas || [];
+    return `
     <div class="card">
       <div class="card-top">
         <span class="card-title">${escapeHtml(g.concepto)}</span>
@@ -571,12 +672,14 @@ function renderGastos() {
       <div class="card-row"><span>Monto</span><span>${fmt(g.monto)}</span></div>
       ${g.fecha ? `<div class="card-meta">📅 ${escapeHtml(g.fecha)}</div>` : ""}
       ${g.link ? `<div class="card-meta">🔗 <a href="${escapeHtml(g.link)}" target="_blank" rel="noopener">Ver enlace</a></div>` : ""}
+      ${ligadas.length ? `<div class="card-meta">🧵 ${ligadas.length} pieza(s) ligada(s) · ${fmt(montoPorPiezaLigada(g.monto, ligadas.length))} c/u de costo real</div>` : ""}
       ${g.notas ? `<div class="card-meta">${escapeHtml(g.notas)}</div>` : ""}
       <div class="card-actions">
         <button onclick="openModalGasto('${g.id}')">✏️ Editar</button>
         <button class="danger" onclick="deleteGasto('${g.id}')">🗑️ Eliminar</button>
       </div>
-    </div>`).join("") || `<p class="empty-hint">Aún no registras gastos generales.</p>`;
+    </div>`;
+  }).join("") || `<p class="empty-hint">Aún no registras gastos generales.</p>`;
 }
 
 /* ---------------------------------------------------------------
@@ -938,6 +1041,12 @@ function refreshAllSelects() {
     <label class="tag-checkbox" style="border-color:${e.color}">
       <input type="checkbox" value="${e.id}" class="p-tag-cb"> ${escapeHtml(e.nombre)}
     </label>`).join("") || `<span class="card-meta">Crea etiquetas en el apartado "Etiquetas y colores".</span>`;
+  // Artista select en modal playera (por default SrLucas)
+  const pArtista = document.getElementById("p-artista");
+  if (pArtista) {
+    pArtista.innerHTML = `<option value="">Sin artista (100% estudio)</option>` +
+      AppState.artistas.map(a => `<option value="${a.id}">${escapeHtml(a.nombre)} (${a.pctArtista}%)</option>`).join("");
+  }
   // Artista select en cotizador
   const qArtista = document.getElementById("q-artista");
   qArtista.innerHTML = `<option value="">Sin artista (100% estudio)</option>` +
@@ -1022,6 +1131,8 @@ function openModalPlayera(id) {
     setVal("p-modo-costeo", p.modoCosteo || "area");
     setVal("p-gangsheet-metros", p.gangSheetMetros || 0);
     setChecked("p-gangsheet-blanco-solido", !!p.gangSheetBlancoSolido);
+    setVal("p-artista", p.artistaId !== undefined ? p.artistaId : "a1");
+    setVal("p-pct-artista", p.pctArtista ?? 0);
   } else {
     ["p-nombre","p-notas"].forEach(f => setVal(f, ""));
     setVal("p-tipo", "Playera"); setVal("p-talla", ""); setVal("p-stock", 1);
@@ -1035,6 +1146,8 @@ function openModalPlayera(id) {
     setVal("p-modo-costeo", "area");
     setVal("p-gangsheet-metros", 0);
     setChecked("p-gangsheet-blanco-solido", false);
+    setVal("p-artista", "a1");
+    setVal("p-pct-artista", (AppState.artistas.find(a => a.id === "a1") || {}).pctArtista || 0);
   }
   document.getElementById("p-costo-playera").disabled = checked("p-prenda-cliente");
   renderPlayeraEstampadosList();
@@ -1048,7 +1161,18 @@ function onPrendaClienteChange() {
   if (esCliente) input.value = 0;
   updatePlayeraPreview();
 }
+// Al elegir un artista distinto, se rellena su % de comisión por default (tomado de su
+// ficha en Artistas y comisiones), pero el campo se puede sobreescribir a mano — son los
+// "2 campos" pedidos: 1) quién es el artista, 2) qué % le toca en esta playera.
+function onPlayeraArtistChange() {
+  const artistaId = val("p-artista");
+  const a = AppState.artistas.find(x => x.id === artistaId);
+  setVal("p-pct-artista", a ? a.pctArtista : 0);
+  updatePlayeraPreview();
+}
 function updatePlayeraPreview() {
+  const existing = AppState.playeras.find(p => p.id === val("p-id"));
+  const costoRealVinculado = existing?.costoImpresionManual ?? null;
   const draft = {
     modoCosteo: val("p-modo-costeo"),
     dtfEspecial: checked("p-dtf-especial"),
@@ -1057,13 +1181,29 @@ function updatePlayeraPreview() {
     gangSheetBlancoSolido: checked("p-gangsheet-blanco-solido")
   };
   const cEst = costoImpresion(draft);
+  const cImpresionEfectivo = costoRealVinculado !== null ? costoRealVinculado : cEst;
   const costoBase = checked("p-prenda-cliente") ? 0 : num("p-costo-playera");
   const sobrecargo = sobrecargoTalla(val("p-talla"));
-  const cTotal = costoBase + cEst + sobrecargo;
+  const cTotal = costoBase + cImpresionEfectivo + sobrecargo;
   const ganancia = num("p-precio-venta") - cTotal;
   const etiquetaCosto = draft.modoCosteo === "gangsheet" ? "Costo Gang Sheet" : "Costo del estampado";
-  document.getElementById("p-cost-preview").innerHTML =
-    `${etiquetaCosto}: <b>${fmt(cEst)}</b>${sobrecargo ? ` — Sobrecargo talla: <b>${fmt(sobrecargo)}</b>` : ""} — Costo total: <b>${fmt(cTotal)}</b> — Ganancia estimada: <b>${fmt(ganancia)}</b>`;
+  const textoCosto = costoRealVinculado !== null
+    ? etiquetaCosto + " estimado: <b>" + fmt(cEst) + "</b> — Costo real vinculado: <b>" + fmt(costoRealVinculado) + "</b>"
+    : etiquetaCosto + ": <b>" + fmt(cEst) + "</b>";
+  const textoSobrecargo = sobrecargo ? " — Sobrecargo talla: <b>" + fmt(sobrecargo) + "</b>" : "";
+  const tipoGanancia = costoRealVinculado !== null ? "real" : "estimada";
+  document.getElementById("p-cost-preview").innerHTML = textoCosto + textoSobrecargo
+    + " — Costo total: <b>" + fmt(cTotal) + "</b> — Ganancia " + tipoGanancia + ": <b>" + fmt(ganancia) + "</b>";
+  // Reparto de esa ganancia entre artista y estudio — el % siempre se aplica sobre la
+  // ganancia (no sobre el precio de venta), tal como se calcula en el cotizador.
+  const pct = Math.max(0, Math.min(100, num("p-pct-artista")));
+  const parteArtista = ganancia * (pct / 100);
+  const artistaSel = document.getElementById("p-artista");
+  const nombreArtista = (artistaSel && artistaSel.value) ? (AppState.artistas.find(a => a.id === artistaSel.value) || {}).nombre : "";
+  const comisionPreview = document.getElementById("p-comision-preview");
+  if (comisionPreview) {
+    comisionPreview.innerHTML = `Parte ${nombreArtista ? escapeHtml(nombreArtista) : "artista"} (${pct}%): <b>${fmt(parteArtista)}</b> — Parte estudio (${100 - pct}%): <b>${fmt(ganancia - parteArtista)}</b>`;
+  }
 }
 function savePlayera() {
   const nombre = val("p-nombre").trim();
@@ -1086,6 +1226,10 @@ function savePlayera() {
     precioVenta: parseFloat(num("p-precio-venta")) || 0,
     precioMayoreo: parseFloat(num("p-precio-mayoreo")) || 0,
     prioridad: val("p-prioridad"), estado: val("p-estado"),
+    artistaId: val("p-artista") || "",
+    pctArtista: Math.max(0, Math.min(100, parseFloat(num("p-pct-artista")) || 0)),
+    costoImpresionManual: (existing && existing.costoImpresionManual != null) ? existing.costoImpresionManual : null,
+    gastoVinculadoId: (existing && existing.gastoVinculadoId) || "",
     bazarId: (existing && existing.bazarId) || "",
     bazarIds: (existing && bazarIdsDe(existing)) || [],
     bazarEstado: (existing && existing.bazarEstado) || "Disponible",
@@ -1138,6 +1282,9 @@ function renderPlayeras() {
     const cEst = costoImpresion(p);
     const cTotal = costoTotalPlayera(p);
     const ganancia = p.precioVenta - cTotal;
+    const comision = comisionPlayera(p);
+    const nombreArtista = p.artistaId ? ((AppState.artistas.find(a => a.id === p.artistaId) || {}).nombre || "—") : "";
+    const gastoLigado = p.gastoVinculadoId ? AppState.gastos.find(g => g.id === p.gastoVinculadoId) : null;
     const stockBajo = (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
     const esGangSheet = p.modoCosteo === "gangsheet";
     const etiquetaImpresion = esGangSheet
@@ -1160,11 +1307,13 @@ function renderPlayeras() {
       </div>
       <div class="card-row"><span>Stock</span><span>${p.stock} pza(s)</span></div>
       <div class="card-row"><span>Costo playera</span><span>${p.prendaCliente ? "🎁 Prenda del cliente ($0.00)" : fmt(p.costoPlayera)}</span></div>
-      <div class="card-row"><span>${etiquetaImpresion}</span><span>${fmt(cEst)}</span></div>
+      <div class="card-row"><span>${etiquetaImpresion}${gastoLigado ? " (estimado)" : ""}</span><span>${fmt(cEst)}</span></div>
+      ${gastoLigado ? `<div class="card-row"><span>🔗 Costo real (de "${escapeHtml(gastoLigado.concepto)}")</span><span style="color:var(--color-accent);">${fmt(p.costoImpresionManual)}</span></div>` : ""}
       <div class="card-row"><span>Costo total</span><span>${fmt(cTotal)}</span></div>
       <div class="card-row"><span>Precio de venta</span><span>${fmt(p.precioVenta)}</span></div>
       ${p.precioMayoreo ? `<div class="card-row"><span>Precio mayoreo</span><span>${fmt(p.precioMayoreo)}</span></div>` : ""}
       <div class="card-row"><span>Ganancia</span><span style="color:${ganancia >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(ganancia)}</span></div>
+      ${nombreArtista ? `<div class="card-row"><span>🎨 ${escapeHtml(nombreArtista)} (${comision.pctArtista}%)</span><span>${fmt(comision.parteArtista)}</span></div>` : ""}
       <div class="card-tags">
         <span class="card-badge ${estadoBadgeClass(p.estado)}">${p.estado}</span>
         <span class="card-badge ${prioridadBadgeClass(p.prioridad)}">${p.prioridad}</span>
@@ -1178,6 +1327,7 @@ function renderPlayeras() {
       <div class="card-actions">
         <button onclick="openModalPlayera('${p.id}')">✏️ Editar</button>
         <button onclick="openModalAsignarPlayeraBazar('${p.id}')">🏪 Bazar</button>
+        ${gastoLigado ? `<button onclick="desvincularCostoRealDePieza('playera','${p.id}')">🔓 Desvincular costo real</button>` : ""}
         <button class="danger" onclick="deletePlayera('${p.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
@@ -1276,13 +1426,15 @@ function renderStickers() {
   document.getElementById("stickers-empty-hint").style.display = list.length ? "none" : "block";
   grid.innerHTML = list.map(s => {
     const stockBajo = (s.stockMinimo || 0) > 0 && (s.stock || 0) <= s.stockMinimo;
+    const gastoLigado = s.gastoVinculadoId ? AppState.gastos.find(g => g.id === s.gastoVinculadoId) : null;
     return `
     <div class="card">
       <div class="card-top">
         <span class="card-title">${escapeHtml(s.nombre)}</span>
         <span class="card-badge badge-media">${s.tamano}</span>
       </div>
-      <div class="card-row"><span>Costo</span><span>${fmt(s.costo)}</span></div>
+      <div class="card-row"><span>Costo${gastoLigado ? " real" : ""}</span><span style="${gastoLigado ? "color:var(--color-accent);" : ""}">${fmt(s.costo)}</span></div>
+      ${gastoLigado ? `<div class="card-meta">🔗 vinculado a "${escapeHtml(gastoLigado.concepto)}"</div>` : ""}
       <div class="card-row"><span>Precio de venta</span><span>${fmt(s.precioVenta)}</span></div>
       <div class="card-row"><span>Ganancia</span><span style="color:${(s.precioVenta || 0) - (s.costo || 0) >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt((s.precioVenta || 0) - (s.costo || 0))}</span></div>
       <div class="card-row"><span>Stock</span><span>${s.stock} pza(s)</span></div>
@@ -1295,6 +1447,7 @@ function renderStickers() {
       <div class="card-actions">
         <button onclick="quoteStickerFromInventory('${s.id}')">🧮 Cotizar</button>
         <button onclick="openModalSticker('${s.id}')">✏️ Editar</button>
+        ${gastoLigado ? `<button onclick="desvincularCostoRealDePieza('sticker','${s.id}')">🔓 Desvincular costo real</button>` : ""}
         <button class="danger" onclick="deleteSticker('${s.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
@@ -2602,9 +2755,9 @@ Object.assign(window, {
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
   deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
-  deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada,
+  deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada, desvincularCostoRealDePiezaBoton,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, goToBazarDetalle,
-  onArtistModeChange, onHeaderBazarChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
+  onArtistModeChange, onHeaderBazarChange, onPlayeraArtistChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteEstampadoModoChange, onQuoteItemProductChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,
   openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalBazar,
@@ -2617,9 +2770,9 @@ Object.assign(window, {
   saveGrafica, saveIngresoExtra, savePlayera, saveProveedor, saveQuote, saveServicioExtra,
   saveSettings, saveSticker, saveGasto, saveCompra,
   saveTallaEtiqueta, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
-  toggleGraficaInventarioOptions, toggleQuoteAreaDtfEspecial, toggleQuoteItemFlag, toggleQuoteTagOperativo,
+  toggleGraficaInventarioOptions, toggleQuoteAreaDtfEspecial, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
-  updatePlayeraEstampadoField, updatePlayeraPreview,
+  updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
   viewCotizacion
 });
