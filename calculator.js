@@ -142,6 +142,15 @@ export function bazarNombre(bazarId) {
   const b = AppState.bazares.find(x => x.id === bazarId);
   return b ? b.nombre : "Sin bazar asignado";
 }
+// Playeras tipo/etiqueta "Bolsa sorpresa" cuyo stock ya llegó (o bajó) al mínimo
+// configurado — se usan para la alerta dedicada en Inventario, ya que suelen ser
+// piezas de venta por impulso que se agotan sin avisar.
+export function playerasSorpresaBajoStock() {
+  return AppState.playeras.filter(p => {
+    const esSorpresa = p.tipo === "Bolsa Sorpresa" || (p.tags || []).includes("e3");
+    return esSorpresa && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
+  });
+}
 // Desglosa los gastos adicionales de un bazar por tipo (producción vs evento),
 // SIN excluir ninguno del total: la etiqueta es solo informativa, todo cuenta
 // como dinero real que salió de tu bolsillo para ese bazar.

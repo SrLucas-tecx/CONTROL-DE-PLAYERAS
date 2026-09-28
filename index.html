@@ -113,6 +113,10 @@
               <input type="text" id="q-cliente" class="form-input" placeholder="Nombre del cliente">
             </div>
             <div class="form-group">
+              <label class="form-label">WhatsApp del cliente (opcional)</label>
+              <input type="tel" id="q-cliente-tel" class="form-input" placeholder="Ej. 7221234567">
+            </div>
+            <div class="form-group">
               <label class="form-label">Fecha</label>
               <input type="date" id="q-fecha" class="form-input">
             </div>
@@ -282,6 +286,7 @@
         <div class="quote-actions">
           <button class="btn-secondary" onclick="resetQuoteForm()">🗑️ Nueva cotización</button>
           <button class="btn-secondary" onclick="exportQuotePDF()">🖨️ Exportar PDF</button>
+          <button class="btn-secondary" onclick="exportQuoteWhatsApp()">💬 Enviar por WhatsApp</button>
           <button class="btn-primary" onclick="saveQuote()">💾 Guardar cotización</button>
         </div>
 
@@ -364,6 +369,7 @@
 
       <!-- ======================= INVENTARIO PLAYERAS ======================= -->
       <section id="page-playeras" class="page-section">
+        <div id="playeras-sorpresa-alerta"></div>
         <div class="filter-bar">
           <button class="filter-chip active" data-tag="all" onclick="setPlayeraTagFilter('all',this)">Todas las etiquetas</button>
           <div id="playera-tag-chips" style="display:inline-flex;gap:8px;flex-wrap:wrap;"></div>
@@ -614,6 +620,12 @@
             <span class="sticker-count-value" id="bd-ganancia-neta">$0</span>
             <span class="sticker-count-sub">ventas + extra − costo real del bazar</span>
           </div>
+        </div>
+
+        <div class="quote-meta-card" id="bd-equilibrio-wrap">
+          <div class="savings-label"><span id="bd-equilibrio-texto">⚖️ Punto de equilibrio</span><span id="bd-equilibrio-pct">0%</span></div>
+          <div class="savings-bar"><div class="savings-bar-fill" id="bd-equilibrio-fill" style="width:0%;"></div></div>
+          <p class="section-sub" id="bd-equilibrio-sub" style="margin-top:6px;">Aún no registras costos para este bazar.</p>
         </div>
 
         <div class="section-header" style="justify-content:space-between;">
@@ -1756,6 +1768,7 @@
         <option value="Entregado">🚦 Entregado</option>
       </select>
       <button class="btn-secondary" onclick="openModalAsignarBazarDesdeVista()">🏪 Asignar a bazar</button>
+      <button class="btn-secondary" onclick="exportQuoteWhatsAppGuardada()">💬 WhatsApp</button>
       <button class="btn-secondary" onclick="editCotizacion()">✏️ Editar</button>
       <button class="btn-danger" onclick="deleteCotizacion()">🗑️ Eliminar</button>
       <button class="btn-secondary" data-modal="modal-ver-cotizacion">Cerrar</button>

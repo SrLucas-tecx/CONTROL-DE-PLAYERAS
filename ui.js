@@ -8,7 +8,7 @@ import {
   fmt, escapeHtml, costoTotalPlayera, costoEstampado, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
-  bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente,
+  bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
   totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra
 } from "./calculator.js";
@@ -1171,8 +1171,6 @@ function onPlayeraArtistChange() {
   updatePlayeraPreview();
 }
 function updatePlayeraPreview() {
-  const existing = AppState.playeras.find(p => p.id === val("p-id"));
-  const costoRealVinculado = existing?.costoImpresionManual ?? null;
   const draft = {
     modoCosteo: val("p-modo-costeo"),
     dtfEspecial: checked("p-dtf-especial"),
@@ -1181,19 +1179,25 @@ function updatePlayeraPreview() {
     gangSheetBlancoSolido: checked("p-gangsheet-blanco-solido")
   };
   const cEst = costoImpresion(draft);
-  const cImpresionEfectivo = costoRealVinculado !== null ? costoRealVinculado : cEst;
   const costoBase = checked("p-prenda-cliente") ? 0 : num("p-costo-playera");
   const sobrecargo = sobrecargoTalla(val("p-talla"));
+  // Si esta playera ya está vinculada a un gasto real (ej. "1 metro de DTF" repartido
+  // entre varias piezas), el costo real vinculado manda sobre el estimado por área —
+  // tanto en el costo total como en la ganancia — igual que hace costoImpresionEfectivoPlayera()
+  // en calculator.js. El estimado se sigue mostrando aparte, solo como referencia.
+  const existing = AppState.playeras.find(p => p.id === val("p-id"));
+  const costoRealVinculado = existing?.costoImpresionManual ?? null;
+  const cImpresionEfectivo = costoRealVinculado !== null ? costoRealVinculado : cEst;
   const cTotal = costoBase + cImpresionEfectivo + sobrecargo;
   const ganancia = num("p-precio-venta") - cTotal;
   const etiquetaCosto = draft.modoCosteo === "gangsheet" ? "Costo Gang Sheet" : "Costo del estampado";
   const textoCosto = costoRealVinculado !== null
-    ? etiquetaCosto + " estimado: <b>" + fmt(cEst) + "</b> — Costo real vinculado: <b>" + fmt(costoRealVinculado) + "</b>"
-    : etiquetaCosto + ": <b>" + fmt(cEst) + "</b>";
-  const textoSobrecargo = sobrecargo ? " — Sobrecargo talla: <b>" + fmt(sobrecargo) + "</b>" : "";
+    ? `${etiquetaCosto} estimado: <b>${fmt(cEst)}</b> — Costo real vinculado: <b>${fmt(costoRealVinculado)}</b>`
+    : `${etiquetaCosto}: <b>${fmt(cEst)}</b>`;
   const tipoGanancia = costoRealVinculado !== null ? "real" : "estimada";
-  document.getElementById("p-cost-preview").innerHTML = textoCosto + textoSobrecargo
-    + " — Costo total: <b>" + fmt(cTotal) + "</b> — Ganancia " + tipoGanancia + ": <b>" + fmt(ganancia) + "</b>";
+  document.getElementById("p-cost-preview").innerHTML = textoCosto
+    + (sobrecargo ? ` — Sobrecargo talla: <b>${fmt(sobrecargo)}</b>` : "")
+    + ` — Costo total: <b>${fmt(cTotal)}</b> — Ganancia ${tipoGanancia}: <b>${fmt(ganancia)}</b>`;
   // Reparto de esa ganancia entre artista y estudio — el % siempre se aplica sobre la
   // ganancia (no sobre el precio de venta), tal como se calcula en el cotizador.
   const pct = Math.max(0, Math.min(100, num("p-pct-artista")));
@@ -1248,8 +1252,26 @@ function deletePlayera(id) {
   AppState.playeras = AppState.playeras.filter(x => x.id !== id);
   saveState(); renderPlayeras();
 }
+// Banner en Inventario > Playeras cuando alguna "Bolsa sorpresa" (por tipo o etiqueta)
+// llegó a su stock mínimo — suelen ser piezas de venta por impulso que se agotan sin
+// que se note en el resto del inventario.
+function renderAlertaPlayerasSorpresa() {
+  const cont = document.getElementById("playeras-sorpresa-alerta");
+  if (!cont) return;
+  const bajas = playerasSorpresaBajoStock();
+  if (!bajas.length) { cont.innerHTML = ""; return; }
+  cont.innerHTML = `
+    <div class="stock-alerta-banner">
+      <span>🎁⚠️</span>
+      <span>
+        <b>${bajas.length} bolsa${bajas.length > 1 ? "s" : ""} sorpresa con stock bajo:</b>
+        ${bajas.map(p => `<a href="#" onclick="openModalPlayera('${p.id}');return false;">${escapeHtml(p.nombre)} (${p.stock || 0} pza)</a>`).join(", ")}
+      </span>
+    </div>`;
+}
 function renderPlayeras() {
   renderPlayeraTagChips();
+  renderAlertaPlayerasSorpresa();
   const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
   const estadoF = document.getElementById("filter-playera-estado").value;
   const colorF = document.getElementById("filter-playera-color").value;
@@ -1863,7 +1885,7 @@ function resetQuoteForm() {
   quoteStickerItems = [];
   quoteServiciosExtra = [];
   quoteTagsOperativos = [];
-  setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-vendedor", "");
+  setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-cliente-tel", ""); setVal("q-vendedor", "");
   setVal("q-fecha", new Date().toISOString().slice(0,10));
   setVal("q-artista", ""); setVal("q-comision-pct", 0); setVal("q-notas", "");
   setVal("q-tipo-venta", "Menudeo");
@@ -1881,6 +1903,7 @@ function saveQuote() {
   const editingId = val("quote-editing-id");
   const data = {
     cliente: val("q-cliente") || "Cliente sin nombre",
+    clienteTelefono: val("q-cliente-tel").trim(),
     fecha: val("q-fecha") || new Date().toISOString().slice(0,10),
     vendedor: val("q-vendedor"),
     artistaId: val("q-artista"),
@@ -1930,6 +1953,70 @@ function exportQuotePDF() {
   const container = document.getElementById("pdf-template");
   container.innerHTML = html;
   html2pdf().set({ margin: 10, filename: "cotizacion_lucxstudio.pdf", html2canvas: { scale: 2 } }).from(container).save();
+}
+// Arma el resumen de la cotización en texto plano (sin HTML — WhatsApp no lo soporta) y
+// abre wa.me con el mensaje precargado. Si el cliente tiene teléfono capturado, abre el
+// chat directo con él; si no, abre el selector de contactos de WhatsApp.
+function buildQuoteWhatsAppText(q) {
+  const lineas = [];
+  lineas.push(`🧵 *LUCXSTUDIO* — Cotización`);
+  lineas.push(`👤 Cliente: ${q.cliente}`);
+  if (q.fecha) lineas.push(`📅 Fecha: ${q.fecha}`);
+  if (q.tipoVenta === "Mayoreo") lineas.push(`📦 Mayoreo`);
+  if (q.esUrgente) lineas.push(`🚀 Pedido urgente`);
+  lineas.push("");
+  lineas.push("🛍️ *Productos:*");
+  q.items.forEach(item => {
+    const detalle = [item.talla, colorNombre(item.colorId)].filter(v => v && v !== "—").join(", ");
+    lineas.push(`• ${item.nombre || "Producto"}${detalle ? ` (${detalle})` : ""} x${item.cantidad} — ${fmt(item.precioVenta)} c/u = ${fmt(item.precioVenta * item.cantidad)}`);
+  });
+  (q.stickers || []).forEach(sticker => {
+    lineas.push(`• 🏷️ ${sticker.nombre || "Sticker"} (${sticker.tamano || "—"}) x${sticker.cantidad} — ${fmt(sticker.precioVenta)} c/u = ${fmt(sticker.precioVenta * sticker.cantidad)}`);
+  });
+  if (q.serviciosExtra && q.serviciosExtra.length) {
+    lineas.push("");
+    lineas.push("✨ *Servicios extra:*");
+    q.serviciosExtra.forEach(s => lineas.push(`• ${s.concepto} — ${fmt(s.monto)}`));
+  }
+  lineas.push("");
+  if (q.montoDescuento) lineas.push(`Descuento (${q.descuentoPct}%): − ${fmt(q.montoDescuento)}`);
+  if (q.montoUrgente) lineas.push(`Recargo por urgencia (${q.recargoUrgentePct}%): + ${fmt(q.montoUrgente)}`);
+  lineas.push(`💵 *Total: ${fmt(q.totalVenta)}*`);
+  lineas.push("");
+  lineas.push("¡Gracias por tu compra! 🖤");
+  return lineas.join("\n");
+}
+function exportQuoteWhatsApp() {
+  if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker antes de enviar.", "error");
+  const t = computeQuoteTotals();
+  const texto = buildQuoteWhatsAppText({
+    cliente: val("q-cliente") || "Cliente sin nombre", fecha: val("q-fecha"),
+    items: quoteItems, stickers: quoteStickerItems, serviciosExtra: quoteServiciosExtra,
+    tipoVenta: val("q-tipo-venta"), ...t
+  });
+  const telCrudo = val("q-cliente-tel").replace(/\D/g, "");
+  // Si capturaron un número local de 10 dígitos, se antepone el 52 de México para que
+  // wa.me lo reconozca; si ya viene con lada de país o no hay teléfono, se respeta tal cual.
+  const tel = telCrudo.length === 10 ? "52" + telCrudo : telCrudo;
+  const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+  window.open(url, "_blank");
+}
+// Igual que exportQuoteWhatsApp() pero para una cotización ya guardada (desde el modal
+// "Ver cotización"), usando sus datos tal como quedaron al guardarla.
+function exportQuoteWhatsAppGuardada() {
+  const c = AppState.cotizaciones.find(x => x.id === viewingCotizacionId);
+  if (!c) return;
+  const texto = buildQuoteWhatsAppText({
+    cliente: c.cliente || "Cliente sin nombre", fecha: c.fecha,
+    items: c.items, stickers: c.stickers, serviciosExtra: c.serviciosExtra,
+    tipoVenta: c.tipoVenta, totalVenta: c.totalVenta, montoDescuento: c.montoDescuento,
+    descuentoPct: c.descuentoPct, montoUrgente: c.montoUrgente, recargoUrgentePct: c.recargoUrgentePct,
+    esUrgente: c.urgente
+  });
+  const telCrudo = (c.clienteTelefono || "").replace(/\D/g, "");
+  const tel = telCrudo.length === 10 ? "52" + telCrudo : telCrudo;
+  const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+  window.open(url, "_blank");
 }
 function buildQuoteHTML(q) {
   const rows = q.items.map(item => {
@@ -2096,7 +2183,7 @@ function editCotizacion() {
   });
   quoteServiciosExtra = JSON.parse(JSON.stringify(c.serviciosExtra || []));
   quoteTagsOperativos = JSON.parse(JSON.stringify(c.tagsOperativos || []));
-  setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-fecha", c.fecha);
+  setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-cliente-tel", c.clienteTelefono || ""); setVal("q-fecha", c.fecha);
   setVal("q-vendedor", c.vendedor); setVal("q-artista", c.artistaId || "");
   setVal("q-comision-pct", c.comisionPctPersonalizado || 0); setVal("q-notas", c.notas || "");
   setVal("q-tipo-venta", c.tipoVenta || "Menudeo");
@@ -2287,6 +2374,21 @@ function renderBazarDetalle() {
   document.getElementById("bd-costo-bazar-sub").textContent = `Pagado/apartado ${fmt(b.montoPagadoBazar || 0)} · Saldo pendiente ${fmt(saldoPendiente)} · Puesto ${fmt(b.costoBaseBazar || 0)} · 🧵 Producción ${fmt(desglose.produccion)} · 🎪 Evento ${fmt(desglose.evento)}`;
   document.getElementById("bd-ingresos-extra").textContent = fmt(sumIngresosExtra);
   document.getElementById("bd-ganancia-neta").textContent = fmt(gananciaNeta);
+  // Punto de equilibrio: cuánto de lo que ya entró (ventas + extra) cubre el costo real
+  // del bazar. Al 100% ya cubriste gastos y todo lo que sigas vendiendo es ganancia neta.
+  const ingresoAcumulado = totalVendido + sumIngresosExtra;
+  const equilibrioPct = costoReal > 0 ? Math.min(100, Math.round((ingresoAcumulado / costoReal) * 100)) : (ingresoAcumulado > 0 ? 100 : 0);
+  const fillEl = document.getElementById("bd-equilibrio-fill");
+  const subEl = document.getElementById("bd-equilibrio-sub");
+  document.getElementById("bd-equilibrio-pct").textContent = `${equilibrioPct}%`;
+  if (fillEl) { fillEl.style.width = `${equilibrioPct}%`; fillEl.classList.toggle("complete", equilibrioPct >= 100); }
+  if (subEl) {
+    subEl.textContent = costoReal <= 0
+      ? "Aún no registras costos para este bazar."
+      : (equilibrioPct >= 100
+        ? `🎉 ¡Ya cubriste los ${fmt(costoReal)} de costo real! Todo lo que vendas de aquí en adelante es ganancia neta.`
+        : `Llevas ${fmt(ingresoAcumulado)} de ${fmt(costoReal)} para cubrir el costo real de este bazar (faltan ${fmt(costoReal - ingresoAcumulado)}).`);
+  }
   document.getElementById("bd-unidades-vendidas").textContent = unidadesVendidas;
   document.getElementById("bd-unidades-disponibles").textContent = unidadesDisponibles;
   document.getElementById("bd-rotacion").textContent = `${rotacion}%`;
@@ -2756,7 +2858,7 @@ Object.assign(window, {
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
   deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
   deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada, desvincularCostoRealDePiezaBoton,
-  duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, goToBazarDetalle,
+  duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
   onArtistModeChange, onHeaderBazarChange, onPlayeraArtistChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteEstampadoModoChange, onQuoteItemProductChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,
