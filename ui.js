@@ -2,13 +2,15 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS } from "./config.js";
+import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, costoEstampado, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
+  comisionTerminalMonto, saldoPendienteCliente, desgloseCierreBazar, clienteNombre, statsCliente,
+  totalMermas, totalMermasMesActual, totalMermasDeBazar, comisionConsignacion, statsConsignacion, nombreConsignacion,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
   totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra
 } from "./calculator.js";
@@ -683,6 +685,137 @@ function renderGastos() {
 }
 
 /* ---------------------------------------------------------------
+   MERMAS (piezas dañadas / perdidas en producción)
+--------------------------------------------------------------- */
+function fillMermaMotivoSelect() {
+  const sel = document.getElementById("merma-motivo");
+  if (!sel) return;
+  sel.innerHTML = MOTIVOS_MERMA.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+}
+function fillMermaSelects() {
+  const pSel = document.getElementById("merma-playera");
+  if (pSel) {
+    pSel.innerHTML = `<option value="">— Sin playera / pieza libre —</option>` +
+      [...AppState.playeras].sort((a, b) => a.nombre.localeCompare(b.nombre))
+        .map(p => `<option value="${p.id}">${escapeHtml(p.nombre)} · ${escapeHtml(p.talla) || "—"} · ${colorNombre(p.colorId)} (stock ${p.stock || 0})</option>`).join("");
+  }
+  const bSel = document.getElementById("merma-bazar");
+  if (bSel) {
+    bSel.innerHTML = `<option value="">— No fue en un bazar —</option>` +
+      AppState.bazares.map(b => `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`).join("");
+  }
+}
+// Al elegir una playera del inventario, se autocompleta el costo unitario con su costo
+// real (área o vinculada a un gasto, lo que aplique) y se bloquea el concepto libre.
+function onMermaPlayeraChange() {
+  const playeraId = val("merma-playera");
+  const nombreWrap = document.getElementById("merma-nombre-wrap");
+  const p = playeraId ? AppState.playeras.find(x => x.id === playeraId) : null;
+  if (p) {
+    nombreWrap.style.display = "none";
+    setVal("merma-costo-unitario", costoTotalPlayera(p).toFixed(2));
+    const cantidadInput = document.getElementById("merma-cantidad");
+    if (cantidadInput) cantidadInput.max = p.stock || 1;
+  } else {
+    nombreWrap.style.display = "block";
+  }
+  updateMermaCostoPreview();
+}
+function updateMermaCostoPreview() {
+  const cantidad = Math.max(1, parseInt(num("merma-cantidad")) || 1);
+  const costoUnitario = num("merma-costo-unitario") || 0;
+  const preview = document.getElementById("merma-costo-preview");
+  if (preview) preview.innerHTML = `Costo total de la merma: <b>${fmt(cantidad * costoUnitario)}</b>`;
+}
+function openModalMerma(id) {
+  fillMermaMotivoSelect();
+  fillMermaSelects();
+  setVal("merma-id", id || "");
+  document.getElementById("modal-merma-title").textContent = id ? "Editar merma" : "Nueva merma";
+  if (id) {
+    const m = AppState.mermas.find(x => x.id === id);
+    setVal("merma-playera", m.playeraId || ""); setVal("merma-nombre", m.nombre || "");
+    setVal("merma-cantidad", m.cantidad || 1); setVal("merma-costo-unitario", m.costoUnitario || 0);
+    setVal("merma-motivo", m.motivo || MOTIVOS_MERMA[0]); setVal("merma-fecha", m.fecha || "");
+    setVal("merma-bazar", m.bazarId || ""); setVal("merma-notas", m.notas || "");
+  } else {
+    setVal("merma-playera", ""); setVal("merma-nombre", ""); setVal("merma-cantidad", 1);
+    setVal("merma-costo-unitario", 0); setVal("merma-motivo", MOTIVOS_MERMA[0]);
+    setVal("merma-fecha", new Date().toISOString().slice(0, 10)); setVal("merma-bazar", ""); setVal("merma-notas", "");
+  }
+  document.getElementById("merma-nombre-wrap").style.display = val("merma-playera") ? "none" : "block";
+  updateMermaCostoPreview();
+  openModal("modal-merma");
+}
+// Acceso directo desde la tarjeta de una playera: la preselecciona y abre el formulario.
+function openModalMermaDesdePlayera(playeraId) {
+  openModalMerma();
+  setVal("merma-playera", playeraId);
+  onMermaPlayeraChange();
+}
+function saveMerma() {
+  const playeraId = val("merma-playera");
+  const p = playeraId ? AppState.playeras.find(x => x.id === playeraId) : null;
+  const nombre = p ? p.nombre : val("merma-nombre").trim();
+  if (!nombre) return showToast("Indica qué pieza se perdió.", "error");
+  const id = val("merma-id") || uid();
+  const existing = AppState.mermas.find(x => x.id === id);
+  const cantidad = Math.max(1, parseInt(num("merma-cantidad")) || 1);
+  const costoUnitario = Math.max(0, num("merma-costo-unitario") || 0);
+  // Si estaba ligada a una playera del inventario, primero se revierte la cantidad
+  // descontada anteriormente antes de aplicar la nueva (por si cambiaron cantidad/playera).
+  if (existing && existing.playeraId) {
+    const antes = AppState.playeras.find(x => x.id === existing.playeraId);
+    if (antes) antes.stock = (antes.stock || 0) + (existing.cantidad || 0);
+  }
+  if (p) {
+    p.stock = Math.max(0, (p.stock || 0) - cantidad);
+  }
+  const data = {
+    playeraId: playeraId || "", nombre, cantidad, costoUnitario, costoTotal: cantidad * costoUnitario,
+    motivo: val("merma-motivo"), fecha: val("merma-fecha"), bazarId: val("merma-bazar") || "", notas: val("merma-notas")
+  };
+  if (existing) {
+    Object.assign(existing, data);
+  } else {
+    AppState.mermas.push(Object.assign({ id }, data));
+  }
+  saveState(); closeModal("modal-merma"); renderMermas(); renderPlayeras(); renderBazarDetalle();
+  showToast("Merma registrada.");
+}
+function deleteMerma(id) {
+  if (!confirm("¿Eliminar este registro de merma? El stock descontado NO se regresa automáticamente.")) return;
+  AppState.mermas = AppState.mermas.filter(x => x.id !== id);
+  saveState(); renderMermas(); renderBazarDetalle();
+}
+function renderMermas() {
+  const grid = document.getElementById("mermas-grid");
+  if (!grid) return;
+  const totalMesEl = document.getElementById("mermas-total-mes");
+  const totalGeneralEl = document.getElementById("mermas-total-general");
+  if (totalMesEl) totalMesEl.textContent = fmt(totalMermasMesActual(AppState.mermas));
+  if (totalGeneralEl) totalGeneralEl.textContent = fmt(totalMermas(AppState.mermas));
+  const ordenadas = [...AppState.mermas].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  grid.innerHTML = ordenadas.map(m => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">📉 ${escapeHtml(m.nombre)}</span>
+        <span class="card-badge badge-agotado">${escapeHtml(m.motivo || "Otro")}</span>
+      </div>
+      <div class="card-row"><span>Cantidad</span><span>${m.cantidad}</span></div>
+      <div class="card-row"><span>Costo unitario</span><span>${fmt(m.costoUnitario)}</span></div>
+      <div class="card-row"><span>Costo total (pérdida)</span><span style="color:var(--color-danger);">${fmt(m.costoTotal)}</span></div>
+      ${m.fecha ? `<div class="card-meta">📅 ${escapeHtml(m.fecha)}</div>` : ""}
+      ${m.bazarId ? `<div class="card-meta">🏪 ${escapeHtml(bazarNombre(m.bazarId))}</div>` : ""}
+      ${m.notas ? `<div class="card-meta">${escapeHtml(m.notas)}</div>` : ""}
+      <div class="card-actions">
+        <button onclick="openModalMerma('${m.id}')">✏️ Editar</button>
+        <button class="danger" onclick="deleteMerma('${m.id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`).join("") || `<p class="empty-hint">Aún no registras mermas — ¡que se mantenga así!</p>`;
+}
+
+/* ---------------------------------------------------------------
    PRÓXIMAS COMPRAS (wishlist con link y meta de ahorro)
 --------------------------------------------------------------- */
 function openModalCompra(id) {
@@ -821,12 +954,13 @@ function openModalBazar(id) {
     const b = AppState.bazares.find(x => x.id === id);
     const fechaInicio = b.fechaInicio || b.fecha || new Date().toISOString().slice(0,10);
     setVal("b-nombre", b.nombre); setVal("b-lugar", b.lugar); setVal("b-fecha", fechaInicio); setVal("b-fecha-fin", b.fechaFin || fechaInicio);
-    setVal("b-costo", b.costoBaseBazar ?? b.costoBazar ?? 0); setVal("b-pagado", b.montoPagadoBazar || 0); setVal("b-notas", b.notas || "");
+    setVal("b-costo", b.costoBaseBazar ?? b.costoBazar ?? 0); setVal("b-pagado", b.montoPagadoBazar || 0);
+    setVal("b-fondo-caja", b.fondoCaja || 0); setVal("b-notas", b.notas || "");
     renderBazarExpenses(b.gastos || []);
   } else {
     const fechaHoy = new Date().toISOString().slice(0,10);
     setVal("b-nombre", ""); setVal("b-lugar", ""); setVal("b-fecha", fechaHoy); setVal("b-fecha-fin", fechaHoy);
-    setVal("b-costo", 0); setVal("b-pagado", 0); setVal("b-notas", ""); renderBazarExpenses([]);
+    setVal("b-costo", 0); setVal("b-pagado", 0); setVal("b-fondo-caja", 0); setVal("b-notas", ""); renderBazarExpenses([]);
   }
   updateBazarCostTotal();
   openModal("modal-bazar");
@@ -913,7 +1047,7 @@ function saveBazar() {
   const costoBaseBazar = Number.parseFloat(num("b-costo")) || 0;
   const data = {
     nombre, lugar: val("b-lugar"), fecha: fechaInicio, fechaInicio, fechaFin,
-    costoBaseBazar, montoPagadoBazar: Math.max(0, num("b-pagado")), gastos,
+    costoBaseBazar, montoPagadoBazar: Math.max(0, num("b-pagado")), fondoCaja: Math.max(0, num("b-fondo-caja")), gastos,
     costoBazar: costoBaseBazar + gastos.reduce((total, gasto) => total + gasto.monto, 0), notas: val("b-notas")
   };
   let newId = id;
@@ -984,6 +1118,15 @@ function goToBazarDetalle(id) {
 function editActiveBazar() {
   openModalBazar(activeBazarId);
 }
+// Guarda el efectivo contado al cerrar la caja de este bazar y refresca la comparación
+// contra el efectivo esperado (fondo de caja + ventas en efectivo).
+function updateEfectivoContadoBazar(value) {
+  const b = AppState.bazares.find(x => x.id === activeBazarId);
+  if (!b) return;
+  b.efectivoContado = value === "" ? null : Math.max(0, parseFloat(value) || 0);
+  saveState();
+  renderBazarDetalle();
+}
 function renderBazares() {
   const body = document.getElementById("bazares-table-body");
   document.getElementById("bazares-empty-hint").style.display = AppState.bazares.length ? "none" : "block";
@@ -993,9 +1136,11 @@ function renderBazares() {
     const saldoPendiente = saldoBazarPendiente(b);
     const desglose = gastosBazarPorTipo(b);
     const sumIngresosExtra = (b.ingresosExtra || []).reduce((s, i) => s + (i.monto || 0), 0);
+    const comisionTerminal = desgloseCierreBazar(b).comisionTerminal;
+    const mermasBazar = totalMermasDeBazar(b.id);
     // Ganancia real = dinero que de verdad entró y salió del bolsillo (nunca usa el
     // costeo estimado por catálogo de cada playera, para no volver a contar el DTF/tela dos veces).
-    const gananciaNeta = stats.totalVendido + sumIngresosExtra - costoReal;
+    const gananciaNeta = stats.totalVendido + sumIngresosExtra - costoReal - comisionTerminal - mermasBazar;
     const esActivo = activeBazarId === b.id;
     return `
     <tr class="${esActivo ? "is-active" : ""}">
@@ -1056,6 +1201,20 @@ function refreshAllSelects() {
   renderQuoteTagsOperativos();
   // Selector global de bazar activo (header)
   renderHeaderBazarSelect();
+  // Cliente select en el cotizador
+  const qClienteSel = document.getElementById("q-cliente-select");
+  if (qClienteSel) {
+    const prevQCliente = qClienteSel.value;
+    qClienteSel.innerHTML = `<option value="">— Cliente nuevo / sin guardar —</option>` +
+      AppState.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
+    qClienteSel.value = prevQCliente || "";
+  }
+  // Cliente (encargo) select en modal playera
+  const pCliente = document.getElementById("p-cliente");
+  if (pCliente) {
+    pCliente.innerHTML = `<option value="">Sin cliente asignado</option>` +
+      AppState.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
+  }
   // Filtro de bazar en cotizaciones guardadas
   const filterCotBazar = document.getElementById("filter-cot-bazar");
   const prevFilterBazar = filterCotBazar.value;
@@ -1133,6 +1292,7 @@ function openModalPlayera(id) {
     setChecked("p-gangsheet-blanco-solido", !!p.gangSheetBlancoSolido);
     setVal("p-artista", p.artistaId !== undefined ? p.artistaId : "a1");
     setVal("p-pct-artista", p.pctArtista ?? 0);
+    setVal("p-cliente", p.clienteId || "");
   } else {
     ["p-nombre","p-notas"].forEach(f => setVal(f, ""));
     setVal("p-tipo", "Playera"); setVal("p-talla", ""); setVal("p-stock", 1);
@@ -1148,6 +1308,7 @@ function openModalPlayera(id) {
     setChecked("p-gangsheet-blanco-solido", false);
     setVal("p-artista", "a1");
     setVal("p-pct-artista", (AppState.artistas.find(a => a.id === "a1") || {}).pctArtista || 0);
+    setVal("p-cliente", "");
   }
   document.getElementById("p-costo-playera").disabled = checked("p-prenda-cliente");
   renderPlayeraEstampadosList();
@@ -1209,6 +1370,34 @@ function updatePlayeraPreview() {
     comisionPreview.innerHTML = `Parte ${nombreArtista ? escapeHtml(nombreArtista) : "artista"} (${pct}%): <b>${fmt(parteArtista)}</b> — Parte estudio (${100 - pct}%): <b>${fmt(ganancia - parteArtista)}</b>`;
   }
 }
+// Libera (regresa al stock) lo que esta playera había reclamado de etiquetas de talla
+// físicas, usando el objeto de consumo guardado en ELLA MISMA — nunca vuelve a adivinar
+// por texto qué registro era, así que revertir siempre es exacto.
+function liberarEtiquetaTallaDePlayera(playera) {
+  const consumo = playera && playera.etiquetaTallaConsumo;
+  if (!consumo) return;
+  const t = AppState.tallaEtiquetas.find(x => x.id === consumo.tallaEtiquetaId);
+  if (t) t.cantidad = (t.cantidad || 0) + consumo.cantidad;
+  playera.etiquetaTallaConsumo = null;
+}
+// Reclama (descuenta del stock físico) las etiquetas de talla que le tocan a esta
+// playera según su talla/color y cuántas piezas tiene, y guarda en la propia playera un
+// OBJETO { tallaEtiquetaId, talla, color, cantidad } con exactamente qué se usó — así
+// sabes cuántas se disminuyeron por esta playera en particular, sin ambigüedad de texto.
+function reclamarEtiquetaTallaParaPlayera(playera) {
+  if (!playera.tieneEtiquetaTalla) return;
+  const colorTxt = colorNombre(playera.colorId);
+  const t = AppState.tallaEtiquetas.find(x =>
+    x.talla.trim().toLowerCase() === (playera.talla || "").trim().toLowerCase() && x.color === colorTxt);
+  if (!t) {
+    showToast(`No hay etiquetas físicas registradas para talla "${playera.talla || "—"}" · ${colorTxt}. Créalas en Catálogo > Etiquetas de talla.`, "error");
+    return;
+  }
+  const cantidad = Math.max(1, playera.stock || 1);
+  t.cantidad = Math.max(0, (t.cantidad || 0) - cantidad);
+  playera.etiquetaTallaConsumo = { tallaEtiquetaId: t.id, talla: t.talla, color: t.color, cantidad };
+  if (t.cantidad === 0) showToast(`⚠️ Se agotaron las etiquetas de talla ${t.talla} · ${t.color}.`, "error");
+}
 function savePlayera() {
   const nombre = val("p-nombre").trim();
   if (!nombre) return showToast("Ponle un nombre al diseño.", "error");
@@ -1232,6 +1421,7 @@ function savePlayera() {
     prioridad: val("p-prioridad"), estado: val("p-estado"),
     artistaId: val("p-artista") || "",
     pctArtista: Math.max(0, Math.min(100, parseFloat(num("p-pct-artista")) || 0)),
+    clienteId: val("p-cliente") || "",
     costoImpresionManual: (existing && existing.costoImpresionManual != null) ? existing.costoImpresionManual : null,
     gastoVinculadoId: (existing && existing.gastoVinculadoId) || "",
     bazarId: (existing && existing.bazarId) || "",
@@ -1240,17 +1430,26 @@ function savePlayera() {
     tags, notas: val("p-notas")
   };
   if (id) {
+    // Libera lo que esta playera ya había reclamado ANTES de aplicar los datos nuevos,
+    // para que el reclamo se recalcule limpio (por si cambió talla, color, stock o el
+    // toggle de etiqueta cosida).
+    liberarEtiquetaTallaDePlayera(existing);
     Object.assign(existing, data);
+    reclamarEtiquetaTallaParaPlayera(existing);
   } else {
-    AppState.playeras.push(Object.assign({ id: uid() }, data));
+    const nueva = Object.assign({ id: uid() }, data);
+    reclamarEtiquetaTallaParaPlayera(nueva);
+    AppState.playeras.push(nueva);
   }
-  saveState(); closeModal("modal-playera"); refreshAllSelects(); renderPlayeras();
+  saveState(); closeModal("modal-playera"); refreshAllSelects(); renderPlayeras(); renderTallaEtiquetas();
   showToast("Playera guardada.");
 }
 function deletePlayera(id) {
   if (!confirm("¿Eliminar esta playera del inventario?")) return;
+  const p = AppState.playeras.find(x => x.id === id);
+  liberarEtiquetaTallaDePlayera(p);
   AppState.playeras = AppState.playeras.filter(x => x.id !== id);
-  saveState(); renderPlayeras();
+  saveState(); renderPlayeras(); renderTallaEtiquetas();
 }
 // Banner en Inventario > Playeras cuando alguna "Bolsa sorpresa" (por tipo o etiqueta)
 // llegó a su stock mínimo — suelen ser piezas de venta por impulso que se agotan sin
@@ -1325,8 +1524,10 @@ function renderPlayeras() {
       </div>
       <div class="card-meta">
         <span>${escapeHtml(p.tipo)}</span>·<span>Talla ${escapeHtml(p.talla) || "—"}</span>·<span>${colorNombre(p.colorId)}</span>
-        ${p.tieneEtiquetaTalla ? "·<span>🏷️ con etiqueta</span>" : ""}
+        ${p.tieneEtiquetaTalla ? `·<span>🏷️ ${p.etiquetaTallaConsumo ? `${p.etiquetaTallaConsumo.cantidad} etiqueta(s) usada(s)` : "con etiqueta"}</span>` : ""}
       </div>
+      ${p.clienteId ? `<div class="card-meta">👤 Encargo para: ${escapeHtml(clienteNombre(p.clienteId) || "—")}</div>` : ""}
+      ${p.consignacionId ? `<div class="card-meta">🤝 ${escapeHtml(nombreConsignacion(p.consignacionId))} · ${escapeHtml(p.consignacionEstado || "En consignación")}</div>` : ""}
       <div class="card-row"><span>Stock</span><span>${p.stock} pza(s)</span></div>
       <div class="card-row"><span>Costo playera</span><span>${p.prendaCliente ? "🎁 Prenda del cliente ($0.00)" : fmt(p.costoPlayera)}</span></div>
       <div class="card-row"><span>${etiquetaImpresion}${gastoLigado ? " (estimado)" : ""}</span><span>${fmt(cEst)}</span></div>
@@ -1349,7 +1550,9 @@ function renderPlayeras() {
       <div class="card-actions">
         <button onclick="openModalPlayera('${p.id}')">✏️ Editar</button>
         <button onclick="openModalAsignarPlayeraBazar('${p.id}')">🏪 Bazar</button>
+        <button onclick="openModalAsignarConsignacion('${p.id}')">🤝 Consignar</button>
         ${gastoLigado ? `<button onclick="desvincularCostoRealDePieza('playera','${p.id}')">🔓 Desvincular costo real</button>` : ""}
+        <button onclick="openModalMermaDesdePlayera('${p.id}')">📉 Merma</button>
         <button class="danger" onclick="deletePlayera('${p.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
@@ -1803,13 +2006,24 @@ function computeQuoteTotals() {
   const recargoUrgentePct = esUrgente ? (AppState.settings.recargoUrgentePct || 0) : 0;
   const montoUrgente = ventaConDescuento * (recargoUrgentePct / 100);
   const totalVenta = ventaConDescuento + montoUrgente;
-  const ganancia = totalVenta - totalCosto;
+  // Método de pago: si es 100% tarjeta, el monto en tarjeta es el total; si es mixto, es lo
+  // que capturaron a mano; si es efectivo, no hay comisión de terminal.
+  const metodoPago = val("q-metodo-pago") || "Efectivo";
+  const montoTarjeta = metodoPago === "Tarjeta" ? totalVenta : (metodoPago === "Mixto" ? Math.min(totalVenta, num("q-monto-tarjeta") || 0) : 0);
+  const montoEfectivo = Math.max(0, totalVenta - montoTarjeta);
+  const comisionTerminal = comisionTerminalMonto(montoTarjeta, AppState.settings.comisionTerminalPct);
+  // La ganancia REAL de la cotización ya descuenta la comisión de terminal — es dinero
+  // que de verdad no te queda, igual que el costo de producción.
+  const ganancia = totalVenta - totalCosto - comisionTerminal;
+  const anticipo = Math.max(0, Math.min(totalVenta, num("q-anticipo") || 0));
+  const saldoPendiente = Math.max(0, totalVenta - anticipo);
   const comision = currentQuoteCommission();
   const parteArtista = ganancia * (comision.pctArtista / 100);
   const parteEstudio = ganancia * (comision.pctEstudio / 100);
   return {
     ventaBruta, totalVenta, totalCosto, ganancia, parteArtista, parteEstudio, comision, sumServiciosExtra,
-    descuentoPct, montoDescuento, esUrgente, recargoUrgentePct, montoUrgente
+    descuentoPct, montoDescuento, esUrgente, recargoUrgentePct, montoUrgente,
+    metodoPago, montoTarjeta, montoEfectivo, comisionTerminal, anticipo, saldoPendiente
   };
 }
 function updateQuoteSummary() {
@@ -1831,6 +2045,34 @@ function updateQuoteSummary() {
   document.getElementById("sum-artista-label").textContent = `Parte de ${artistName} (${t.comision.pctArtista}%)`;
   document.getElementById("sum-estudio-label").textContent = `Parte del estudio (${t.comision.pctEstudio}%)`;
   document.getElementById("sum-artista-card").style.display = t.comision.pctArtista > 0 ? "flex" : "none";
+  const comisionCard = document.getElementById("sum-comision-terminal-card");
+  if (comisionCard) {
+    comisionCard.style.display = t.comisionTerminal > 0 ? "flex" : "none";
+    document.getElementById("sum-comision-terminal").textContent = "− " + fmt(t.comisionTerminal);
+  }
+  const saldoCard = document.getElementById("sum-saldo-pendiente-card");
+  if (saldoCard) {
+    saldoCard.style.display = t.anticipo > 0 ? "flex" : "none";
+    document.getElementById("sum-saldo-pendiente").textContent = fmt(t.saldoPendiente);
+  }
+}
+// Muestra/oculta el campo de "monto con tarjeta" y lo autocompleta según el método
+// elegido: Efectivo → $0, Tarjeta → el total completo, Mixto → lo que capturen a mano.
+function onQuoteMetodoPagoChange() {
+  const metodo = val("q-metodo-pago");
+  const wrap = document.getElementById("q-monto-tarjeta-wrap");
+  if (wrap) wrap.style.display = metodo === "Mixto" ? "flex" : "none";
+  updateQuoteSummary();
+}
+// Al elegir un cliente guardado, se autocompletan nombre y teléfono (se pueden ajustar a
+// mano para esta cotización sin afectar el registro del cliente).
+function onQuoteClienteSelectChange(clienteId) {
+  setVal("q-cliente-id", clienteId || "");
+  if (!clienteId) return;
+  const c = AppState.clientes.find(x => x.id === clienteId);
+  if (!c) return;
+  setVal("q-cliente", c.nombre);
+  if (c.telefono) setVal("q-cliente-tel", c.telefono);
 }
 
 /* -----------------------------------------------------------------
@@ -1885,10 +2127,12 @@ function resetQuoteForm() {
   quoteStickerItems = [];
   quoteServiciosExtra = [];
   quoteTagsOperativos = [];
-  setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-cliente-tel", ""); setVal("q-vendedor", "");
+  setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-cliente-tel", ""); setVal("q-cliente-id", ""); setVal("q-cliente-select", ""); setVal("q-vendedor", "");
   setVal("q-fecha", new Date().toISOString().slice(0,10));
   setVal("q-artista", ""); setVal("q-comision-pct", 0); setVal("q-notas", "");
   setVal("q-tipo-venta", "Menudeo");
+  setVal("q-metodo-pago", "Efectivo"); setVal("q-monto-tarjeta", 0); setVal("q-anticipo", 0);
+  document.getElementById("q-monto-tarjeta-wrap").style.display = "none";
   setVal("q-descuento-pct", 0); setChecked("q-urgente", false);
   setChecked("q-venta-nula", false); setVal("q-venta-nula-motivo", "");
   document.getElementById("q-comision-custom-wrap").style.display = "none";
@@ -1903,6 +2147,7 @@ function saveQuote() {
   const editingId = val("quote-editing-id");
   const data = {
     cliente: val("q-cliente") || "Cliente sin nombre",
+    clienteId: val("q-cliente-id") || "",
     clienteTelefono: val("q-cliente-tel").trim(),
     fecha: val("q-fecha") || new Date().toISOString().slice(0,10),
     vendedor: val("q-vendedor"),
@@ -1923,6 +2168,8 @@ function saveQuote() {
     totalVenta: t.totalVenta, totalCosto: t.totalCosto, ganancia: t.ganancia,
     parteArtista: t.parteArtista, parteEstudio: t.parteEstudio,
     comisionNombre: t.comision.nombre, pctArtista: t.comision.pctArtista, pctEstudio: t.comision.pctEstudio,
+    metodoPago: t.metodoPago, montoTarjeta: t.montoTarjeta, montoEfectivo: t.montoEfectivo, comisionTerminal: t.comisionTerminal,
+    anticipo: t.anticipo, saldoPendiente: t.saldoPendiente,
     tagsOperativos: JSON.parse(JSON.stringify(quoteTagsOperativos)),
     estadoProduccion: editingId ? ((AppState.cotizaciones.find(c => c.id === editingId) || {}).estadoProduccion || "Por hacer") : "Por hacer",
     estado: editingId ? (AppState.cotizaciones.find(c=>c.id===editingId)||{}).estado || "Pendiente" : "Pendiente"
@@ -1952,11 +2199,10 @@ function exportQuotePDF() {
   });
   const container = document.getElementById("pdf-template");
   container.innerHTML = html;
-  html2pdf().set({ margin: 10, filename: "cotizacion_lucxstudio.pdf", html2canvas: { scale: 2 } }).from(container).save();
+  html2pdf().set({ margin: 10, filename: "cotizacion_lucxstudio.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" } }).from(container).save();
 }
-// Arma el resumen de la cotización en texto plano (sin HTML — WhatsApp no lo soporta) y
-// abre wa.me con el mensaje precargado. Si el cliente tiene teléfono capturado, abre el
-// chat directo con él; si no, abre el selector de contactos de WhatsApp.
+// Arma el resumen de la cotización en texto plano (sin HTML — WhatsApp no lo soporta),
+// usado tanto para el mensaje de WhatsApp como para la vista previa antes de compartir.
 function buildQuoteWhatsAppText(q) {
   const lineas = [];
   lineas.push(`🧵 *LUCXSTUDIO* — Cotización`);
@@ -1982,41 +2228,94 @@ function buildQuoteWhatsAppText(q) {
   if (q.montoDescuento) lineas.push(`Descuento (${q.descuentoPct}%): − ${fmt(q.montoDescuento)}`);
   if (q.montoUrgente) lineas.push(`Recargo por urgencia (${q.recargoUrgentePct}%): + ${fmt(q.montoUrgente)}`);
   lineas.push(`💵 *Total: ${fmt(q.totalVenta)}*`);
+  if (q.metodoPago && q.metodoPago !== "Efectivo") lineas.push(`Método de pago: ${q.metodoPago === "Tarjeta" ? "💳 Tarjeta" : "💵💳 Mixto"}`);
+  if (q.anticipo) {
+    lineas.push(`Anticipo recibido: ${fmt(q.anticipo)}`);
+    lineas.push(`*Saldo pendiente: ${fmt(q.saldoPendiente)}*`);
+  }
   lineas.push("");
   lineas.push("¡Gracias por tu compra! 🖤");
   return lineas.join("\n");
 }
+// Arma el contexto "q" (mismo shape que usan buildQuoteHTML/buildQuoteWhatsAppText) a
+// partir del formulario del cotizador que está abierto ahorita.
+function buildQuoteContextDesdeForm() {
+  const t = computeQuoteTotals();
+  return {
+    folio: val("quote-editing-id") ? "Edición" : "Nueva",
+    cliente: val("q-cliente") || "Cliente sin nombre", clienteTelefono: val("q-cliente-tel"),
+    fecha: val("q-fecha"), vendedor: val("q-vendedor"),
+    items: quoteItems, stickers: quoteStickerItems, serviciosExtra: quoteServiciosExtra,
+    notas: val("q-notas"), ventaNula: checked("q-venta-nula"), tipoVenta: val("q-tipo-venta"), ...t
+  };
+}
+// Arma el mismo contexto pero a partir de una cotización ya guardada.
+function buildQuoteContextDesdeGuardada(c) {
+  return {
+    folio: c.folio, cliente: c.cliente || "Cliente sin nombre", clienteTelefono: c.clienteTelefono,
+    fecha: c.fecha, vendedor: c.vendedor,
+    items: c.items, stickers: c.stickers, serviciosExtra: c.serviciosExtra, notas: c.notas,
+    ventaNula: c.ventaNula, tipoVenta: c.tipoVenta, totalVenta: c.totalVenta, totalCosto: c.totalCosto,
+    montoDescuento: c.montoDescuento, descuentoPct: c.descuentoPct, montoUrgente: c.montoUrgente,
+    recargoUrgentePct: c.recargoUrgentePct, esUrgente: c.urgente,
+    metodoPago: c.metodoPago, montoTarjeta: c.montoTarjeta, comisionTerminal: c.comisionTerminal,
+    anticipo: c.anticipo, saldoPendiente: c.saldoPendiente
+  };
+}
+function telParaWhatsApp(telefonoCrudo) {
+  const telCrudo = (telefonoCrudo || "").replace(/\D/g, "");
+  return telCrudo.length === 10 ? "52" + telCrudo : telCrudo;
+}
+function abrirWhatsAppConTexto(texto, telefono) {
+  const url = `https://wa.me/${telParaWhatsApp(telefono)}?text=${encodeURIComponent(texto)}`;
+  window.open(url, "_blank");
+}
 function exportQuoteWhatsApp() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker antes de enviar.", "error");
-  const t = computeQuoteTotals();
-  const texto = buildQuoteWhatsAppText({
-    cliente: val("q-cliente") || "Cliente sin nombre", fecha: val("q-fecha"),
-    items: quoteItems, stickers: quoteStickerItems, serviciosExtra: quoteServiciosExtra,
-    tipoVenta: val("q-tipo-venta"), ...t
-  });
-  const telCrudo = val("q-cliente-tel").replace(/\D/g, "");
-  // Si capturaron un número local de 10 dígitos, se antepone el 52 de México para que
-  // wa.me lo reconozca; si ya viene con lada de país o no hay teléfono, se respeta tal cual.
-  const tel = telCrudo.length === 10 ? "52" + telCrudo : telCrudo;
-  const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
-  window.open(url, "_blank");
+  const q = buildQuoteContextDesdeForm();
+  abrirWhatsAppConTexto(buildQuoteWhatsAppText(q), q.clienteTelefono);
 }
 // Igual que exportQuoteWhatsApp() pero para una cotización ya guardada (desde el modal
 // "Ver cotización"), usando sus datos tal como quedaron al guardarla.
 function exportQuoteWhatsAppGuardada() {
   const c = AppState.cotizaciones.find(x => x.id === viewingCotizacionId);
   if (!c) return;
-  const texto = buildQuoteWhatsAppText({
-    cliente: c.cliente || "Cliente sin nombre", fecha: c.fecha,
-    items: c.items, stickers: c.stickers, serviciosExtra: c.serviciosExtra,
-    tipoVenta: c.tipoVenta, totalVenta: c.totalVenta, montoDescuento: c.montoDescuento,
-    descuentoPct: c.descuentoPct, montoUrgente: c.montoUrgente, recargoUrgentePct: c.recargoUrgentePct,
-    esUrgente: c.urgente
-  });
-  const telCrudo = (c.clienteTelefono || "").replace(/\D/g, "");
-  const tel = telCrudo.length === 10 ? "52" + telCrudo : telCrudo;
-  const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
-  window.open(url, "_blank");
+  const q = buildQuoteContextDesdeGuardada(c);
+  abrirWhatsAppConTexto(buildQuoteWhatsAppText(q), q.clienteTelefono);
+}
+/* -----------------------------------------------------------------
+   VISTA PREVIA ANTES DE COMPARTIR
+   Un solo botón ("📤 Vista previa / Compartir") que muestra primero
+   el mensaje exacto que se va a enviar, y desde ahí se decide si se
+   descarga como PDF o se manda por WhatsApp — para no mandar nada
+   a ciegas.
+----------------------------------------------------------------- */
+let previewQuoteContext = null;
+function openPreviewCotizacion() {
+  if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker antes de compartir.", "error");
+  previewQuoteContext = buildQuoteContextDesdeForm();
+  document.getElementById("preview-cotizacion-body").textContent = buildQuoteWhatsAppText(previewQuoteContext);
+  openModal("modal-preview-cotizacion");
+}
+function openPreviewCotizacionGuardada() {
+  const c = AppState.cotizaciones.find(x => x.id === viewingCotizacionId);
+  if (!c) return;
+  previewQuoteContext = buildQuoteContextDesdeGuardada(c);
+  document.getElementById("preview-cotizacion-body").textContent = buildQuoteWhatsAppText(previewQuoteContext);
+  openModal("modal-preview-cotizacion");
+}
+function confirmarExportarPDF() {
+  if (!previewQuoteContext) return;
+  const html = buildQuoteHTML(previewQuoteContext);
+  const container = document.getElementById("pdf-template");
+  container.innerHTML = html;
+  html2pdf().set({ margin: 10, filename: "cotizacion_lucxstudio.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" } }).from(container).save();
+  closeModal("modal-preview-cotizacion");
+}
+function confirmarExportarWhatsApp() {
+  if (!previewQuoteContext) return;
+  abrirWhatsAppConTexto(buildQuoteWhatsAppText(previewQuoteContext), previewQuoteContext.clienteTelefono);
+  closeModal("modal-preview-cotizacion");
 }
 function buildQuoteHTML(q) {
   const rows = q.items.map(item => {
@@ -2029,31 +2328,50 @@ function buildQuoteHTML(q) {
       <td>${escapeHtml(sticker.nombre || "Sticker")} <span style="color:#888;">(${escapeHtml(sticker.tamano || "—")})</span></td><td>—</td><td>—</td>
       <td>${sticker.cantidad}</td><td>${fmt(sticker.precioVenta)}</td><td>${fmt(sticker.precioVenta * sticker.cantidad)}</td>
     </tr>`).join("");
+  const metodoPagoLabel = { Efectivo: "💵 Efectivo", Tarjeta: "💳 Tarjeta", Mixto: "💵💳 Mixto" }[q.metodoPago] || "";
   return `
-  <div style="font-family:Arial,sans-serif;color:#222;padding:10px;">
-    <div style="display:flex;justify-content:space-between;border-bottom:3px solid #c0242c;padding-bottom:10px;margin-bottom:16px;">
-      <div><h1 style="margin:0;color:#c0242c;">LUCXSTUDIO</h1><p style="margin:2px 0;font-size:12px;">Cotización de playeras y stickers ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}${q.urgente || q.esUrgente ? " — 🚀 Pedido urgente" : ""}</p></div>
-      <div style="text-align:right;font-size:12px;"><b>Folio:</b> ${q.folio}<br><b>Fecha:</b> ${q.fecha}</div>
+  <div style="font-family:Arial,sans-serif;color:#222;padding:26px;width:748px;box-sizing:border-box;background:#fff;">
+    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #c0242c;padding-bottom:14px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <img src="LOGO-crop.png" style="height:52px;width:auto;" onerror="this.style.display='none'">
+        <div>
+          <h1 style="margin:0;color:#c0242c;font-size:26px;letter-spacing:.5px;">LUCXSTUDIO</h1>
+          <p style="margin:2px 0 0;font-size:12px;color:#555;">Cotización de playeras y stickers ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}${q.urgente || q.esUrgente ? " — 🚀 Pedido urgente" : ""}</p>
+        </div>
+      </div>
+      <div style="text-align:right;font-size:12px;color:#333;background:#f7f7f7;padding:8px 12px;border-radius:8px;">
+        <div><b>Folio:</b> ${escapeHtml(q.folio || "—")}</div>
+        <div><b>Fecha:</b> ${escapeHtml(q.fecha || "—")}</div>
+      </div>
     </div>
-    <p style="font-size:13px;"><b>Cliente:</b> ${escapeHtml(q.cliente)} &nbsp;&nbsp; <b>Vendedor:</b> ${escapeHtml(q.vendedor||"—")}</p>
-    ${q.ventaNula ? `<p style="font-size:12px;background:#fdeeee;border:1px dashed #c0242c;padding:6px;">🎁 Cotización marcada como venta nula (regalo / cortesía).</p>` : ""}
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <p style="margin:0;"><b>Cliente:</b> ${escapeHtml(q.cliente)}${q.clienteTelefono ? ` &nbsp;·&nbsp; <b>Tel:</b> ${escapeHtml(q.clienteTelefono)}` : ""}</p>
+      <p style="margin:0;"><b>Vendedor:</b> ${escapeHtml(q.vendedor || "—")}</p>
+    </div>
+    ${q.ventaNula ? `<p style="font-size:12px;background:#fdeeee;border:1px dashed #c0242c;border-radius:6px;padding:8px;">🎁 Cotización marcada como venta nula (regalo / cortesía).</p>` : ""}
     <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
-      <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Producto</th><th>Talla</th><th>Color</th><th>Cant.</th><th>Precio c/u</th><th>Subtotal</th></tr></thead>
+      <thead><tr style="background:#c0242c;color:#fff;"><th style="padding:8px 6px;text-align:left;border-radius:6px 0 0 0;">Producto</th><th style="padding:8px 6px;">Talla</th><th style="padding:8px 6px;">Color</th><th style="padding:8px 6px;">Cant.</th><th style="padding:8px 6px;">Precio c/u</th><th style="padding:8px 6px;border-radius:0 6px 0 0;">Subtotal</th></tr></thead>
       <tbody>${rows}${stickerRows}</tbody>
     </table>
     ${q.serviciosExtra && q.serviciosExtra.length ? `
     <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
-      <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Servicio extra</th><th>Monto</th></tr></thead>
-      <tbody>${q.serviciosExtra.map(s => `<tr><td>${escapeHtml(s.concepto)}</td><td>${fmt(s.monto)}</td></tr>`).join("")}</tbody>
+      <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Servicio extra</th><th style="padding:6px;">Monto</th></tr></thead>
+      <tbody>${q.serviciosExtra.map(s => `<tr><td style="padding:5px 6px;">${escapeHtml(s.concepto)}</td><td style="padding:5px 6px;">${fmt(s.monto)}</td></tr>`).join("")}</tbody>
     </table>` : ""}
-    <div style="margin-top:16px;text-align:right;font-size:13px;">
-      <p>Total costo producción: ${fmt(q.totalCosto)}</p>
-      ${q.montoDescuento ? `<p>Subtotal: ${fmt(q.ventaBruta)}</p><p style="color:#c0242c;">Descuento (${q.descuentoPct}%): − ${fmt(q.montoDescuento)}</p>` : ""}
-      ${q.montoUrgente ? `<p style="color:#c0242c;">Recargo por urgencia (${q.recargoUrgentePct}%): + ${fmt(q.montoUrgente)}</p>` : ""}
-      <p style="font-size:16px;font-weight:bold;color:#c0242c;">Total de venta: ${fmt(q.totalVenta)}</p>
-      <p>Ganancia total: ${fmt(q.ganancia)}</p>
+    <div style="margin-top:18px;display:flex;justify-content:flex-end;">
+      <table style="font-size:13px;border-collapse:collapse;min-width:280px;">
+        <tr><td style="padding:3px 10px 3px 0;color:#555;">Total costo producción</td><td style="padding:3px 0;text-align:right;">${fmt(q.totalCosto)}</td></tr>
+        ${q.montoDescuento ? `<tr><td style="padding:3px 10px 3px 0;color:#555;">Subtotal</td><td style="padding:3px 0;text-align:right;">${fmt(q.ventaBruta)}</td></tr>
+        <tr><td style="padding:3px 10px 3px 0;color:#c0242c;">Descuento (${q.descuentoPct}%)</td><td style="padding:3px 0;text-align:right;color:#c0242c;">− ${fmt(q.montoDescuento)}</td></tr>` : ""}
+        ${q.montoUrgente ? `<tr><td style="padding:3px 10px 3px 0;color:#c0242c;">Recargo por urgencia (${q.recargoUrgentePct}%)</td><td style="padding:3px 0;text-align:right;color:#c0242c;">+ ${fmt(q.montoUrgente)}</td></tr>` : ""}
+        <tr><td style="padding:8px 10px 4px 0;font-size:17px;font-weight:bold;color:#c0242c;">Total</td><td style="padding:8px 0 4px;text-align:right;font-size:17px;font-weight:bold;color:#c0242c;">${fmt(q.totalVenta)}</td></tr>
+        ${metodoPagoLabel ? `<tr><td style="padding:3px 10px 3px 0;color:#555;">Método de pago</td><td style="padding:3px 0;text-align:right;">${metodoPagoLabel}</td></tr>` : ""}
+        ${q.anticipo ? `<tr><td style="padding:3px 10px 3px 0;color:#555;">Anticipo recibido</td><td style="padding:3px 0;text-align:right;">${fmt(q.anticipo)}</td></tr>
+        <tr><td style="padding:3px 10px 3px 0;font-weight:bold;">Saldo pendiente</td><td style="padding:3px 0;text-align:right;font-weight:bold;">${fmt(q.saldoPendiente)}</td></tr>` : ""}
+      </table>
     </div>
-    ${q.notas ? `<p style="margin-top:14px;font-size:12px;"><b>Notas:</b> ${escapeHtml(q.notas)}</p>` : ""}
+    ${q.notas ? `<p style="margin-top:16px;font-size:12px;background:#f7f7f7;padding:8px;border-radius:6px;"><b>Notas:</b> ${escapeHtml(q.notas)}</p>` : ""}
+    <p style="margin-top:22px;text-align:center;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:10px;">¡Gracias por tu compra! · LUCXSTUDIO — impresión DTF y playeras personalizadas</p>
   </div>`;
 }
 
@@ -2183,10 +2501,12 @@ function editCotizacion() {
   });
   quoteServiciosExtra = JSON.parse(JSON.stringify(c.serviciosExtra || []));
   quoteTagsOperativos = JSON.parse(JSON.stringify(c.tagsOperativos || []));
-  setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-cliente-tel", c.clienteTelefono || ""); setVal("q-fecha", c.fecha);
+  setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-cliente-tel", c.clienteTelefono || ""); setVal("q-cliente-id", c.clienteId || ""); setVal("q-cliente-select", c.clienteId || ""); setVal("q-fecha", c.fecha);
   setVal("q-vendedor", c.vendedor); setVal("q-artista", c.artistaId || "");
   setVal("q-comision-pct", c.comisionPctPersonalizado || 0); setVal("q-notas", c.notas || "");
   setVal("q-tipo-venta", c.tipoVenta || "Menudeo");
+  setVal("q-metodo-pago", c.metodoPago || "Efectivo"); setVal("q-monto-tarjeta", c.montoTarjeta || 0); setVal("q-anticipo", c.anticipo || 0);
+  document.getElementById("q-monto-tarjeta-wrap").style.display = (c.metodoPago === "Mixto") ? "flex" : "none";
   setVal("q-descuento-pct", c.descuentoPct || 0); setChecked("q-urgente", !!c.urgente);
   setChecked("q-venta-nula", !!c.ventaNula); setVal("q-venta-nula-motivo", c.ventaNulaMotivo || "");
   document.getElementById("q-comision-custom-wrap").style.display = c.artistaId === "__custom__" ? "block" : "none";
@@ -2252,35 +2572,269 @@ function renderProduccionKanban() {
 }
 
 /* =================================================================
-   HISTORIAL DE CLIENTES
+   CONSIGNACIÓN (playeras que le das a alguien más para vender)
+================================================================= */
+function openModalConsignacion(id) {
+  setVal("cons-id", id || "");
+  document.getElementById("modal-consignacion-title").textContent = id ? "Editar consignación" : "Nueva consignación";
+  if (id) {
+    const c = AppState.consignaciones.find(x => x.id === id);
+    setVal("cons-nombre", c.nombre); setVal("cons-fecha", c.fecha || ""); setVal("cons-pct", c.pctComision ?? 30);
+    setVal("cons-notas", c.notas || "");
+  } else {
+    setVal("cons-nombre", ""); setVal("cons-fecha", new Date().toISOString().slice(0, 10));
+    setVal("cons-pct", 30); setVal("cons-notas", "");
+  }
+  openModal("modal-consignacion");
+}
+function saveConsignacion() {
+  const nombre = val("cons-nombre").trim();
+  if (!nombre) return showToast("Indica a quién le das la consignación.", "error");
+  const id = val("cons-id");
+  const data = {
+    nombre, fecha: val("cons-fecha"),
+    pctComision: Math.max(0, Math.min(100, parseFloat(num("cons-pct")) || 0)),
+    notas: val("cons-notas")
+  };
+  if (id) {
+    Object.assign(AppState.consignaciones.find(x => x.id === id), data);
+  } else {
+    AppState.consignaciones.push(Object.assign({ id: uid() }, data));
+  }
+  saveState(); closeModal("modal-consignacion"); refreshAllSelects(); renderConsignaciones();
+  showToast("Consignación guardada.");
+}
+// Al borrar la consignación, las playeras que seguían con ella vuelven a quedar libres
+// (sin consignacionId), en vez de quedar apuntando a un registro que ya no existe.
+function deleteConsignacion(id) {
+  if (!confirm("¿Eliminar esta consignación? Las playeras que seguían con ella quedarán libres.")) return;
+  AppState.playeras.forEach(p => {
+    if (p.consignacionId === id) { p.consignacionId = ""; p.consignacionEstado = ""; }
+  });
+  AppState.consignaciones = AppState.consignaciones.filter(x => x.id !== id);
+  saveState(); refreshAllSelects(); renderConsignaciones(); renderPlayeras();
+}
+function renderConsignaciones() {
+  const grid = document.getElementById("consignaciones-grid");
+  if (!grid) return;
+  document.getElementById("consignaciones-empty-hint").style.display = AppState.consignaciones.length ? "none" : "block";
+  grid.innerHTML = AppState.consignaciones.map(c => {
+    const stats = statsConsignacion(c);
+    return `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">🤝 ${escapeHtml(c.nombre)}</span>
+        <span class="card-badge badge-media">${c.pctComision}% consignatario</span>
+      </div>
+      ${c.fecha ? `<div class="card-meta">📅 Desde ${escapeHtml(c.fecha)}</div>` : ""}
+      <div class="card-row"><span>Piezas entregadas</span><span>${stats.piezasEntregadas}</span></div>
+      <div class="card-row"><span>Vendidas</span><span>${stats.piezasVendidas}</span></div>
+      <div class="card-row"><span>Devueltas</span><span>${stats.piezasDevueltas}</span></div>
+      <div class="card-row"><span>Pendientes (con el consignatario)</span><span>${stats.piezasPendientes}</span></div>
+      <div class="card-row"><span>Total vendido</span><span>${fmt(stats.totalVendido)}</span></div>
+      <div class="card-row"><span>Parte del consignatario</span><span>${fmt(stats.parteConsignatarioTotal)}</span></div>
+      <div class="card-row"><span>Parte del estudio</span><span style="color:var(--color-success);">${fmt(stats.parteEstudioTotal)}</span></div>
+      ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
+      <div class="card-actions">
+        <button onclick="openModalConsignacion('${c.id}')">✏️ Editar</button>
+        <button class="danger" onclick="deleteConsignacion('${c.id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+// Modal para ligar UNA playera del inventario a una consignación existente (o quitarla).
+function onAscConsignacionChange() {
+  document.getElementById("asc-estado-wrap").style.display = val("asc-consignacion") ? "block" : "none";
+}
+function openModalAsignarConsignacion(playeraId) {
+  setVal("asc-playera-id", playeraId);
+  const sel = document.getElementById("asc-consignacion");
+  sel.innerHTML = `<option value="">— Ninguna —</option>` +
+    AppState.consignaciones.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)} (${c.pctComision}%)</option>`).join("");
+  const p = AppState.playeras.find(x => x.id === playeraId);
+  setVal("asc-consignacion", (p && p.consignacionId) || "");
+  setVal("asc-estado", (p && p.consignacionEstado) || "En consignación");
+  document.getElementById("asc-estado-wrap").style.display = (p && p.consignacionId) ? "block" : "none";
+  openModal("modal-asignar-consignacion");
+}
+function saveAsignarConsignacion() {
+  const playeraId = val("asc-playera-id");
+  const p = AppState.playeras.find(x => x.id === playeraId);
+  if (!p) return;
+  const consignacionId = val("asc-consignacion");
+  p.consignacionId = consignacionId || "";
+  p.consignacionEstado = consignacionId ? (val("asc-estado") || "En consignación") : "";
+  saveState(); closeModal("modal-asignar-consignacion"); renderPlayeras(); renderConsignaciones();
+  showToast(consignacionId ? "Playera asignada a la consignación." : "Playera quitada de la consignación.");
+}
+
+/* =================================================================
+   CLIENTES (CRM: registro manual + historial de compras)
 ================================================================= */
 let viewingClienteKey = null;
+let clienteEtiquetaFiltro = "all";
+function openModalClienteEtiqueta(id) {
+  setVal("cet-id", id || "");
+  document.getElementById("modal-cliente-etiqueta-title").textContent = id ? "Editar etiqueta de cliente" : "Nueva etiqueta de cliente";
+  if (id) {
+    const e = AppState.clienteEtiquetas.find(x => x.id === id);
+    setVal("cet-nombre", e.nombre); setVal("cet-color", e.color);
+  } else {
+    setVal("cet-nombre", ""); setVal("cet-color", "#e3363d");
+  }
+  openModal("modal-cliente-etiqueta");
+}
+function saveClienteEtiqueta() {
+  const nombre = val("cet-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre a la etiqueta.", "error");
+  const id = val("cet-id");
+  const data = { nombre, color: val("cet-color") };
+  if (id) {
+    Object.assign(AppState.clienteEtiquetas.find(x => x.id === id), data);
+  } else {
+    AppState.clienteEtiquetas.push(Object.assign({ id: uid() }, data));
+  }
+  saveState(); closeModal("modal-cliente-etiqueta"); renderClientes();
+  showToast("Etiqueta de cliente guardada.");
+}
+function deleteClienteEtiqueta(id) {
+  if (!confirm("¿Eliminar esta etiqueta? Se quitará de todos los clientes.")) return;
+  AppState.clienteEtiquetas = AppState.clienteEtiquetas.filter(x => x.id !== id);
+  AppState.clientes.forEach(c => { c.tags = (c.tags || []).filter(t => t !== id); });
+  if (clienteEtiquetaFiltro === id) clienteEtiquetaFiltro = "all";
+  saveState(); renderClientes();
+}
+function setClienteEtiquetaFiltro(id) {
+  clienteEtiquetaFiltro = id;
+  renderClientes();
+}
+function openModalCliente(id) {
+  setVal("cl-id", id || "");
+  document.getElementById("modal-cliente-title").textContent = id ? "Editar cliente" : "Nuevo cliente";
+  const tagsContainer = document.getElementById("cl-tags-container");
+  tagsContainer.innerHTML = AppState.clienteEtiquetas.map(e => `
+    <label class="tag-checkbox" style="border-color:${e.color}">
+      <input type="checkbox" value="${e.id}" class="cl-tag-cb"> ${escapeHtml(e.nombre)}
+    </label>`).join("") || `<span class="card-meta">Crea una etiqueta primero con "🏷️ + Etiqueta de cliente".</span>`;
+  if (id) {
+    const c = AppState.clientes.find(x => x.id === id);
+    setVal("cl-nombre", c.nombre); setVal("cl-telefono", c.telefono || ""); setVal("cl-notas", c.notas || "");
+    document.querySelectorAll(".cl-tag-cb").forEach(cb => cb.checked = (c.tags || []).includes(cb.value));
+  } else {
+    setVal("cl-nombre", ""); setVal("cl-telefono", ""); setVal("cl-notas", "");
+  }
+  openModal("modal-cliente");
+}
+function saveCliente() {
+  const nombre = val("cl-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre al cliente.", "error");
+  const id = val("cl-id");
+  const tags = Array.from(document.querySelectorAll(".cl-tag-cb:checked")).map(cb => cb.value);
+  const data = { nombre, telefono: val("cl-telefono").trim(), notas: val("cl-notas"), tags };
+  if (id) {
+    Object.assign(AppState.clientes.find(x => x.id === id), data);
+  } else {
+    AppState.clientes.push(Object.assign({ id: uid() }, data));
+  }
+  saveState(); closeModal("modal-cliente"); refreshAllSelects(); renderClientes();
+  showToast("Cliente guardado.");
+}
+function deleteCliente(id) {
+  if (!confirm("¿Eliminar este cliente? Sus cotizaciones anteriores se conservan, solo se quita el registro.")) return;
+  AppState.clientes = AppState.clientes.filter(x => x.id !== id);
+  saveState(); refreshAllSelects(); renderClientes();
+}
+// Formaliza un cliente "legacy" (que solo existía como nombre libre en cotizaciones
+// viejas) como un registro completo, sin perder su historial.
+function guardarClienteLegacy(nombre) {
+  AppState.clientes.push({ id: uid(), nombre, telefono: "", notas: "", tags: [] });
+  saveState(); refreshAllSelects(); renderClientes();
+  showToast("Cliente guardado — su historial anterior ya quedó ligado por nombre.");
+}
 function renderClientes() {
   const grid = document.getElementById("clientes-grid");
   if (!grid) return;
+  const etGrid = document.getElementById("cliente-etiquetas-grid");
+  if (etGrid) {
+    etGrid.innerHTML = `
+      <div class="chip-item ${clienteEtiquetaFiltro === "all" ? "is-active" : ""}" style="cursor:pointer;" onclick="setClienteEtiquetaFiltro('all')">Todos</div>
+      ` + AppState.clienteEtiquetas.map(e => `
+      <div class="chip-item ${clienteEtiquetaFiltro === e.id ? "is-active" : ""}">
+        <span class="chip-swatch" style="background:${e.color}"></span>
+        <span style="cursor:pointer;" onclick="setClienteEtiquetaFiltro('${e.id}')">${escapeHtml(e.nombre)}</span>
+        <button onclick="openModalClienteEtiqueta('${e.id}')" title="Editar">✏️</button>
+        <button onclick="deleteClienteEtiqueta('${e.id}')" title="Eliminar">✕</button>
+      </div>`).join("");
+  }
   const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
-  const clientes = agruparClientes().filter(cl => !searchTerm || cl.nombre.toLowerCase().includes(searchTerm));
-  document.getElementById("clientes-empty-hint").style.display = clientes.length ? "none" : "block";
-  grid.innerHTML = clientes.map(cl => `
+  const clientesGuardados = AppState.clientes
+    .filter(c => !searchTerm || c.nombre.toLowerCase().includes(searchTerm))
+    .filter(c => clienteEtiquetaFiltro === "all" || (c.tags || []).includes(clienteEtiquetaFiltro))
+    .map(c => ({ cliente: c, stats: statsCliente(c) }))
+    .sort((a, b) => b.stats.totalGastado - a.stats.totalGastado);
+  const nombresGuardados = new Set(AppState.clientes.map(c => c.nombre.trim().toLowerCase()));
+  const legacy = clienteEtiquetaFiltro === "all"
+    ? agruparClientes().filter(cl => cl.nombre && !nombresGuardados.has(cl.nombre.trim().toLowerCase()) && (!searchTerm || cl.nombre.toLowerCase().includes(searchTerm)))
+    : [];
+  document.getElementById("clientes-empty-hint").style.display = (clientesGuardados.length || legacy.length) ? "none" : "block";
+  const tagsHtmlDe = c => (c.tags || []).map(tid => {
+    const e = AppState.clienteEtiquetas.find(x => x.id === tid);
+    return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
+  }).join("");
+  grid.innerHTML = clientesGuardados.map(({ cliente: c, stats }) => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">👤 ${escapeHtml(c.nombre)}</span>
+      </div>
+      ${c.telefono ? `<div class="card-meta">📱 ${escapeHtml(c.telefono)}</div>` : ""}
+      <div class="card-tags">${tagsHtmlDe(c)}</div>
+      <div class="card-row"><span>Pedidos</span><span>${stats.pedidos}</span></div>
+      <div class="card-row"><span>Total gastado</span><span>${fmt(stats.totalGastado)}</span></div>
+      <div class="card-row"><span>Última compra</span><span>${stats.ultimaFecha || "—"}</span></div>
+      ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
+      <div class="card-actions">
+        <button onclick="openModalClienteDetalle('${c.id}')">📜 Ver historial</button>
+        <button onclick="openModalCliente('${c.id}')">✏️ Editar</button>
+        <button class="danger" onclick="deleteCliente('${c.id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`).join("") + legacy.map(cl => `
     <div class="card">
       <div class="card-top">
         <span class="card-title">👤 ${escapeHtml(cl.nombre)}</span>
+        <span class="card-badge badge-baja">Sin registrar</span>
       </div>
       <div class="card-row"><span>Pedidos</span><span>${cl.pedidos}</span></div>
       <div class="card-row"><span>Total gastado</span><span>${fmt(cl.totalGastado)}</span></div>
       <div class="card-row"><span>Última compra</span><span>${cl.ultimaFecha || "—"}</span></div>
       <div class="card-actions">
-        <button onclick="openModalClienteDetalle('${cl.nombre.replace(/'/g, "\\'")}')">📜 Ver historial</button>
+        <button onclick="openModalClienteDetalleLegacy('${cl.nombre.replace(/'/g, "\\'")}')">📜 Ver historial</button>
+        <button onclick="guardarClienteLegacy('${cl.nombre.replace(/'/g, "\\'")}')">+ Guardar como cliente</button>
       </div>
     </div>`).join("");
 }
-function openModalClienteDetalle(nombre) {
+function openModalClienteDetalle(clienteId) {
+  const c = AppState.clientes.find(x => x.id === clienteId);
+  if (!c) return;
+  viewingClienteKey = c.nombre.toLowerCase();
+  document.getElementById("modal-cliente-detalle-title").textContent = "👤 " + c.nombre;
+  const stats = statsCliente(c);
+  const pedidos = AppState.cotizaciones.filter(cot => stats.cotizacionIds.includes(cot.id));
+  document.getElementById("modal-cliente-detalle-body").innerHTML = pedidos.map(cot => `
+    <div class="card-row">
+      <span>${escapeHtml(cot.folio || "")} · ${cot.fecha} · ${cot.estado}${cot.ventaNula ? " · 🎁 venta nula" : ""}</span>
+      <span>${fmt(cot.totalVenta)} <button onclick="viewCotizacion('${cot.id}')" style="margin-left:6px;">👁️</button></span>
+    </div>`).join("") || `<p class="empty-hint">Este cliente no tiene cotizaciones.</p>`;
+  openModal("modal-cliente-detalle");
+}
+// Historial para un cliente "legacy" (todavía sin registro guardado): se agrupa solo
+// por coincidencia de nombre libre en cotizaciones viejas.
+function openModalClienteDetalleLegacy(nombre) {
   viewingClienteKey = nombre.toLowerCase();
   document.getElementById("modal-cliente-detalle-title").textContent = "👤 " + nombre;
   const pedidos = AppState.cotizaciones.filter(c => ((c.cliente || "Cliente sin nombre").trim() || "Cliente sin nombre").toLowerCase() === viewingClienteKey);
   document.getElementById("modal-cliente-detalle-body").innerHTML = pedidos.map(c => `
     <div class="card-row">
-      <span>${escapeHtml(c.folio)} · ${c.fecha} · ${c.estado}${c.ventaNula ? " · 🎁 venta nula" : ""}</span>
+      <span>${escapeHtml(c.folio || "")} · ${c.fecha} · ${c.estado}${c.ventaNula ? " · 🎁 venta nula" : ""}</span>
       <span>${fmt(c.totalVenta)} <button onclick="viewCotizacion('${c.id}')" style="margin-left:6px;">👁️</button></span>
     </div>`).join("") || `<p class="empty-hint">Este cliente no tiene cotizaciones.</p>`;
   openModal("modal-cliente-detalle");
@@ -2355,9 +2909,12 @@ function renderBazarDetalle() {
   const ingresosExtra = b.ingresosExtra || [];
   const sumIngresosExtra = ingresosExtra.reduce((s, i) => s + (i.monto || 0), 0);
   // Ganancia REAL en efectivo: lo que de verdad entró (ventas + extra) menos lo que
-  // de verdad salió de tu bolsillo (puesto + producción + evento). No usa el costeo
-  // estimado de cada playera, así que nunca duplica el gasto de DTF/tela.
-  const gananciaNeta = totalVendido + sumIngresosExtra - costoReal;
+  // de verdad salió de tu bolsillo (puesto + producción + evento) y la comisión de
+  // terminal de las ventas con tarjeta. No usa el costeo estimado de cada playera, así
+  // que nunca duplica el gasto de DTF/tela.
+  const cierre = desgloseCierreBazar(b);
+  const mermasBazar = totalMermasDeBazar(b.id);
+  const gananciaNeta = totalVendido + sumIngresosExtra - costoReal - cierre.comisionTerminal - mermasBazar;
   const playerasVendidas = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") === "Vendida");
   const playerasDisponibles = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") !== "Vendida");
   const unidadesVendidas = playerasVendidas.reduce((s, p) => s + (p.stock || 0), 0);
@@ -2371,7 +2928,7 @@ function renderBazarDetalle() {
   document.getElementById("bd-cotizaciones").textContent = todas.length + playerasAsignadas.length;
   document.getElementById("bd-regalado").textContent = fmt(totalRegalado);
   document.getElementById("bd-costo-bazar").textContent = fmt(costoReal);
-  document.getElementById("bd-costo-bazar-sub").textContent = `Pagado/apartado ${fmt(b.montoPagadoBazar || 0)} · Saldo pendiente ${fmt(saldoPendiente)} · Puesto ${fmt(b.costoBaseBazar || 0)} · 🧵 Producción ${fmt(desglose.produccion)} · 🎪 Evento ${fmt(desglose.evento)}`;
+  document.getElementById("bd-costo-bazar-sub").textContent = `Pagado/apartado ${fmt(b.montoPagadoBazar || 0)} · Saldo pendiente ${fmt(saldoPendiente)} · Puesto ${fmt(b.costoBaseBazar || 0)} · 🧵 Producción ${fmt(desglose.produccion)} · 🎪 Evento ${fmt(desglose.evento)}${mermasBazar ? ` · 📉 Mermas ${fmt(mermasBazar)}` : ""}`;
   document.getElementById("bd-ingresos-extra").textContent = fmt(sumIngresosExtra);
   document.getElementById("bd-ganancia-neta").textContent = fmt(gananciaNeta);
   // Punto de equilibrio: cuánto de lo que ya entró (ventas + extra) cubre el costo real
@@ -2393,6 +2950,28 @@ function renderBazarDetalle() {
   document.getElementById("bd-unidades-disponibles").textContent = unidadesDisponibles;
   document.getElementById("bd-rotacion").textContent = `${rotacion}%`;
   document.getElementById("bd-valor-disponible").textContent = fmt(valorDisponible);
+
+  // Cierre de caja: separa lo cobrado en efectivo de lo cobrado con tarjeta y compara el
+  // efectivo esperado (fondo inicial + ventas en efectivo) contra lo que se cuente al cerrar.
+  document.getElementById("bd-cierre-efectivo").textContent = fmt(cierre.ventasEfectivo);
+  document.getElementById("bd-cierre-tarjeta").textContent = fmt(cierre.ventasTarjeta);
+  document.getElementById("bd-cierre-comision").textContent = "− " + fmt(cierre.comisionTerminal);
+  document.getElementById("bd-cierre-esperado").textContent = `${fmt(b.fondoCaja || 0)} + ${fmt(cierre.ventasEfectivo)} = ${fmt(cierre.efectivoEsperado)}`;
+  setVal("bd-efectivo-contado", b.efectivoContado ?? "");
+  const diferenciaEl = document.getElementById("bd-cierre-diferencia");
+  if (cierre.diferencia === null) {
+    diferenciaEl.textContent = "Captura el efectivo contado para ver si cuadra la caja.";
+    diferenciaEl.style.color = "";
+  } else if (Math.abs(cierre.diferencia) < 0.01) {
+    diferenciaEl.textContent = "✅ La caja cuadra exacto.";
+    diferenciaEl.style.color = "var(--color-success)";
+  } else if (cierre.diferencia > 0) {
+    diferenciaEl.textContent = `Sobran ${fmt(cierre.diferencia)} respecto a lo esperado.`;
+    diferenciaEl.style.color = "var(--color-success)";
+  } else {
+    diferenciaEl.textContent = `⚠️ Faltan ${fmt(Math.abs(cierre.diferencia))} respecto a lo esperado.`;
+    diferenciaEl.style.color = "var(--color-danger)";
+  }
 
   const renderPlayerasEnBazar = (containerId, emptyId, items, esVendida) => {
     const grid = document.getElementById(containerId);
@@ -2548,7 +3127,14 @@ function openModalAsignarPlayeraBazar(playeraId) {
   const assignedIds = p ? bazarIdsDe(p) : [];
   renderAssignmentBazares(assignedIds);
   setVal("ab-status", (p && p.bazarEstado) || "Disponible");
+  setVal("ab-metodo-pago", (p && p.metodoPago) || "Efectivo");
+  onAbStatusChange();
   openModal("modal-asignar-bazar");
+}
+// Solo tiene sentido preguntar el método de pago cuando la playera se marca "Vendida".
+function onAbStatusChange() {
+  const wrap = document.getElementById("ab-metodo-pago-wrap");
+  if (wrap) wrap.style.display = val("ab-status") === "Vendida" ? "block" : "none";
 }
 function saveAsignarBazar() {
   const playeraId = val("ab-playera-id");
@@ -2562,6 +3148,16 @@ function saveAsignarBazar() {
     p.bazarId = bazarId;
     p.bazarIds = selectedBazarIds;
     p.bazarEstado = val("ab-status") || "Disponible";
+    // Si se vendió con tarjeta, se calcula y guarda su comisión de terminal (con el %
+    // vigente al momento de la venta, para que quede fijo aunque el % cambie después).
+    if (p.bazarEstado === "Vendida") {
+      p.metodoPago = val("ab-metodo-pago") || "Efectivo";
+      const montoVenta = (p.precioVenta || 0) * (p.stock || 0);
+      p.montoTarjeta = p.metodoPago === "Tarjeta" ? montoVenta : 0;
+      p.comisionTerminal = comisionTerminalMonto(p.montoTarjeta, AppState.settings.comisionTerminalPct);
+    } else {
+      p.metodoPago = ""; p.montoTarjeta = 0; p.comisionTerminal = 0;
+    }
     saveState();
     closeModal("modal-asignar-bazar");
     renderPlayeras(); renderBazares(); renderBazarDetalle();
@@ -2836,8 +3432,10 @@ export function renderAll() {
   renderArtistas();
   renderProveedores();
   renderGastos();
+  renderMermas();
   renderComprasPendientes();
   renderBazares();
+  renderConsignaciones();
   renderAjustes();
   renderPlayeras();
   renderStickers();
@@ -2858,20 +3456,26 @@ Object.assign(window, {
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
   deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
   deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada, desvincularCostoRealDePiezaBoton,
+  deleteMerma, deleteConsignacion,
+  deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
-  onArtistModeChange, onHeaderBazarChange, onPlayeraArtistChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
+  onAbStatusChange, onAscConsignacionChange, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteEstampadoModoChange, onQuoteItemProductChange,
+  onQuoteMetodoPagoChange, onQuoteClienteSelectChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,
-  openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalBazar,
-  openModalBazarDesdeAsignacion, openModalClienteDetalle, openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica,
+  openPreviewCotizacion, openPreviewCotizacionGuardada, confirmarExportarPDF, confirmarExportarWhatsApp,
+  openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalAsignarConsignacion, openModalBazar,
+  openModalBazarDesdeAsignacion, openModalCliente, openModalClienteDetalle, openModalClienteDetalleLegacy, openModalClienteEtiqueta,
+  openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalMerma, openModalMermaDesdePlayera,
   openModalIngresoExtra, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
   openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
-  addBazarExpense, removeBazarExpense, updateBazarCostTotal,
+  addBazarExpense, removeBazarExpense, updateBazarCostTotal, updateEfectivoContadoBazar, updateMermaCostoPreview,
+  saveAsignarConsignacion, saveConsignacion, saveMerma,
   removeQuoteItem, removeQuoteSticker, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
-  resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveColor, saveEtiqueta, saveEtiquetaOp,
+  resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveCliente, saveClienteEtiqueta, saveColor, saveEtiqueta, saveEtiquetaOp,
   saveGrafica, saveIngresoExtra, savePlayera, saveProveedor, saveQuote, saveServicioExtra,
   saveSettings, saveSticker, saveGasto, saveCompra,
-  saveTallaEtiqueta, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
+  saveTallaEtiqueta, setClienteEtiquetaFiltro, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
   toggleGraficaInventarioOptions, toggleQuoteAreaDtfEspecial, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,

@@ -142,6 +142,40 @@ export function bazarNombre(bazarId) {
   const b = AppState.bazares.find(x => x.id === bazarId);
   return b ? b.nombre : "Sin bazar asignado";
 }
+// Comisión que cobra la terminal bancaria por un pago con tarjeta — se calcula siempre
+// sobre lo que realmente se cobró con tarjeta, nunca sobre el total de la venta.
+export function comisionTerminalMonto(montoTarjeta, pct) {
+  return (montoTarjeta || 0) * ((pct || 0) / 100);
+}
+// Plan de pagos de una cotización: cuánto falta por cobrarle al cliente después de su
+// anticipo (para pedidos grandes con anticipo + liquidación, ej. 60/40).
+export function saldoPendienteCliente(cotizacion) {
+  return Math.max(0, (cotizacion.totalVenta || 0) - (cotizacion.anticipo || 0));
+}
+// Cierre de caja de un bazar: separa lo cobrado en efectivo de lo cobrado con tarjeta
+// (cotizaciones + playeras vendidas directo), calcula la comisión total de terminal, y
+// compara el efectivo que "debería" haber en la caja contra lo que se contó al cerrar.
+export function desgloseCierreBazar(bazar) {
+  const cots = AppState.cotizaciones.filter(c => bazarTiene(c, bazar.id) && !c.ventaNula);
+  const playerasVendidas = AppState.playeras.filter(p => bazarTiene(p, bazar.id) && (p.bazarEstado || "Disponible") === "Vendida" && (p.stock || 0) > 0);
+  let ventasTarjeta = 0, comisionTerminal = 0, totalVendido = 0;
+  cots.forEach(c => {
+    totalVendido += c.totalVenta || 0;
+    ventasTarjeta += c.montoTarjeta || 0;
+    comisionTerminal += c.comisionTerminal || 0;
+  });
+  playerasVendidas.forEach(p => {
+    totalVendido += (p.precioVenta || 0) * (p.stock || 0);
+    ventasTarjeta += p.montoTarjeta || 0;
+    comisionTerminal += p.comisionTerminal || 0;
+  });
+  const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
+  const fondoCaja = bazar.fondoCaja || 0;
+  const efectivoEsperado = fondoCaja + ventasEfectivo;
+  const tieneConteo = bazar.efectivoContado !== null && bazar.efectivoContado !== undefined && bazar.efectivoContado !== "";
+  const diferencia = tieneConteo ? (bazar.efectivoContado - efectivoEsperado) : null;
+  return { ventasEfectivo, ventasTarjeta, comisionTerminal, fondoCaja, efectivoEsperado, efectivoContado: tieneConteo ? bazar.efectivoContado : null, diferencia };
+}
 // Playeras tipo/etiqueta "Bolsa sorpresa" cuyo stock ya llegó (o bajó) al mínimo
 // configurado — se usan para la alerta dedicada en Inventario, ya que suelen ser
 // piezas de venta por impulso que se agotan sin avisar.
@@ -316,6 +350,60 @@ export function totalGastosPorCategoria(gastos) {
 }
 
 /* ---------------------------------------------------------------
+   MERMAS (piezas dañadas / perdidas en producción)
+--------------------------------------------------------------- */
+export function totalMermas(mermas) {
+  return (mermas || []).reduce((s, m) => s + (m.costoTotal || 0), 0);
+}
+export function totalMermasMesActual(mermas) {
+  const ym = new Date().toISOString().slice(0, 7);
+  return (mermas || []).filter(m => (m.fecha || "").startsWith(ym)).reduce((s, m) => s + (m.costoTotal || 0), 0);
+}
+// Mermas que le corresponden a un bazar en particular (para restarlas de su ganancia real).
+export function totalMermasDeBazar(bazarId) {
+  return AppState.mermas.filter(m => m.bazarId === bazarId).reduce((s, m) => s + (m.costoTotal || 0), 0);
+}
+
+/* ---------------------------------------------------------------
+   CONSIGNACIÓN (playeras que le das a alguien más para vender)
+--------------------------------------------------------------- */
+// Reparto de la ganancia de una playera consignada entre el consignatario y el estudio.
+// Igual que con la comisión de artista: el % siempre se aplica sobre la ganancia, nunca
+// sobre el precio de venta.
+export function comisionConsignacion(playera, consignacion) {
+  const pct = Math.max(0, Math.min(100, (consignacion && consignacion.pctComision) || 0));
+  const ganancia = (playera.precioVenta || 0) - costoTotalPlayera(playera);
+  const parteConsignatario = ganancia * (pct / 100);
+  return { pctConsignatario: pct, pctEstudio: 100 - pct, ganancia, parteConsignatario, parteEstudio: ganancia - parteConsignatario };
+}
+// Resumen de una consignación completa: cuántas piezas se entregaron, cuántas se
+// vendieron, cuántas se devolvieron, y cuánto le toca al consignatario vs. al estudio.
+export function statsConsignacion(consignacion) {
+  const playeras = AppState.playeras.filter(p => p.consignacionId === consignacion.id);
+  let piezasEntregadas = 0, piezasVendidas = 0, piezasDevueltas = 0;
+  let totalVendido = 0, gananciaTotal = 0, parteConsignatarioTotal = 0, parteEstudioTotal = 0;
+  playeras.forEach(p => {
+    const cantidad = p.stock || 0;
+    piezasEntregadas += cantidad;
+    if (p.consignacionEstado === "Vendida") {
+      piezasVendidas += cantidad;
+      totalVendido += (p.precioVenta || 0) * cantidad;
+      const c = comisionConsignacion(p, consignacion);
+      gananciaTotal += c.ganancia * cantidad;
+      parteConsignatarioTotal += c.parteConsignatario * cantidad;
+      parteEstudioTotal += c.parteEstudio * cantidad;
+    } else if (p.consignacionEstado === "Devuelta") {
+      piezasDevueltas += cantidad;
+    }
+  });
+  return {
+    piezasEntregadas, piezasVendidas, piezasDevueltas,
+    piezasPendientes: Math.max(0, piezasEntregadas - piezasVendidas - piezasDevueltas),
+    totalVendido, gananciaTotal, parteConsignatarioTotal, parteEstudioTotal
+  };
+}
+
+/* ---------------------------------------------------------------
    PRÓXIMAS COMPRAS (wishlist con meta de ahorro)
 --------------------------------------------------------------- */
 // % de la meta de ahorro ya reunido para una compra pendiente (0-100, sin pasarse de 100).
@@ -334,6 +422,29 @@ export function faltanteCompra(item) {
    Agrupa las cotizaciones por nombre de cliente (sin distinguir
    mayúsculas/espacios) para ver su historial de compras.
 --------------------------------------------------------------- */
+export function clienteNombre(clienteId) {
+  const c = AppState.clientes.find(x => x.id === clienteId);
+  return c ? c.nombre : "";
+}
+export function nombreConsignacion(consignacionId) {
+  const c = AppState.consignaciones.find(x => x.id === consignacionId);
+  return c ? c.nombre : "";
+}
+// Estadísticas de compra de UN cliente guardado: junta sus cotizaciones ligadas por
+// clienteId y también, para no perder historial viejo, las que solo coinciden por nombre
+// (cotizaciones hechas antes de que existiera el registro de este cliente).
+export function statsCliente(cliente) {
+  const nombreKey = (cliente.nombre || "").trim().toLowerCase();
+  const pedidos = AppState.cotizaciones.filter(c =>
+    c.clienteId === cliente.id || (!c.clienteId && (c.cliente || "").trim().toLowerCase() === nombreKey && nombreKey)
+  );
+  let totalGastado = 0, ultimaFecha = "";
+  pedidos.forEach(c => {
+    if (!c.ventaNula) totalGastado += c.totalVenta || 0;
+    if ((c.fecha || "") > ultimaFecha) ultimaFecha = c.fecha || "";
+  });
+  return { pedidos: pedidos.length, totalGastado, ultimaFecha, cotizacionIds: pedidos.map(c => c.id) };
+}
 export function agruparClientes() {
   const grupos = {};
   AppState.cotizaciones.forEach(c => {

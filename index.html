@@ -44,9 +44,11 @@
       <button class="nav-item" data-page="artistas">🎨 Artistas y comisiones</button>
       <button class="nav-item" data-page="proveedores">🚚 Proveedores</button>
       <button class="nav-item" data-page="bazares">🏪 Mis Bazares</button>
+      <button class="nav-item" data-page="consignaciones">🤝 Consignaciones</button>
 
       <div class="nav-group-label">Finanzas</div>
       <button class="nav-item" data-page="gastos">💸 Gastos generales</button>
+      <button class="nav-item" data-page="mermas">📉 Mermas</button>
       <button class="nav-item" data-page="compras">🎯 Próximas compras</button>
 
       <div class="nav-group-label">Reportes</div>
@@ -109,6 +111,11 @@
           <input type="hidden" id="quote-editing-id">
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">Cliente guardado (opcional)</label>
+              <select id="q-cliente-select" class="form-select" onchange="onQuoteClienteSelectChange(this.value)"><option value="">— Cliente nuevo / sin guardar —</option></select>
+              <input type="hidden" id="q-cliente-id">
+            </div>
+            <div class="form-group">
               <label class="form-label">Cliente</label>
               <input type="text" id="q-cliente" class="form-input" placeholder="Nombre del cliente">
             </div>
@@ -131,6 +138,25 @@
             <div class="form-group" id="q-comision-custom-wrap" style="display:none;">
               <label class="form-label">% para el artista</label>
               <input type="number" id="q-comision-pct" class="form-input" min="0" max="100" step="0.1" value="0" onchange="renderQuoteItems()">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Método de pago</label>
+              <select id="q-metodo-pago" class="form-select" onchange="onQuoteMetodoPagoChange()">
+                <option value="Efectivo">💵 Efectivo</option>
+                <option value="Tarjeta">💳 Tarjeta</option>
+                <option value="Mixto">💵💳 Mixto</option>
+              </select>
+            </div>
+            <div class="form-group" id="q-monto-tarjeta-wrap" style="display:none;">
+              <label class="form-label">Monto pagado con tarjeta ($)</label>
+              <input type="number" id="q-monto-tarjeta" class="form-input" min="0" step="0.01" oninput="updateQuoteSummary()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Anticipo del cliente ($, opcional)</label>
+              <input type="number" id="q-anticipo" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateQuoteSummary()">
+              <span class="form-hint">Para pedidos grandes con anticipo + liquidación (ej. 60/40).</span>
             </div>
           </div>
           <div class="form-row">
@@ -262,8 +288,16 @@
             <span class="summary-value" id="sum-urgente">+ $0.00</span>
           </div>
           <div class="summary-card accent">
-            <span class="summary-label">Ganancia total</span>
+            <span class="summary-label">Ganancia real</span>
             <span class="summary-value" id="sum-ganancia">$0.00</span>
+          </div>
+          <div class="summary-card" id="sum-comision-terminal-card" style="display:none;">
+            <span class="summary-label">💳 Comisión de terminal</span>
+            <span class="summary-value" id="sum-comision-terminal">− $0.00</span>
+          </div>
+          <div class="summary-card" id="sum-saldo-pendiente-card" style="display:none;">
+            <span class="summary-label">Saldo pendiente del cliente</span>
+            <span class="summary-value" id="sum-saldo-pendiente">$0.00</span>
           </div>
           <div class="summary-card" id="sum-artista-card">
             <span class="summary-label" id="sum-artista-label">Parte del artista</span>
@@ -285,8 +319,7 @@
 
         <div class="quote-actions">
           <button class="btn-secondary" onclick="resetQuoteForm()">🗑️ Nueva cotización</button>
-          <button class="btn-secondary" onclick="exportQuotePDF()">🖨️ Exportar PDF</button>
-          <button class="btn-secondary" onclick="exportQuoteWhatsApp()">💬 Enviar por WhatsApp</button>
+          <button class="btn-primary" onclick="openPreviewCotizacion()">📤 Vista previa / Compartir</button>
           <button class="btn-primary" onclick="saveQuote()">💾 Guardar cotización</button>
         </div>
 
@@ -334,14 +367,20 @@
 
       <!-- ======================= CLIENTES ======================= -->
       <section id="page-clientes" class="page-section">
-        <div class="section-header">
+        <div class="section-header" style="justify-content:space-between;">
           <div>
             <h2 class="section-title">Clientes</h2>
-            <p class="section-sub">Historial de compras agrupado por cliente, de mayor a menor gasto total.</p>
+            <p class="section-sub">Tu directorio de clientes, con etiquetas (VIP, recurrente, mayorista...) e historial de compras.</p>
           </div>
+          <button class="btn-primary" onclick="openModalCliente()">+ Nuevo cliente</button>
         </div>
+        <div class="chips-grid" style="align-items:center;justify-content:space-between;">
+          <span class="form-label" style="margin:0;">Etiquetas de cliente</span>
+          <button class="btn-secondary" onclick="openModalClienteEtiqueta()">🏷️ + Etiqueta de cliente</button>
+        </div>
+        <div id="cliente-etiquetas-grid" class="chips-grid"></div>
         <div id="clientes-grid" class="cards-grid"></div>
-        <p class="empty-hint" id="clientes-empty-hint">Todavía no tienes cotizaciones con cliente registrado.</p>
+        <p class="empty-hint" id="clientes-empty-hint">Todavía no tienes clientes registrados.</p>
       </section>
       <!-- ======================= /CLIENTES ======================= -->
 
@@ -528,6 +567,32 @@
       <!-- ======================= /GASTOS GENERALES ======================= -->
 
 
+      <!-- ======================= MERMAS (piezas dañadas/perdidas) ======================= -->
+      <section id="page-mermas" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Mermas</h2>
+            <p class="section-sub">Piezas dañadas, manchadas o perdidas en producción — se registran como pérdida real, sin necesidad de que hayan pasado por un bazar.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalMerma()">+ Nueva merma</button>
+        </div>
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">Perdido este mes</span>
+            <span class="sticker-count-value" id="mermas-total-mes" style="color:var(--color-danger);">$0</span>
+            <span class="sticker-count-sub">suma del mes en curso</span>
+          </div>
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Perdido en total</span>
+            <span class="sticker-count-value" id="mermas-total-general" style="color:var(--color-danger);">$0</span>
+            <span class="sticker-count-sub">histórico de todas las mermas</span>
+          </div>
+        </div>
+        <div id="mermas-grid" class="cards-grid"></div>
+      </section>
+      <!-- ======================= /MERMAS ======================= -->
+
+
       <!-- ======================= PRÓXIMAS COMPRAS (WISHLIST CON META) ======================= -->
       <section id="page-compras" class="page-section">
         <div class="section-header" style="justify-content:space-between;">
@@ -568,6 +633,21 @@
         <p class="empty-hint" id="bazares-empty-hint">Aún no registras bazares o lugares de venta.</p>
       </section>
       <!-- ======================= /BAZARES ======================= -->
+
+
+      <!-- ======================= CONSIGNACIONES ======================= -->
+      <section id="page-consignaciones" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Consignaciones</h2>
+            <p class="section-sub">Playeras que le das a alguien más (otro vendedor, una tienda) para que las venda por ti, con su propio % de comisión.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button>
+        </div>
+        <div id="consignaciones-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="consignaciones-empty-hint">Aún no registras consignaciones.</p>
+      </section>
+      <!-- ======================= /CONSIGNACIONES ======================= -->
 
 
       <!-- ======================= DETALLE DE UN BAZAR ======================= -->
@@ -626,6 +706,35 @@
           <div class="savings-label"><span id="bd-equilibrio-texto">⚖️ Punto de equilibrio</span><span id="bd-equilibrio-pct">0%</span></div>
           <div class="savings-bar"><div class="savings-bar-fill" id="bd-equilibrio-fill" style="width:0%;"></div></div>
           <p class="section-sub" id="bd-equilibrio-sub" style="margin-top:6px;">Aún no registras costos para este bazar.</p>
+        </div>
+
+        <div class="quote-meta-card" id="bd-cierre-wrap">
+          <h3 class="section-title" style="font-size:var(--fs-md);margin-bottom:var(--space-3);">🧮 Cierre de caja</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">💵 Ventas en efectivo</label>
+              <p class="cost-preview" id="bd-cierre-efectivo" style="margin:0;">$0.00</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">💳 Ventas con tarjeta</label>
+              <p class="cost-preview" id="bd-cierre-tarjeta" style="margin:0;">$0.00</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Comisión de terminal</label>
+              <p class="cost-preview" id="bd-cierre-comision" style="margin:0;color:var(--color-danger);">− $0.00</p>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Fondo de caja + ventas efectivo = efectivo esperado</label>
+              <p class="cost-preview" id="bd-cierre-esperado" style="margin:0;">$0.00</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Efectivo contado al cerrar ($)</label>
+              <input type="number" id="bd-efectivo-contado" class="form-input" min="0" step="0.01" placeholder="Cuenta tu caja al final del día" onchange="updateEfectivoContadoBazar(this.value)">
+            </div>
+          </div>
+          <p class="section-sub" id="bd-cierre-diferencia">Captura el efectivo contado para ver si cuadra la caja.</p>
         </div>
 
         <div class="section-header" style="justify-content:space-between;">
@@ -1070,6 +1179,12 @@
       <p class="cost-preview" id="p-comision-preview">Parte artista: $0.00 — Parte estudio: $0.00</p>
 
       <div class="form-group">
+        <label class="form-label">Cliente (encargo, opcional)</label>
+        <select id="p-cliente" class="form-select"><option value="">— Sin cliente asignado —</option></select>
+        <span class="form-hint">Para apartar esta pieza a un encargo específico antes de venderla.</span>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">Notas</label>
         <textarea id="p-notas" class="form-textarea" placeholder="Opcional"></textarea>
       </div>
@@ -1322,6 +1437,62 @@
 </div>
 
 <!-- MODAL: PROVEEDOR -->
+<div class="modal-overlay" id="modal-cliente">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-cliente-title">Nuevo cliente</h2>
+      <button class="modal-close" data-modal="modal-cliente">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cl-id">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="cl-nombre" class="form-input" placeholder="Nombre del cliente">
+      </div>
+      <div class="form-group">
+        <label class="form-label">WhatsApp / Teléfono (opcional)</label>
+        <input type="tel" id="cl-telefono" class="form-input" placeholder="Ej. 7221234567">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Etiquetas</label>
+        <div id="cl-tags-container" class="tag-checkbox-list"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="cl-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-cliente">Cancelar</button>
+      <button class="btn-primary" onclick="saveCliente()">Guardar cliente</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-cliente-etiqueta">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-cliente-etiqueta-title">Nueva etiqueta de cliente</h2>
+      <button class="modal-close" data-modal="modal-cliente-etiqueta">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cet-id">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="cet-nombre" class="form-input" placeholder="Ej. Cliente VIP">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Color</label>
+        <input type="color" id="cet-color" class="form-input" value="#e3363d">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-cliente-etiqueta">Cancelar</button>
+      <button class="btn-primary" onclick="saveClienteEtiqueta()">Guardar etiqueta</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-proveedor">
   <div class="modal-box modal-box-sm">
     <div class="modal-header">
@@ -1355,6 +1526,60 @@
 </div>
 
 <!-- MODAL: NUEVO / EDITAR GASTO GENERAL -->
+<div class="modal-overlay" id="modal-merma">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-merma-title">Nueva merma</h2>
+      <button class="modal-close" data-modal="modal-merma">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="merma-id">
+      <div class="form-group">
+        <label class="form-label">Playera del inventario (opcional)</label>
+        <select id="merma-playera" class="form-select" onchange="onMermaPlayeraChange()"><option value="">— Sin playera / pieza libre —</option></select>
+        <span class="form-hint">Si la eliges, se descuenta del stock y se calcula su costo real automáticamente.</span>
+      </div>
+      <div class="form-group" id="merma-nombre-wrap">
+        <label class="form-label">Concepto</label>
+        <input type="text" id="merma-nombre" class="form-input" placeholder="Ej. Playera manchada con DTF">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cantidad</label>
+          <input type="number" id="merma-cantidad" class="form-input" min="1" step="1" value="1" oninput="updateMermaCostoPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Costo unitario ($)</label>
+          <input type="number" id="merma-costo-unitario" class="form-input" min="0" step="0.01" oninput="updateMermaCostoPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Motivo</label>
+          <select id="merma-motivo" class="form-select"></select>
+        </div>
+      </div>
+      <p class="cost-preview" id="merma-costo-preview">Costo total de la merma: $0.00</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input type="date" id="merma-fecha" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bazar (opcional)</label>
+          <select id="merma-bazar" class="form-select"><option value="">— No fue en un bazar —</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="merma-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-merma">Cancelar</button>
+      <button class="btn-primary" onclick="saveMerma()">Guardar merma</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-gasto">
   <div class="modal-box">
     <div class="modal-header">
@@ -1453,6 +1678,69 @@
 </div>
 
 <!-- MODAL: BAZAR / LUGAR DE VENTA -->
+<div class="modal-overlay" id="modal-consignacion">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-consignacion-title">Nueva consignación</h2>
+      <button class="modal-close" data-modal="modal-consignacion">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cons-id">
+      <div class="form-group">
+        <label class="form-label">Consignatario (persona / tienda)</label>
+        <input type="text" id="cons-nombre" class="form-input" placeholder="Ej. Tienda de mi tía">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fecha de entrega</label>
+          <input type="date" id="cons-fecha" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">% Comisión del consignatario (sobre la ganancia)</label>
+          <input type="number" id="cons-pct" class="form-input" min="0" max="100" step="1" value="30">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="cons-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-consignacion">Cancelar</button>
+      <button class="btn-primary" onclick="saveConsignacion()">Guardar consignación</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-asignar-consignacion">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">🤝 Asignar a consignación</h2>
+      <button class="modal-close" data-modal="modal-asignar-consignacion">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="asc-playera-id">
+      <div class="form-group">
+        <label class="form-label">Consignación</label>
+        <select id="asc-consignacion" class="form-select" onchange="onAscConsignacionChange()"><option value="">— Ninguna —</option></select>
+      </div>
+      <div class="form-group" id="asc-estado-wrap" style="display:none;">
+        <label class="form-label">Estado en la consignación</label>
+        <select id="asc-estado" class="form-select">
+          <option value="En consignación">📦 En consignación (con el consignatario)</option>
+          <option value="Vendida">✅ Vendida</option>
+          <option value="Devuelta">↩️ Devuelta / no se vendió</option>
+        </select>
+      </div>
+      <p class="cost-preview">¿No está en la lista? Cierra esta ventana y créala primero en "🤝 Consignaciones".</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-asignar-consignacion">Cancelar</button>
+      <button class="btn-primary" onclick="saveAsignarConsignacion()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-bazar">
   <div class="modal-box modal-box-sm">
     <div class="modal-header">
@@ -1487,6 +1775,11 @@
         <label class="form-label">Ya pagado / apartado ($)</label>
         <input type="number" id="b-pagado" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateBazarCostTotal()">
         <p class="form-help">Captura lo que ya entregaste para restarlo del costo total.</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fondo de caja inicial ($)</label>
+        <input type="number" id="b-fondo-caja" class="form-input" min="0" step="0.01" placeholder="0.00">
+        <p class="form-help">El efectivo con el que abres el puesto (para cambio), para poder cuadrar la caja al cierre.</p>
       </div>
       <div class="bazar-expenses-section">
         <div class="bazar-expenses-heading">
@@ -1546,11 +1839,19 @@
       </div>
       <div class="form-group" id="ab-status-wrap" style="display:none;">
         <label class="form-label">Estado de la playera</label>
-        <select id="ab-status" class="form-select">
+        <select id="ab-status" class="form-select" onchange="onAbStatusChange()">
           <option value="Disponible">🟢 Disponible / se quedó</option>
           <option value="Vendida"> Vendida✅</option>
           <option value="Venta nula">🎁 Venta nula / cortesía</option>
         </select>
+      </div>
+      <div class="form-group" id="ab-metodo-pago-wrap" style="display:none;">
+        <label class="form-label">Método de pago</label>
+        <select id="ab-metodo-pago" class="form-select">
+          <option value="Efectivo">💵 Efectivo</option>
+          <option value="Tarjeta">💳 Tarjeta</option>
+        </select>
+        <span class="form-hint">Si fue con tarjeta, se descuenta la comisión de terminal de la ganancia real del bazar.</span>
       </div>
       <p class="cost-preview">¿No está en la lista? Cierra esta ventana y créalo primero en “🏪 Mis Bazares”.</p>
     </div>
@@ -1746,6 +2047,24 @@
 </div>
 
 <!-- MODAL: VER COTIZACIÓN GUARDADA -->
+<div class="modal-overlay" id="modal-preview-cotizacion">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title">📤 Vista previa de la cotización</h2>
+      <button class="modal-close" data-modal="modal-preview-cotizacion">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="section-sub">Así se ve lo que se va a compartir. Revísalo antes de descargar el PDF o mandarlo por WhatsApp.</p>
+      <pre id="preview-cotizacion-body" class="cost-preview" style="white-space:pre-wrap;font-family:var(--font-mono, monospace);line-height:1.6;"></pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-preview-cotizacion">Cancelar</button>
+      <button class="btn-secondary" onclick="confirmarExportarPDF()">📄 Descargar PDF</button>
+      <button class="btn-primary" onclick="confirmarExportarWhatsApp()">💬 Enviar por WhatsApp</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-ver-cotizacion">
   <div class="modal-box">
     <div class="modal-header">
@@ -1768,7 +2087,7 @@
         <option value="Entregado">🚦 Entregado</option>
       </select>
       <button class="btn-secondary" onclick="openModalAsignarBazarDesdeVista()">🏪 Asignar a bazar</button>
-      <button class="btn-secondary" onclick="exportQuoteWhatsAppGuardada()">💬 WhatsApp</button>
+      <button class="btn-secondary" onclick="openPreviewCotizacionGuardada()">📤 Vista previa / Compartir</button>
       <button class="btn-secondary" onclick="editCotizacion()">✏️ Editar</button>
       <button class="btn-danger" onclick="deleteCotizacion()">🗑️ Eliminar</button>
       <button class="btn-secondary" data-modal="modal-ver-cotizacion">Cerrar</button>
@@ -1777,7 +2096,7 @@
 </div>
 
 <!-- Plantilla oculta para exportar PDF -->
-<div id="pdf-template" style="display:none;"></div>
+<div id="pdf-template" style="position:fixed;top:0;left:-99999px;width:800px;"></div>
 
 <div id="toast"></div>
 

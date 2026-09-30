@@ -190,7 +190,7 @@ ul{list-style:none;}
 }
 .btn-danger:hover{background:var(--color-danger);color:#fff;}
 
-.page-content{padding:var(--space-6);max-width:none;width:100%;margin:0;}
+.page-content{padding:var(--space-6);max-width:1400px;width:100%;margin:0 auto;}
 .page-section{display:none;}
 .page-section.active{display:block;animation:fadein .25s ease;}
 @keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
@@ -315,6 +315,7 @@ ul{list-style:none;}
 .chip-swatch{width:16px;height:16px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.15);}
 .chip-item button{font-size:var(--fs-xs);color:var(--color-text-muted);padding:2px;}
 .chip-item button:hover{color:var(--color-danger);}
+.chip-item.is-active{border-color:var(--color-accent);background:var(--color-accent-soft);color:var(--color-accent);}
 
 /* ============ COTIZADOR ============ */
 .quote-meta-card{

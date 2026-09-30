@@ -19,6 +19,7 @@ export function defaultState() {
       gangSheetPrecioMetro: 190,
       gangSheetBlancoSolidoPrecioMetro: 230,
       recargoUrgentePct: 20,
+      comisionTerminalPct: 3.5,
       moneda: "MXN"
     },
     colores: [
@@ -50,8 +51,17 @@ export function defaultState() {
     cotizaciones: [],
     graficas: [],
     proveedores: [],
+    clientes: [],
+    clienteEtiquetas: [
+      { id: "ce1", nombre: "Cliente VIP", color: "#c56bdb" },
+      { id: "ce2", nombre: "Recurrente", color: "#3fb87f" },
+      { id: "ce3", nombre: "Mayorista", color: "#5d8bd8" },
+      { id: "ce4", nombre: "Nuevo", color: "#e0a23a" }
+    ],
     gastos: [],
     comprasPendientes: [],
+    mermas: [],
+    consignaciones: [],
     etiquetasOperativas: [
       { id: "eo1", nombre: "Urgente", color: "#e3363d" },
       { id: "eo2", nombre: "Retrabajo", color: "#e0a23a" },
@@ -78,6 +88,19 @@ export const GASTOS_CATEGORIAS = [
   "Materiales", "DTF / Insumos de impresión", "Herramientas y equipo",
   "Renta", "Servicios", "Transporte", "Empaque", "Publicidad", "Otro"
 ];
+
+/* ---------------------------------------------------------------
+   MERMAS (piezas dañadas / perdidas en producción)
+--------------------------------------------------------------- */
+export const MOTIVOS_MERMA = [
+  "Dañada en producción", "Manchada", "Defecto de tela", "Estampado mal pegado",
+  "Rota / perdida en transporte", "Robo o extravío", "Otro"
+];
+
+/* ---------------------------------------------------------------
+   CONSIGNACIÓN (playeras que le das a alguien más para vender)
+--------------------------------------------------------------- */
+export const CONSIGNACION_ESTADOS = ["En consignación", "Vendida", "Devuelta"];
 
 /* ---------------------------------------------------------------
    TIPOS DE GASTO DE UN BAZAR
