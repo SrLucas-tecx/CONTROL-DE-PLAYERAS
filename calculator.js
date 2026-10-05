@@ -76,6 +76,45 @@ export function costoImpresionEfectivoPlayera(playera) {
 export function montoPorPiezaLigada(monto, cantidadPiezas) {
   return cantidadPiezas > 0 ? monto / cantidadPiezas : 0;
 }
+// Área (cm²) de una pieza ligable a un gasto, para el reparto proporcional. Las playeras
+// costeadas por Gang Sheet no tienen un área cm² comparable (se cobran por metro lineal),
+// así que no participan del reparto por área — se excluyen devolviendo null.
+export function areaPiezaLigable(tipo, pieza) {
+  if (tipo === "playera") {
+    if (pieza.modoCosteo === "gangsheet") return null;
+    return areaTotalCm2(pieza.estampados);
+  }
+  return Math.max(0, (pieza.anchoCm || 0) * (pieza.largoCm || 0));
+}
+// Costeo proporcional absorbente: reparte el monto total de un gasto (ej. un metro de
+// DTF) entre varias piezas según el % de área que ocupa cada una — así la suma de los
+// costos individuales siempre da exactamente el monto del gasto, sin importar cuánto
+// desperdicio haya. `piezas` es un arreglo de {key, area}; las de area null/0 (ej. Gang
+// Sheet) quedan fuera del reparto y su costo queda en 0 — el llamador decide cómo
+// costearlas aparte (p.ej. dejándolas en partes iguales o con su propio costeo).
+export function repartoProporcionalPorArea(piezas, montoTotal) {
+  const elegibles = piezas.filter(p => p.area !== null && p.area !== undefined && p.area > 0);
+  const areaTotal = elegibles.reduce((s, p) => s + p.area, 0);
+  const costos = {};
+  piezas.forEach(p => { costos[p.key] = 0; });
+  if (areaTotal > 0) {
+    elegibles.forEach(p => { costos[p.key] = montoTotal * (p.area / areaTotal); });
+  }
+  return { costos, areaTotal };
+}
+// % del rollo que ocupa un lote de piezas — sirve para avisar cuando el llenado es tan
+// bajo que el costo absorbente por pieza se dispara sin sentido (Sprint 2).
+export function pctLlenadoRollo(areaTotalLote, anchoRolloCm, largoMetrosRollo) {
+  const areaRollo = (anchoRolloCm || 0) * 100 * (largoMetrosRollo || 1);
+  return areaRollo > 0 ? Math.min(100, Math.round((areaTotalLote / areaRollo) * 100)) : 0;
+}
+// Revisa si una pieza cabe en el ancho del rollo — considera que se puede rotar 90°, así
+// que basta con que su LADO MENOR quepa en ese ancho (Sprint 2).
+export function piezaCabeEnRollo(anchoCm, largoCm, anchoRolloCm) {
+  if (!anchoRolloCm) return true;
+  const ladoMenor = Math.min(anchoCm || 0, largoCm || 0);
+  return ladoMenor <= anchoRolloCm;
+}
 // Devuelve el costo de impresión a usar para una prenda del cotizador: si hay más de un
 // estampado (modo área) y el usuario lo editó manualmente, se respeta ese valor; si no, se
 // calcula con la fórmula de área × costo DTF, o con el costo de Gang Sheet si aplica.
@@ -438,12 +477,21 @@ export function statsCliente(cliente) {
   const pedidos = AppState.cotizaciones.filter(c =>
     c.clienteId === cliente.id || (!c.clienteId && (c.cliente || "").trim().toLowerCase() === nombreKey && nombreKey)
   );
+  // Playeras del inventario que se le asignaron a este cliente como encargo y ya se
+  // vendieron directo (sin pasar por una cotización) también cuentan en su historial.
+  const playerasVendidas = AppState.playeras.filter(p => p.clienteId === cliente.id && p.bazarEstado === "Vendida");
   let totalGastado = 0, ultimaFecha = "";
   pedidos.forEach(c => {
     if (!c.ventaNula) totalGastado += c.totalVenta || 0;
     if ((c.fecha || "") > ultimaFecha) ultimaFecha = c.fecha || "";
   });
-  return { pedidos: pedidos.length, totalGastado, ultimaFecha, cotizacionIds: pedidos.map(c => c.id) };
+  playerasVendidas.forEach(p => {
+    totalGastado += (p.precioVenta || 0) * (p.stock || 0);
+  });
+  return {
+    pedidos: pedidos.length + playerasVendidas.length, totalGastado, ultimaFecha,
+    cotizacionIds: pedidos.map(c => c.id), playeraIds: playerasVendidas.map(p => p.id)
+  };
 }
 export function agruparClientes() {
   const grupos = {};

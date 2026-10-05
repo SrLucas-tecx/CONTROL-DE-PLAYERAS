@@ -11,6 +11,7 @@ import {
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
   comisionTerminalMonto, saldoPendienteCliente, desgloseCierreBazar, clienteNombre, statsCliente,
   totalMermas, totalMermasMesActual, totalMermasDeBazar, comisionConsignacion, statsConsignacion, nombreConsignacion,
+  areaPiezaLigable, repartoProporcionalPorArea,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
   totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra
 } from "./calculator.js";
@@ -545,17 +546,53 @@ function toggleGastoLigarPlayeras(isChecked) {
   document.getElementById("gasto-ligar-wrap").style.display = isChecked ? "block" : "none";
   updateGastoLigarPreview();
 }
+// Dado un key compuesto "p:<id>" / "s:<id>", regresa el objeto real y su área (cm²) —
+// base compartida entre el preview y el guardado para que nunca se desincronicen.
+function piezaLigadaDeKey(key) {
+  const [tipoKey, pid] = key.split(":");
+  const tipo = tipoKey === "p" ? "playera" : "sticker";
+  const obj = tipo === "playera" ? AppState.playeras.find(x => x.id === pid) : AppState.stickers.find(x => x.id === pid);
+  return obj ? { key, tipo, pid, obj, area: areaPiezaLigable(tipo, obj) } : null;
+}
+// Calcula cuánto le toca a cada pieza seleccionada según el modo de reparto elegido —
+// usado tanto por el preview en vivo como por saveGasto(), para que siempre coincidan.
+function calcularRepartoGasto() {
+  const seleccionadas = [...document.querySelectorAll(".gasto-ligar-cb:checked")].map(cb => cb.value);
+  const monto = num("gasto-monto") || 0;
+  const modo = val("gasto-reparto-modo") || "area";
+  const piezas = seleccionadas.map(piezaLigadaDeKey).filter(Boolean);
+  let costos = {};
+  if (modo === "area") {
+    const r = repartoProporcionalPorArea(piezas.map(p => ({ key: p.key, area: p.area })), monto);
+    costos = r.costos;
+    // Las piezas sin área comparable (Gang Sheet) no entran al reparto por área — se les
+    // reparte en partes iguales lo que sobre después de cubrir a las que sí tienen área.
+    const sinArea = piezas.filter(p => !p.area);
+    if (sinArea.length) {
+      const montoAsignado = Object.values(costos).reduce((s, c) => s + c, 0);
+      const porPiezaSinArea = montoPorPiezaLigada(monto - montoAsignado, sinArea.length);
+      sinArea.forEach(p => { costos[p.key] = Math.max(0, porPiezaSinArea); });
+    }
+  } else {
+    const porPieza = montoPorPiezaLigada(monto, piezas.length);
+    piezas.forEach(p => { costos[p.key] = porPieza; });
+  }
+  return { piezas, costos, modo, monto };
+}
 function updateGastoLigarPreview() {
   const preview = document.getElementById("gasto-ligar-preview");
   if (!preview) return;
-  const seleccionadas = [...document.querySelectorAll(".gasto-ligar-cb:checked")];
-  const monto = num("gasto-monto") || 0;
-  if (!seleccionadas.length) {
+  const { piezas, costos, modo, monto } = calcularRepartoGasto();
+  if (!piezas.length) {
     preview.textContent = "Selecciona playeras o stickers para ver el costo real por pieza.";
     return;
   }
-  const porPieza = montoPorPiezaLigada(monto, seleccionadas.length);
-  preview.innerHTML = `${fmt(monto)} ÷ ${seleccionadas.length} pieza(s) = <b>${fmt(porPieza)}</b> de costo real de impresión por pieza.`;
+  if (modo === "igual") {
+    preview.innerHTML = `${fmt(monto)} ÷ ${piezas.length} pieza(s) = <b>${fmt(costos[piezas[0].key])}</b> de costo real por pieza (partes iguales).`;
+    return;
+  }
+  const filas = piezas.map(p => `<div class="card-row"><span>${escapeHtml(p.obj.nombre)}${p.area ? ` (${p.area.toFixed(0)} cm²)` : " (Gang Sheet)"}</span><span>${fmt(costos[p.key])}</span></div>`).join("");
+  preview.innerHTML = `<div style="margin-bottom:6px;">Reparto por área — ${fmt(monto)} en total:</div>${filas}`;
 }
 function openModalGasto(id) {
   fillGastoCategoriaSelect();
@@ -567,8 +604,10 @@ function openModalGasto(id) {
     setVal("gasto-concepto", g.concepto); setVal("gasto-categoria", g.categoria || "Otro");
     setVal("gasto-monto", g.monto || 0); setVal("gasto-fecha", g.fecha || "");
     setVal("gasto-link", g.link || ""); setVal("gasto-notas", g.notas || "");
+    setVal("gasto-reparto-modo", g.repartoModo || "area");
     ligadas = g.piezasLigadas || [];
   } else {
+    setVal("gasto-reparto-modo", "area");
     setVal("gasto-concepto", ""); setVal("gasto-categoria", "Materiales"); setVal("gasto-monto", "");
     setVal("gasto-fecha", new Date().toISOString().slice(0, 10)); setVal("gasto-link", ""); setVal("gasto-notas", "");
   }
@@ -610,10 +649,11 @@ function saveGasto() {
   const monto = num("gasto-monto");
   const ligar = checked("gasto-ligar-toggle");
   const seleccionadas = ligar ? [...document.querySelectorAll(".gasto-ligar-cb:checked")].map(cb => cb.value) : [];
+  const repartoModo = val("gasto-reparto-modo") || "area";
   const data = {
     concepto, categoria: val("gasto-categoria"), monto,
     fecha: val("gasto-fecha"), link: val("gasto-link").trim(), notas: val("gasto-notas"),
-    piezasLigadas: seleccionadas
+    piezasLigadas: seleccionadas, repartoModo: ligar ? repartoModo : (existing?.repartoModo || "area")
   };
   if (existing) {
     // Desliga las piezas que ya no quedaron seleccionadas.
@@ -628,20 +668,18 @@ function saveGasto() {
   } else {
     AppState.gastos.push(Object.assign({ id }, data));
   }
-  // Aplica el costo real (monto ÷ piezas) a cada playera/sticker seleccionado.
-  const porPieza = montoPorPiezaLigada(monto, seleccionadas.length);
-  seleccionadas.forEach(key => {
-    const [tipoKey, pid] = key.split(":");
-    if (tipoKey === "p") {
-      const p = AppState.playeras.find(x => x.id === pid);
-      if (p) { p.costoImpresionManual = porPieza; p.gastoVinculadoId = id; }
-    } else {
-      const s = AppState.stickers.find(x => x.id === pid);
-      if (s) { s.costo = Math.round(porPieza * 100) / 100; s.gastoVinculadoId = id; }
-    }
-  });
+  // Aplica el costo real a cada playera/sticker seleccionado, según el modo de reparto
+  // elegido (por área — recomendado — o en partes iguales).
+  if (ligar) {
+    const { piezas, costos } = calcularRepartoGasto();
+    piezas.forEach(p => {
+      const costo = Math.round((costos[p.key] || 0) * 100) / 100;
+      if (p.tipo === "playera") { p.obj.costoImpresionManual = costo; p.obj.gastoVinculadoId = id; }
+      else { p.obj.costo = costo; p.obj.gastoVinculadoId = id; }
+    });
+  }
   saveState(); closeModal("modal-gasto"); renderGastos(); renderPlayeras(); renderStickers();
-  showToast(seleccionadas.length ? `Gasto guardado — costo real aplicado a ${seleccionadas.length} pieza(s).` : "Gasto guardado.");
+  showToast(seleccionadas.length ? `Gasto guardado — costo real aplicado a ${seleccionadas.length} pieza(s) (${repartoModo === "area" ? "por área" : "partes iguales"}).` : "Gasto guardado.");
 }
 function deleteGasto(id) {
   if (!confirm("¿Eliminar este gasto?")) return;
@@ -783,10 +821,23 @@ function saveMerma() {
   saveState(); closeModal("modal-merma"); renderMermas(); renderPlayeras(); renderBazarDetalle();
   showToast("Merma registrada.");
 }
+// Deshace una merma mal registrada: si estaba ligada a una playera del inventario, le
+// regresa exactamente la cantidad que se le había descontado (declasifica el registro),
+// y luego lo elimina. Así nunca se pierde stock por un error de captura.
 function deleteMerma(id) {
-  if (!confirm("¿Eliminar este registro de merma? El stock descontado NO se regresa automáticamente.")) return;
+  const m = AppState.mermas.find(x => x.id === id);
+  if (!m) return;
+  const mensaje = m.playeraId
+    ? `¿Eliminar esta merma? Se le regresarán ${m.cantidad} pieza(s) al stock de "${m.nombre}".`
+    : "¿Eliminar este registro de merma?";
+  if (!confirm(mensaje)) return;
+  if (m.playeraId) {
+    const p = AppState.playeras.find(x => x.id === m.playeraId);
+    if (p) p.stock = (p.stock || 0) + (m.cantidad || 0);
+  }
   AppState.mermas = AppState.mermas.filter(x => x.id !== id);
-  saveState(); renderMermas(); renderBazarDetalle();
+  saveState(); renderMermas(); renderPlayeras(); renderBazarDetalle();
+  showToast(m.playeraId ? "Merma deshecha — el stock ya se regresó." : "Merma eliminada.");
 }
 function renderMermas() {
   const grid = document.getElementById("mermas-grid");
@@ -1215,6 +1266,12 @@ function refreshAllSelects() {
     pCliente.innerHTML = `<option value="">Sin cliente asignado</option>` +
       AppState.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
   }
+  // Cliente (encargo) select en modal sticker
+  const sCliente = document.getElementById("s-cliente");
+  if (sCliente) {
+    sCliente.innerHTML = `<option value="">— Sin cliente asignado —</option>` +
+      AppState.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
+  }
   // Filtro de bazar en cotizaciones guardadas
   const filterCotBazar = document.getElementById("filter-cot-bazar");
   const prevFilterBazar = filterCotBazar.value;
@@ -1313,6 +1370,7 @@ function openModalPlayera(id) {
   document.getElementById("p-costo-playera").disabled = checked("p-prenda-cliente");
   renderPlayeraEstampadosList();
   onPlayeraModoCosteoChange();
+  onPlayeraTieneEtiquetaChange();
   openModal("modal-playera");
 }
 function onPrendaClienteChange() {
@@ -1380,17 +1438,49 @@ function liberarEtiquetaTallaDePlayera(playera) {
   if (t) t.cantidad = (t.cantidad || 0) + consumo.cantidad;
   playera.etiquetaTallaConsumo = null;
 }
-// Reclama (descuenta del stock físico) las etiquetas de talla que le tocan a esta
-// playera según su talla/color y cuántas piezas tiene, y guarda en la propia playera un
-// OBJETO { tallaEtiquetaId, talla, color, cantidad } con exactamente qué se usó — así
-// sabes cuántas se disminuyeron por esta playera en particular, sin ambigüedad de texto.
+// Llena el select de "Etiqueta de talla a usar" con cada etiqueta guardada y cuántas
+// quedan disponibles. Si esta playera ya tenía una reclamada, el conteo se muestra
+// sumando de vuelta lo que ella misma tiene apartado (para no verlo artificialmente
+// bajo), y queda preseleccionada; si no, se sugiere la que coincide por talla/color,
+// pero el usuario puede elegir cualquier otra a mano.
+function renderPlayeraEtiquetaTallaOptions(playeraIdActual) {
+  const sel = document.getElementById("p-etiqueta-talla-id");
+  if (!sel) return;
+  const p = playeraIdActual ? AppState.playeras.find(x => x.id === playeraIdActual) : null;
+  const consumoActual = p ? p.etiquetaTallaConsumo : null;
+  if (!AppState.tallaEtiquetas.length) {
+    sel.innerHTML = `<option value="">— No hay etiquetas de talla registradas —</option>`;
+    return;
+  }
+  sel.innerHTML = AppState.tallaEtiquetas.map(t => {
+    const disponible = (t.cantidad || 0) + (consumoActual && consumoActual.tallaEtiquetaId === t.id ? consumoActual.cantidad : 0);
+    return `<option value="${t.id}">${escapeHtml(t.talla)} · ${escapeHtml(t.color)} (quedan ${disponible})</option>`;
+  }).join("");
+  if (consumoActual) {
+    sel.value = consumoActual.tallaEtiquetaId;
+  } else {
+    const colorTxt = colorNombre(val("p-color"));
+    const sugerida = AppState.tallaEtiquetas.find(t =>
+      t.talla.trim().toLowerCase() === (val("p-talla") || "").trim().toLowerCase() && t.color === colorTxt);
+    if (sugerida) sel.value = sugerida.id;
+  }
+}
+function onPlayeraTieneEtiquetaChange() {
+  const on = checked("p-tiene-etiqueta");
+  document.getElementById("p-etiqueta-talla-wrap").style.display = on ? "block" : "none";
+  if (on) renderPlayeraEtiquetaTallaOptions(val("p-id"));
+  updatePlayeraPreview();
+}
+// Reclama (descuenta del stock físico) la etiqueta de talla que el usuario eligió a mano
+// en el select — ya no se adivina por texto — y guarda en la propia playera un OBJETO
+// { tallaEtiquetaId, talla, color, cantidad } con exactamente qué se usó, así sabes
+// cuántas se disminuyeron por esta playera en particular, sin ambigüedad.
 function reclamarEtiquetaTallaParaPlayera(playera) {
   if (!playera.tieneEtiquetaTalla) return;
-  const colorTxt = colorNombre(playera.colorId);
-  const t = AppState.tallaEtiquetas.find(x =>
-    x.talla.trim().toLowerCase() === (playera.talla || "").trim().toLowerCase() && x.color === colorTxt);
+  const tallaEtiquetaId = val("p-etiqueta-talla-id");
+  const t = AppState.tallaEtiquetas.find(x => x.id === tallaEtiquetaId);
   if (!t) {
-    showToast(`No hay etiquetas físicas registradas para talla "${playera.talla || "—"}" · ${colorTxt}. Créalas en Catálogo > Etiquetas de talla.`, "error");
+    showToast(`Elige qué etiqueta de talla usar, o créala en Catálogo > Etiquetas de talla.`, "error");
     return;
   }
   const cantidad = Math.max(1, playera.stock || 1);
@@ -1565,17 +1655,19 @@ function renderPlayeras() {
 function openModalSticker(id) {
   setVal("s-id", id || "");
   document.getElementById("modal-sticker-title").textContent = id ? "Editar estampado" : "Nuevo estampado";
+  refreshAllSelects();
   if (id) {
     const s = AppState.stickers.find(x => x.id === id);
     setVal("s-nombre", s.nombre); setVal("s-tamano", s.tamano); setVal("s-ancho", s.anchoCm || 0); setVal("s-largo", s.largoCm || 0); setVal("s-costo", s.costo);
     setVal("s-precio-venta", s.precioVenta || 0);
     setVal("s-stock", s.stock); setVal("s-stock-minimo", s.stockMinimo ?? AppState.settings.stockMinimoDefault ?? 0);
     setVal("s-prioridad", s.prioridad); setVal("s-estado", s.estado);
+    setVal("s-cliente", s.clienteId || "");
     setVal("s-notas", s.notas || "");
   } else {
     setVal("s-nombre", ""); setVal("s-tamano", "Chico"); setVal("s-ancho", 5); setVal("s-largo", 5); setVal("s-costo", 0); setVal("s-precio-venta", 0);
     setVal("s-stock", 1); setVal("s-stock-minimo", AppState.settings.stockMinimoDefault || 0);
-    setVal("s-prioridad", "Media"); setVal("s-estado", "En stock"); setVal("s-notas", "");
+    setVal("s-prioridad", "Media"); setVal("s-estado", "En stock"); setVal("s-cliente", ""); setVal("s-notas", "");
   }
   updateStickerCostPreview();
   openModal("modal-sticker");
@@ -1601,6 +1693,7 @@ function saveSticker() {
     precioVenta: Math.round(num("s-precio-venta") * 100) / 100,
     stock: parseInt(num("s-stock")) || 0, stockMinimo: parseInt(num("s-stock-minimo")) || 0,
     prioridad: val("s-prioridad"), estado: val("s-estado"),
+    clienteId: val("s-cliente") || "",
     notas: val("s-notas")
   };
   if (id) {
@@ -1668,6 +1761,7 @@ function renderStickers() {
         <span class="card-badge ${prioridadBadgeClass(s.prioridad)}">${s.prioridad}</span>
         ${stockBajo ? `<span class="card-badge badge-agotado">⚠️ Stock bajo</span>` : ""}
       </div>
+      ${s.clienteId ? `<div class="card-meta">👤 Encargo para: ${escapeHtml(clienteNombre(s.clienteId) || "—")}</div>` : ""}
       ${s.notas ? `<div class="card-meta">${escapeHtml(s.notas)}</div>` : ""}
       <div class="card-actions">
         <button onclick="quoteStickerFromInventory('${s.id}')">🧮 Cotizar</button>
@@ -1924,11 +2018,13 @@ function renderQuoteItems() {
     return `
     <tr>
       <td>
-        <select onchange="onQuoteItemProductChange('${item.rowId}', this.value)">
-          <option value="">— Manual / personalizado —</option>
-          ${playeraOptions}
-        </select>
-        ${!item.playeraId ? `<input type="text" placeholder="Nombre" value="${escapeHtml(item.nombre)}" style="margin-top:4px;" onchange="updateQuoteItemField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta" style="margin-top:4px;">${escapeHtml(item.nombre)}</div>`}
+        <div class="quote-product-cell">
+          <select onchange="onQuoteItemProductChange('${item.rowId}', this.value)">
+            <option value="">— Manual / personalizado —</option>
+            ${playeraOptions}
+          </select>
+          ${!item.playeraId ? `<input type="text" placeholder="Nombre" value="${escapeHtml(item.nombre)}" onchange="updateQuoteItemField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta">${escapeHtml(item.nombre)}</div>`}
+        </div>
       </td>
       <td>
         <select onchange="updateQuoteItemField('${item.rowId}','tipo',this.value)" style="min-width:110px;">
@@ -1964,8 +2060,10 @@ function renderQuoteItems() {
     stickerBody.innerHTML = quoteStickerItems.map(item => `
       <tr>
         <td>
-          <select onchange="updateQuoteStickerField('${item.rowId}','stickerId',this.value)"><option value="">— Manual / personalizado —</option>${stickerOptions}</select>
-          ${!item.stickerId ? `<input type="text" placeholder="Nombre del sticker" value="${escapeHtml(item.nombre)}" style="margin-top:4px;" onchange="updateQuoteStickerField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta" style="margin-top:4px;">${escapeHtml(item.nombre)}</div>`}
+          <div class="quote-product-cell">
+            <select onchange="updateQuoteStickerField('${item.rowId}','stickerId',this.value)"><option value="">— Manual / personalizado —</option>${stickerOptions}</select>
+            ${!item.stickerId ? `<input type="text" placeholder="Nombre del sticker" value="${escapeHtml(item.nombre)}" onchange="updateQuoteStickerField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta">${escapeHtml(item.nombre)}</div>`}
+          </div>
         </td>
         <td>${!item.stickerId ? `<select onchange="updateQuoteStickerField('${item.rowId}','tamano',this.value)"><option ${item.tamano === "Chico" ? "selected" : ""}>Chico</option><option ${item.tamano === "Mediano" ? "selected" : ""}>Mediano</option><option ${item.tamano === "Grande" ? "selected" : ""}>Grande</option></select>` : escapeHtml(item.tamano)}</td>
         <td><input type="number" min="0" step="0.01" value="${Number(item.anchoCm || 0).toFixed(2)}" onchange="updateQuoteStickerField('${item.rowId}','anchoCm',this.value)"></td>
@@ -2819,11 +2917,19 @@ function openModalClienteDetalle(clienteId) {
   document.getElementById("modal-cliente-detalle-title").textContent = "👤 " + c.nombre;
   const stats = statsCliente(c);
   const pedidos = AppState.cotizaciones.filter(cot => stats.cotizacionIds.includes(cot.id));
-  document.getElementById("modal-cliente-detalle-body").innerHTML = pedidos.map(cot => `
+  const playerasVendidas = AppState.playeras.filter(p => (stats.playeraIds || []).includes(p.id));
+  const filasPedidos = pedidos.map(cot => `
     <div class="card-row">
       <span>${escapeHtml(cot.folio || "")} · ${cot.fecha} · ${cot.estado}${cot.ventaNula ? " · 🎁 venta nula" : ""}</span>
       <span>${fmt(cot.totalVenta)} <button onclick="viewCotizacion('${cot.id}')" style="margin-left:6px;">👁️</button></span>
-    </div>`).join("") || `<p class="empty-hint">Este cliente no tiene cotizaciones.</p>`;
+    </div>`).join("");
+  const filasPlayeras = playerasVendidas.map(p => `
+    <div class="card-row">
+      <span>🏪 ${escapeHtml(p.nombre)} · venta directa (sin cotización)</span>
+      <span>${fmt((p.precioVenta || 0) * (p.stock || 0))}</span>
+    </div>`).join("");
+  document.getElementById("modal-cliente-detalle-body").innerHTML = filasPedidos + filasPlayeras ||
+    `<p class="empty-hint">Este cliente no tiene cotizaciones ni ventas directas.</p>`;
   openModal("modal-cliente-detalle");
 }
 // Historial para un cliente "legacy" (todavía sin registro guardado): se agrupa solo
@@ -3160,7 +3266,7 @@ function saveAsignarBazar() {
     }
     saveState();
     closeModal("modal-asignar-bazar");
-    renderPlayeras(); renderBazares(); renderBazarDetalle();
+    renderPlayeras(); renderBazares(); renderBazarDetalle(); renderClientes();
     showToast(bazarId ? (p.bazarEstado === "Vendida" ? "Playera marcada como vendida en los bazares." : p.bazarEstado === "Venta nula" ? "Playera marcada como venta nula." : "Playera asignada como disponible en los bazares.") : "Playera sin bazar asignado.");
     return;
   }
@@ -3459,7 +3565,7 @@ Object.assign(window, {
   deleteMerma, deleteConsignacion,
   deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
-  onAbStatusChange, onAscConsignacionChange, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange,
+  onAbStatusChange, onAscConsignacionChange, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteEstampadoModoChange, onQuoteItemProductChange,
   onQuoteMetodoPagoChange, onQuoteClienteSelectChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,

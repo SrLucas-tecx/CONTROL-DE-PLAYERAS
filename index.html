@@ -150,11 +150,11 @@
               </select>
             </div>
             <div class="form-group" id="q-monto-tarjeta-wrap" style="display:none;">
-              <label class="form-label">Monto pagado con tarjeta ($)</label>
+              <label class="form-label">Monto con tarjeta ($)</label>
               <input type="number" id="q-monto-tarjeta" class="form-input" min="0" step="0.01" oninput="updateQuoteSummary()">
             </div>
             <div class="form-group">
-              <label class="form-label">Anticipo del cliente ($, opcional)</label>
+              <label class="form-label">Anticipo del cliente ($)</label>
               <input type="number" id="q-anticipo" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateQuoteSummary()">
               <span class="form-hint">Para pedidos grandes con anticipo + liquidación (ej. 60/40).</span>
             </div>
@@ -1128,12 +1128,17 @@
 
       <div class="form-group">
         <div class="form-switch">
-          <span class="switch-label">¿Lleva etiqueta de talla cosida?</span>
+          <span class="switch-label">Lleva etiqueta</span>
           <label class="switch">
-            <input type="checkbox" id="p-tiene-etiqueta">
+            <input type="checkbox" id="p-tiene-etiqueta" onchange="onPlayeraTieneEtiquetaChange()">
             <span class="slider"></span>
           </label>
         </div>
+      </div>
+      <div class="form-group" id="p-etiqueta-talla-wrap" style="display:none;">
+        <label class="form-label">Etiqueta de talla a usar</label>
+        <select id="p-etiqueta-talla-id" class="form-select" onchange="updatePlayeraPreview()"></select>
+        <span class="form-hint">Elige cuál etiqueta física se le cose a esta playera — su stock se descuenta al guardar.</span>
       </div>
 
       <p class="cost-preview" id="p-cost-preview">Costo del estampado: $0.00 — Costo total: $0.00</p>
@@ -1255,6 +1260,10 @@
             <option>En stock</option><option>Agotado</option>
           </select>
         </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cliente (encargo, opcional)</label>
+        <select id="s-cliente" class="form-select"><option value="">— Sin cliente asignado —</option></select>
       </div>
       <div class="form-group">
         <label class="form-label">Notas</label>
@@ -1619,9 +1628,16 @@
             <span class="slider"></span>
           </label>
         </div>
-        <p class="section-sub" style="margin:4px 0 0;">Marca qué playeras o stickers (de diversos tamaños) salieron de esta compra. A cada uno se le asignará como costo real el monto dividido entre los que elijas — reemplaza al costo estimado por área, sin tocar el costo de la prenda.</p>
+        <p class="section-sub" style="margin:4px 0 0;">Marca qué playeras o stickers (de diversos tamaños) salieron de esta compra.</p>
       </div>
       <div id="gasto-ligar-wrap" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Forma de repartir el costo</label>
+          <select id="gasto-reparto-modo" class="form-select" onchange="updateGastoLigarPreview()">
+            <option value="area">📐 Por área (recomendado — cada pieza paga según su tamaño)</option>
+            <option value="igual">⚖️ En partes iguales (todas pagan lo mismo)</option>
+          </select>
+        </div>
         <div id="gasto-ligar-list" class="gasto-ligar-list"></div>
         <p class="cost-preview" id="gasto-ligar-preview">Selecciona playeras o stickers para ver el costo real por pieza.</p>
       </div>
