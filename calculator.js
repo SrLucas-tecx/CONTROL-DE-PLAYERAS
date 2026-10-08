@@ -194,9 +194,13 @@ export function saldoPendienteCliente(cotizacion) {
 // Cierre de caja de un bazar: separa lo cobrado en efectivo de lo cobrado con tarjeta
 // (cotizaciones + playeras vendidas directo), calcula la comisión total de terminal, y
 // compara el efectivo que "debería" haber en la caja contra lo que se contó al cerrar.
-export function desgloseCierreBazar(bazar) {
-  const cots = AppState.cotizaciones.filter(c => bazarTiene(c, bazar.id) && !c.ventaNula);
-  const playerasVendidas = AppState.playeras.filter(p => bazarTiene(p, bazar.id) && (p.bazarEstado || "Disponible") === "Vendida" && (p.stock || 0) > 0);
+// Núcleo compartido del cierre de caja: dado un filtro de qué cotizaciones/playeras
+// contar y de dónde sacar el fondo de caja/efectivo contado, arma el mismo desglose
+// (ventas en efectivo, en tarjeta, comisión de terminal, efectivo esperado vs. contado).
+// Lo usan tanto el cierre de un bazar como la Caja general (sin bazar) — Sprint 4.
+function desgloseCierreCajaBase(filtroCot, filtroPlayera, fondoCaja, efectivoContadoRaw) {
+  const cots = AppState.cotizaciones.filter(c => !c.ventaNula && filtroCot(c));
+  const playerasVendidas = AppState.playeras.filter(p => (p.bazarEstado || "Disponible") === "Vendida" && (p.stock || 0) > 0 && filtroPlayera(p));
   let ventasTarjeta = 0, comisionTerminal = 0, totalVendido = 0;
   cots.forEach(c => {
     totalVendido += c.totalVenta || 0;
@@ -209,11 +213,26 @@ export function desgloseCierreBazar(bazar) {
     comisionTerminal += p.comisionTerminal || 0;
   });
   const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
-  const fondoCaja = bazar.fondoCaja || 0;
-  const efectivoEsperado = fondoCaja + ventasEfectivo;
-  const tieneConteo = bazar.efectivoContado !== null && bazar.efectivoContado !== undefined && bazar.efectivoContado !== "";
-  const diferencia = tieneConteo ? (bazar.efectivoContado - efectivoEsperado) : null;
-  return { ventasEfectivo, ventasTarjeta, comisionTerminal, fondoCaja, efectivoEsperado, efectivoContado: tieneConteo ? bazar.efectivoContado : null, diferencia };
+  const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo;
+  const tieneConteo = efectivoContadoRaw !== null && efectivoContadoRaw !== undefined && efectivoContadoRaw !== "";
+  const diferencia = tieneConteo ? (efectivoContadoRaw - efectivoEsperado) : null;
+  return {
+    totalVendido, ventasEfectivo, ventasTarjeta, comisionTerminal, fondoCaja: fondoCaja || 0,
+    efectivoEsperado, efectivoContado: tieneConteo ? efectivoContadoRaw : null, diferencia
+  };
+}
+export function desgloseCierreBazar(bazar) {
+  return desgloseCierreCajaBase(c => bazarTiene(c, bazar.id), p => bazarTiene(p, bazar.id), bazar.fondoCaja, bazar.efectivoContado);
+}
+// Caja general (sin bazar): cuenta las ventas que NO tienen ningún bazar asignado — así
+// sirve para el día a día del taller, fuera de cualquier evento.
+export function desgloseCierreCajaGeneral() {
+  const cg = AppState.cajaGeneral || {};
+  return desgloseCierreCajaBase(
+    c => bazarIdsDe(c).length === 0,
+    p => bazarIdsDe(p).length === 0,
+    cg.fondoCaja, cg.efectivoContado
+  );
 }
 // Playeras tipo/etiqueta "Bolsa sorpresa" cuyo stock ya llegó (o bajó) al mínimo
 // configurado — se usan para la alerta dedicada en Inventario, ya que suelen ser

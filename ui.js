@@ -9,9 +9,9 @@ import {
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
-  comisionTerminalMonto, saldoPendienteCliente, desgloseCierreBazar, clienteNombre, statsCliente,
+  comisionTerminalMonto, saldoPendienteCliente, desgloseCierreBazar, desgloseCierreCajaGeneral, clienteNombre, statsCliente,
   totalMermas, totalMermasMesActual, totalMermasDeBazar, comisionConsignacion, statsConsignacion, nombreConsignacion,
-  areaPiezaLigable, repartoProporcionalPorArea,
+  areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
   totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra
 } from "./calculator.js";
@@ -70,8 +70,11 @@ const PAGE_TITLES = {
   artistas: "Artistas y comisiones",
   proveedores: "Proveedores",
   gastos: "Gastos generales",
+  mermas: "Mermas",
   compras: "Próximas compras",
   bazares: "Mis Bazares",
+  consignaciones: "Consignaciones",
+  caja: "Caja",
   "bazar-detalle": "Detalle de bazar",
   estadisticas: "Estadísticas",
   ajustes: "Ajustes de costos"
@@ -84,6 +87,7 @@ export function switchPage(page) {
   document.getElementById("page-title").textContent = PAGE_TITLES[page] || "LUCXSTUDIO";
   document.getElementById("header-cta").style.display = page === "cotizador" ? "none" : "inline-block";
   if (page === "bazares") renderBazares();
+  if (page === "caja") renderCaja();
   if (page === "estadisticas") renderEstadisticas();
   if (page === "produccion") renderProduccionKanban();
   if (page === "clientes") renderClientes();
@@ -524,9 +528,21 @@ function fillGastoCategoriaSelect() {
 // Une playeras y stickers (de diversos tamaños) en un solo checklist ligable a un gasto,
 // usando ids compuestos "p:<id>" / "s:<id>" para no chocar entre las dos colecciones.
 function piezasLigablesDisponibles() {
-  const playeras = AppState.playeras.map(p => ({ tipo: "playera", id: p.id, key: `p:${p.id}`, nombre: p.nombre, detalle: `${p.talla || "—"} · ${colorNombre(p.colorId)}`, gastoVinculadoId: p.gastoVinculadoId }));
-  const stickers = AppState.stickers.map(s => ({ tipo: "sticker", id: s.id, key: `s:${s.id}`, nombre: s.nombre, detalle: `🏷️ Sticker ${s.tamano}`, gastoVinculadoId: s.gastoVinculadoId }));
+  const playeras = AppState.playeras.map(p => ({ tipo: "playera", id: p.id, key: `p:${p.id}`, nombre: p.nombre, detalle: `${p.talla || "—"} · ${colorNombre(p.colorId)}`, gastoVinculadoId: p.gastoVinculadoId, obj: p }));
+  const stickers = AppState.stickers.map(s => ({ tipo: "sticker", id: s.id, key: `s:${s.id}`, nombre: s.nombre, detalle: `🏷️ Sticker ${s.tamano}`, gastoVinculadoId: s.gastoVinculadoId, obj: s }));
   return [...playeras, ...stickers].sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+// Revisa si alguna dimensión de la pieza no cabe en el ancho de rollo configurado
+// (considerando que se puede rotar) — para las playeras revisa cada estampado, para
+// un sticker revisa su propio ancho/largo. Gang Sheet no aplica (no se mide por pieza).
+function piezaNoCabeEnRollo(pieza) {
+  const anchoRollo = AppState.settings.dtfAnchoRolloCm;
+  if (!anchoRollo) return false;
+  if (pieza.tipo === "sticker") {
+    return !piezaCabeEnRollo(pieza.obj.anchoCm, pieza.obj.largoCm, anchoRollo);
+  }
+  if (pieza.obj.modoCosteo === "gangsheet") return false;
+  return (pieza.obj.estampados || []).some(e => !piezaCabeEnRollo(e.anchoCm, e.largoCm, anchoRollo));
 }
 function renderGastoLigarPlayerasList(gastoIdActual, seleccionadas) {
   const list = document.getElementById("gasto-ligar-list");
@@ -534,10 +550,12 @@ function renderGastoLigarPlayerasList(gastoIdActual, seleccionadas) {
   const piezas = piezasLigablesDisponibles();
   list.innerHTML = piezas.map(pieza => {
     const ligadaAOtro = pieza.gastoVinculadoId && pieza.gastoVinculadoId !== gastoIdActual;
+    const noCabe = piezaNoCabeEnRollo(pieza);
     return `
     <label class="gasto-ligar-item">
       <input type="checkbox" class="gasto-ligar-cb" value="${pieza.key}" ${seleccionadas.includes(pieza.key) ? "checked" : ""} onchange="updateGastoLigarPreview()">
       <span>${escapeHtml(pieza.nombre)} · ${pieza.detalle}</span>
+      ${noCabe ? `<span class="card-meta" style="color:var(--color-danger);">⚠️ no cabe en el ancho del rollo (${AppState.settings.dtfAnchoRolloCm} cm)</span>` : ""}
       ${ligadaAOtro ? `<span class="card-meta">🔗 se reasignará (ligada a otro gasto)</span>` : ""}
     </label>`;
   }).join("") || `<p class="empty-hint">Aún no tienes playeras ni stickers en el inventario.</p>`;
@@ -556,10 +574,13 @@ function piezaLigadaDeKey(key) {
 }
 // Calcula cuánto le toca a cada pieza seleccionada según el modo de reparto elegido —
 // usado tanto por el preview en vivo como por saveGasto(), para que siempre coincidan.
-function calcularRepartoGasto() {
-  const seleccionadas = [...document.querySelectorAll(".gasto-ligar-cb:checked")].map(cb => cb.value);
-  const monto = num("gasto-monto") || 0;
-  const modo = val("gasto-reparto-modo") || "area";
+// Por default lee el formulario abierto; si se le pasa `overrides` (piezasLigadas, monto,
+// modo) calcula directo sobre datos guardados — así se puede recalcular un gasto ya
+// guardado sin tener que reabrir el modal (botón "🔄 Recalcular reparto" en su tarjeta).
+function calcularRepartoGasto(overrides) {
+  const seleccionadas = overrides?.piezasLigadas ?? [...document.querySelectorAll(".gasto-ligar-cb:checked")].map(cb => cb.value);
+  const monto = overrides?.monto ?? (num("gasto-monto") || 0);
+  const modo = overrides?.modo ?? (val("gasto-reparto-modo") || "area");
   const piezas = seleccionadas.map(piezaLigadaDeKey).filter(Boolean);
   let costos = {};
   if (modo === "area") {
@@ -583,16 +604,34 @@ function updateGastoLigarPreview() {
   const preview = document.getElementById("gasto-ligar-preview");
   if (!preview) return;
   const { piezas, costos, modo, monto } = calcularRepartoGasto();
+  const alertaEl = document.getElementById("gasto-llenado-alerta");
   if (!piezas.length) {
     preview.textContent = "Selecciona playeras o stickers para ver el costo real por pieza.";
+    if (alertaEl) alertaEl.style.display = "none";
     return;
   }
+  // % de llenado del rollo: solo informativo, no afecta el monto del gasto — avisa
+  // cuando el lote es tan chico que el costo por pieza se dispara sin sentido.
+  const areaTotalLote = piezas.reduce((s, p) => s + (p.area || 0), 0);
+  const anchoRollo = AppState.settings.dtfAnchoRolloCm;
+  const metros = Math.max(0.1, num("gasto-metros") || 1);
+  const pctLlenado = pctLlenadoRollo(areaTotalLote, anchoRollo, metros);
+  const umbral = AppState.settings.umbralLlenadoPct ?? 30;
+  if (alertaEl) {
+    if (areaTotalLote > 0 && pctLlenado < umbral) {
+      alertaEl.style.display = "block";
+      alertaEl.innerHTML = `⚠️ Este lote solo usa <b>${pctLlenado}%</b> del rollo (${metros} m) — el costo por pieza puede salir inflado. Agrega más piezas, o
+        <button type="button" onclick="document.getElementById('gasto-ligar-toggle').checked=false; toggleGastoLigarPlayeras(false);">usa el costo estimado por área en vez de ligarlo</button>.`;
+    } else {
+      alertaEl.style.display = "none";
+    }
+  }
   if (modo === "igual") {
-    preview.innerHTML = `${fmt(monto)} ÷ ${piezas.length} pieza(s) = <b>${fmt(costos[piezas[0].key])}</b> de costo real por pieza (partes iguales).`;
+    preview.innerHTML = `${fmt(monto)} ÷ ${piezas.length} pieza(s) = <b>${fmt(costos[piezas[0].key])}</b> de costo real por pieza (partes iguales). Llenado del rollo: ${pctLlenado}%.`;
     return;
   }
   const filas = piezas.map(p => `<div class="card-row"><span>${escapeHtml(p.obj.nombre)}${p.area ? ` (${p.area.toFixed(0)} cm²)` : " (Gang Sheet)"}</span><span>${fmt(costos[p.key])}</span></div>`).join("");
-  preview.innerHTML = `<div style="margin-bottom:6px;">Reparto por área — ${fmt(monto)} en total:</div>${filas}`;
+  preview.innerHTML = `<div style="margin-bottom:6px;">Reparto por área — ${fmt(monto)} en total · Llenado del rollo: <b>${pctLlenado}%</b></div>${filas}`;
 }
 function openModalGasto(id) {
   fillGastoCategoriaSelect();
@@ -605,9 +644,11 @@ function openModalGasto(id) {
     setVal("gasto-monto", g.monto || 0); setVal("gasto-fecha", g.fecha || "");
     setVal("gasto-link", g.link || ""); setVal("gasto-notas", g.notas || "");
     setVal("gasto-reparto-modo", g.repartoModo || "area");
+    setVal("gasto-metros", g.metros || 1);
     ligadas = g.piezasLigadas || [];
   } else {
     setVal("gasto-reparto-modo", "area");
+    setVal("gasto-metros", 1);
     setVal("gasto-concepto", ""); setVal("gasto-categoria", "Materiales"); setVal("gasto-monto", "");
     setVal("gasto-fecha", new Date().toISOString().slice(0, 10)); setVal("gasto-link", ""); setVal("gasto-notas", "");
   }
@@ -653,7 +694,8 @@ function saveGasto() {
   const data = {
     concepto, categoria: val("gasto-categoria"), monto,
     fecha: val("gasto-fecha"), link: val("gasto-link").trim(), notas: val("gasto-notas"),
-    piezasLigadas: seleccionadas, repartoModo: ligar ? repartoModo : (existing?.repartoModo || "area")
+    piezasLigadas: seleccionadas, repartoModo: ligar ? repartoModo : (existing?.repartoModo || "area"),
+    metros: Math.max(0.1, num("gasto-metros") || 1)
   };
   if (existing) {
     // Desliga las piezas que ya no quedaron seleccionadas.
@@ -669,7 +711,9 @@ function saveGasto() {
     AppState.gastos.push(Object.assign({ id }, data));
   }
   // Aplica el costo real a cada playera/sticker seleccionado, según el modo de reparto
-  // elegido (por área — recomendado — o en partes iguales).
+  // elegido (por área — recomendado — o en partes iguales), y guarda el % de llenado del
+  // rollo para poder mostrarlo después en las tarjetas sin tener que recalcular todo.
+  const gastoGuardado = existing || AppState.gastos.find(x => x.id === id);
   if (ligar) {
     const { piezas, costos } = calcularRepartoGasto();
     piezas.forEach(p => {
@@ -677,9 +721,33 @@ function saveGasto() {
       if (p.tipo === "playera") { p.obj.costoImpresionManual = costo; p.obj.gastoVinculadoId = id; }
       else { p.obj.costo = costo; p.obj.gastoVinculadoId = id; }
     });
+    const areaTotalLote = piezas.reduce((s, p) => s + (p.area || 0), 0);
+    gastoGuardado.areaTotalLote = areaTotalLote;
+    gastoGuardado.pctLlenado = pctLlenadoRollo(areaTotalLote, AppState.settings.dtfAnchoRolloCm, data.metros);
+  } else {
+    gastoGuardado.areaTotalLote = 0;
+    gastoGuardado.pctLlenado = null;
   }
   saveState(); closeModal("modal-gasto"); renderGastos(); renderPlayeras(); renderStickers();
   showToast(seleccionadas.length ? `Gasto guardado — costo real aplicado a ${seleccionadas.length} pieza(s) (${repartoModo === "area" ? "por área" : "partes iguales"}).` : "Gasto guardado.");
+}
+// Vuelve a aplicar el reparto de un gasto ya guardado (mismas piezas, mismo monto, mismo
+// modo) directo desde su tarjeta, sin reabrir el modal — útil si cambiaste el ancho de
+// estampado de alguna playera ligada y quieres que su costo real se actualice.
+function recalcularRepartoGasto(id) {
+  const g = AppState.gastos.find(x => x.id === id);
+  if (!g || !(g.piezasLigadas || []).length) return;
+  const { piezas, costos } = calcularRepartoGasto({ piezasLigadas: g.piezasLigadas, monto: g.monto, modo: g.repartoModo });
+  piezas.forEach(p => {
+    const costo = Math.round((costos[p.key] || 0) * 100) / 100;
+    if (p.tipo === "playera") { p.obj.costoImpresionManual = costo; p.obj.gastoVinculadoId = id; }
+    else { p.obj.costo = costo; p.obj.gastoVinculadoId = id; }
+  });
+  const areaTotalLote = piezas.reduce((s, p) => s + (p.area || 0), 0);
+  g.areaTotalLote = areaTotalLote;
+  g.pctLlenado = pctLlenadoRollo(areaTotalLote, AppState.settings.dtfAnchoRolloCm, g.metros || 1);
+  saveState(); renderGastos(); renderPlayeras(); renderStickers();
+  showToast("Reparto recalculado.");
 }
 function deleteGasto(id) {
   if (!confirm("¿Eliminar este gasto?")) return;
@@ -703,6 +771,12 @@ function renderGastos() {
   const ordenados = [...AppState.gastos].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
   grid.innerHTML = ordenados.map(g => {
     const ligadas = g.piezasLigadas || [];
+    const piezasInfo = ligadas.map(piezaLigadaDeKey).filter(Boolean);
+    const costoDe = p => p.tipo === "playera" ? (p.obj.costoImpresionManual || 0) : (p.obj.costo || 0);
+    const desglose = piezasInfo.map(p => `<div class="card-row"><span>${escapeHtml(p.obj.nombre)}</span><span>${fmt(costoDe(p))}</span></div>`).join("");
+    const llenadoTxt = (g.pctLlenado !== null && g.pctLlenado !== undefined)
+      ? ` · Llenado del rollo: <b style="color:${g.pctLlenado < (AppState.settings.umbralLlenadoPct ?? 30) ? "var(--color-danger)" : "var(--color-success)"}">${g.pctLlenado}%</b>`
+      : "";
     return `
     <div class="card">
       <div class="card-top">
@@ -712,10 +786,16 @@ function renderGastos() {
       <div class="card-row"><span>Monto</span><span>${fmt(g.monto)}</span></div>
       ${g.fecha ? `<div class="card-meta">📅 ${escapeHtml(g.fecha)}</div>` : ""}
       ${g.link ? `<div class="card-meta">🔗 <a href="${escapeHtml(g.link)}" target="_blank" rel="noopener">Ver enlace</a></div>` : ""}
-      ${ligadas.length ? `<div class="card-meta">🧵 ${ligadas.length} pieza(s) ligada(s) · ${fmt(montoPorPiezaLigada(g.monto, ligadas.length))} c/u de costo real</div>` : ""}
+      ${ligadas.length ? `
+      <div class="card-meta">🧵 ${ligadas.length} pieza(s) ligada(s) · ${g.repartoModo === "igual" ? "partes iguales" : "por área"}${llenadoTxt}</div>
+      <details class="gasto-desglose">
+        <summary>Ver desglose por pieza</summary>
+        <div class="gasto-desglose-rows">${desglose}</div>
+      </details>` : ""}
       ${g.notas ? `<div class="card-meta">${escapeHtml(g.notas)}</div>` : ""}
       <div class="card-actions">
         <button onclick="openModalGasto('${g.id}')">✏️ Editar</button>
+        ${ligadas.length ? `<button onclick="recalcularRepartoGasto('${g.id}')">🔄 Recalcular reparto</button>` : ""}
         <button class="danger" onclick="deleteGasto('${g.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
@@ -963,6 +1043,8 @@ function renderAjustes() {
   setVal("set-gangsheet-precio", AppState.settings.gangSheetPrecioMetro);
   setVal("set-gangsheet-blanco-precio", AppState.settings.gangSheetBlancoSolidoPrecioMetro);
   setVal("set-recargo-urgente", AppState.settings.recargoUrgentePct);
+  setVal("set-comision-terminal", AppState.settings.comisionTerminalPct);
+  setVal("set-umbral-llenado", AppState.settings.umbralLlenadoPct ?? 30);
   setVal("set-moneda", AppState.settings.moneda);
   updateCostPreview();
 }
@@ -989,6 +1071,8 @@ function saveSettings() {
   AppState.settings.gangSheetPrecioMetro = parseFloat(num("set-gangsheet-precio")) || 0;
   AppState.settings.gangSheetBlancoSolidoPrecioMetro = parseFloat(num("set-gangsheet-blanco-precio")) || 0;
   AppState.settings.recargoUrgentePct = Math.max(0, parseFloat(num("set-recargo-urgente")) || 0);
+  AppState.settings.comisionTerminalPct = Math.max(0, parseFloat(num("set-comision-terminal")) || 0);
+  AppState.settings.umbralLlenadoPct = Math.max(0, Math.min(100, parseFloat(num("set-umbral-llenado")) || 0));
   AppState.settings.moneda = val("set-moneda") || "MXN";
   saveState();
   showToast("Ajustes guardados. Los costos se recalculan automáticamente.");
@@ -1177,6 +1261,75 @@ function updateEfectivoContadoBazar(value) {
   b.efectivoContado = value === "" ? null : Math.max(0, parseFloat(value) || 0);
   saveState();
   renderBazarDetalle();
+}
+
+/* ---------------------------------------------------------------
+   CAJA (registradora): bazar específico o caja general sin bazar
+--------------------------------------------------------------- */
+// Qué se está viendo en la página Caja: "general" (ventas sin bazar) o el id de un bazar.
+let cajaSeleccion = "general";
+function renderCaja() {
+  const sel = document.getElementById("caja-selector");
+  if (!sel) return;
+  // Si el bazar que estaba seleccionado ya no existe, regresa a la caja general.
+  if (cajaSeleccion !== "general" && !AppState.bazares.some(b => b.id === cajaSeleccion)) cajaSeleccion = "general";
+  if (document.activeElement !== sel) {
+    sel.innerHTML = `<option value="general">💰 Caja general (ventas sin bazar)</option>` +
+      AppState.bazares.map(b => `<option value="${b.id}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
+    sel.value = cajaSeleccion;
+  } else {
+    cajaSeleccion = sel.value;
+  }
+  const esGeneral = cajaSeleccion === "general";
+  const bazar = esGeneral ? null : AppState.bazares.find(b => b.id === cajaSeleccion);
+  const d = esGeneral ? desgloseCierreCajaGeneral() : desgloseCierreBazar(bazar);
+  document.getElementById("caja-total-vendido").textContent = fmt(d.totalVendido);
+  document.getElementById("caja-total-sub").textContent = esGeneral ? "ventas que no están ligadas a ningún bazar" : `ventas ligadas a ${bazar.nombre}`;
+  document.getElementById("caja-efectivo").textContent = fmt(d.ventasEfectivo);
+  document.getElementById("caja-tarjeta").textContent = fmt(d.ventasTarjeta);
+  document.getElementById("caja-comision-sub").textContent = `comisión de terminal: ${fmt(d.comisionTerminal)}`;
+  document.getElementById("caja-esperado").textContent = fmt(d.efectivoEsperado);
+  document.getElementById("caja-fondo-hint").textContent = esGeneral
+    ? "Cambio con el que abriste la caja."
+    : "Es el mismo fondo de caja de este bazar — se edita desde aquí o desde el bazar.";
+  setVal("caja-fondo", d.fondoCaja || "");
+  setVal("caja-contado", d.efectivoContado ?? "");
+  const difEl = document.getElementById("caja-diferencia");
+  if (d.diferencia === null) {
+    difEl.textContent = "Captura el efectivo contado para ver si cuadra la caja.";
+    difEl.style.color = "";
+  } else if (Math.abs(d.diferencia) < 0.01) {
+    difEl.textContent = "✅ La caja cuadra exacto.";
+    difEl.style.color = "var(--color-success)";
+  } else if (d.diferencia > 0) {
+    difEl.textContent = `Sobran ${fmt(d.diferencia)} respecto a lo esperado.`;
+    difEl.style.color = "var(--color-success)";
+  } else {
+    difEl.textContent = `⚠️ Faltan ${fmt(Math.abs(d.diferencia))} respecto a lo esperado.`;
+    difEl.style.color = "var(--color-danger)";
+  }
+}
+// Guarda el fondo de caja donde corresponda: en la caja general, o en el bazar elegido
+// (el mismo campo que usa el modal de bazar, para que ambos lugares queden sincronizados).
+function updateFondoCaja(value) {
+  const monto = value === "" ? 0 : Math.max(0, parseFloat(value) || 0);
+  if (cajaSeleccion === "general") {
+    AppState.cajaGeneral = Object.assign({ fondoCaja: 0, efectivoContado: null }, AppState.cajaGeneral, { fondoCaja: monto });
+  } else {
+    const b = AppState.bazares.find(x => x.id === cajaSeleccion);
+    if (b) b.fondoCaja = monto;
+  }
+  saveState(); renderCaja(); renderBazarDetalle();
+}
+function updateEfectivoContadoCaja(value) {
+  const monto = value === "" ? null : Math.max(0, parseFloat(value) || 0);
+  if (cajaSeleccion === "general") {
+    AppState.cajaGeneral = Object.assign({ fondoCaja: 0, efectivoContado: null }, AppState.cajaGeneral, { efectivoContado: monto });
+  } else {
+    const b = AppState.bazares.find(x => x.id === cajaSeleccion);
+    if (b) b.efectivoContado = monto;
+  }
+  saveState(); renderCaja(); renderBazarDetalle();
 }
 function renderBazares() {
   const body = document.getElementById("bazares-table-body");
@@ -1622,6 +1775,7 @@ function renderPlayeras() {
       <div class="card-row"><span>Costo playera</span><span>${p.prendaCliente ? "🎁 Prenda del cliente ($0.00)" : fmt(p.costoPlayera)}</span></div>
       <div class="card-row"><span>${etiquetaImpresion}${gastoLigado ? " (estimado)" : ""}</span><span>${fmt(cEst)}</span></div>
       ${gastoLigado ? `<div class="card-row"><span>🔗 Costo real (de "${escapeHtml(gastoLigado.concepto)}")</span><span style="color:var(--color-accent);">${fmt(p.costoImpresionManual)}</span></div>` : ""}
+      ${gastoLigado && gastoLigado.pctLlenado != null ? `<div class="card-meta">📐 Lote al ${gastoLigado.pctLlenado}% de llenado del rollo</div>` : ""}
       <div class="card-row"><span>Costo total</span><span>${fmt(cTotal)}</span></div>
       <div class="card-row"><span>Precio de venta</span><span>${fmt(p.precioVenta)}</span></div>
       ${p.precioMayoreo ? `<div class="card-row"><span>Precio mayoreo</span><span>${fmt(p.precioMayoreo)}</span></div>` : ""}
@@ -1752,7 +1906,7 @@ function renderStickers() {
         <span class="card-badge badge-media">${s.tamano}</span>
       </div>
       <div class="card-row"><span>Costo${gastoLigado ? " real" : ""}</span><span style="${gastoLigado ? "color:var(--color-accent);" : ""}">${fmt(s.costo)}</span></div>
-      ${gastoLigado ? `<div class="card-meta">🔗 vinculado a "${escapeHtml(gastoLigado.concepto)}"</div>` : ""}
+      ${gastoLigado ? `<div class="card-meta">🔗 vinculado a "${escapeHtml(gastoLigado.concepto)}"${gastoLigado.pctLlenado != null ? ` · lote al ${gastoLigado.pctLlenado}% de llenado` : ""}</div>` : ""}
       <div class="card-row"><span>Precio de venta</span><span>${fmt(s.precioVenta)}</span></div>
       <div class="card-row"><span>Ganancia</span><span style="color:${(s.precioVenta || 0) - (s.costo || 0) >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt((s.precioVenta || 0) - (s.costo || 0))}</span></div>
       <div class="card-row"><span>Stock</span><span>${s.stock} pza(s)</span></div>
@@ -2656,7 +2810,7 @@ function renderProduccionKanban() {
           </div>
           <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha}</div>
           ${tagsOpHtml ? `<div class="card-tags">${tagsOpHtml}</div>` : ""}
-          <select onchange="updateCotizacionProduccion('${c.id}', this.value)" style="width:100%;margin-top:6px;">
+          <select class="form-select" onchange="updateCotizacionProduccion('${c.id}', this.value)" style="width:100%;margin-top:6px;">
             ${ETAPAS_PRODUCCION.map(e => `<option value="${e}" ${e===etapa?"selected":""}>${e}</option>`).join("")}
           </select>
         </div>`;
@@ -3542,6 +3696,7 @@ export function renderAll() {
   renderComprasPendientes();
   renderBazares();
   renderConsignaciones();
+  renderCaja();
   renderAjustes();
   renderPlayeras();
   renderStickers();
@@ -3561,7 +3716,7 @@ Object.assign(window, {
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
   deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
-  deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada, desvincularCostoRealDePiezaBoton,
+  deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada, desvincularCostoRealDePiezaBoton, recalcularRepartoGasto,
   deleteMerma, deleteConsignacion,
   deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
@@ -3576,6 +3731,7 @@ Object.assign(window, {
   openModalIngresoExtra, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
   openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
   addBazarExpense, removeBazarExpense, updateBazarCostTotal, updateEfectivoContadoBazar, updateMermaCostoPreview,
+  renderCaja, updateFondoCaja, updateEfectivoContadoCaja,
   saveAsignarConsignacion, saveConsignacion, saveMerma,
   removeQuoteItem, removeQuoteSticker, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
   resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveCliente, saveClienteEtiqueta, saveColor, saveEtiqueta, saveEtiquetaOp,

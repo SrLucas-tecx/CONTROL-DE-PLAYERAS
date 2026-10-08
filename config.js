@@ -20,6 +20,7 @@ export function defaultState() {
       gangSheetBlancoSolidoPrecioMetro: 230,
       recargoUrgentePct: 20,
       comisionTerminalPct: 3.5,
+      umbralLlenadoPct: 30,
       moneda: "MXN"
     },
     colores: [
@@ -62,6 +63,7 @@ export function defaultState() {
     comprasPendientes: [],
     mermas: [],
     consignaciones: [],
+    cajaGeneral: { fondoCaja: 0, efectivoContado: null },
     etiquetasOperativas: [
       { id: "eo1", nombre: "Urgente", color: "#e3363d" },
       { id: "eo2", nombre: "Retrabajo", color: "#e0a23a" },

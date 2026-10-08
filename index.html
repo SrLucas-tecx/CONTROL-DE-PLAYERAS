@@ -45,6 +45,7 @@
       <button class="nav-item" data-page="proveedores">🚚 Proveedores</button>
       <button class="nav-item" data-page="bazares">🏪 Mis Bazares</button>
       <button class="nav-item" data-page="consignaciones">🤝 Consignaciones</button>
+      <button class="nav-item" data-page="caja">💰 Caja</button>
 
       <div class="nav-group-label">Finanzas</div>
       <button class="nav-item" data-page="gastos">💸 Gastos generales</button>
@@ -650,6 +651,59 @@
       <!-- ======================= /CONSIGNACIONES ======================= -->
 
 
+      <!-- ======================= CAJA (registradora) ======================= -->
+      <section id="page-caja" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Caja</h2>
+            <p class="section-sub">Cuánto llevas vendido y cuánto debería haber en tu caja — de un bazar en particular, o de tus ventas del día a día sin bazar.</p>
+          </div>
+          <div class="form-group" style="margin:0;min-width:240px;">
+            <select id="caja-selector" class="form-select" onchange="renderCaja()"></select>
+          </div>
+        </div>
+
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">💰 Total vendido</span>
+            <span class="sticker-count-value" id="caja-total-vendido">$0</span>
+            <span class="sticker-count-sub" id="caja-total-sub">sin contar ventas nulas</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">💵 Ventas en efectivo</span>
+            <span class="sticker-count-value" id="caja-efectivo">$0</span>
+            <span class="sticker-count-sub">lo cobrado en billetes</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">💳 Ventas con tarjeta</span>
+            <span class="sticker-count-value" id="caja-tarjeta">$0</span>
+            <span class="sticker-count-sub" id="caja-comision-sub">comisión de terminal: $0</span>
+          </div>
+          <div class="sticker-count-card sticker-count-net" style="background:var(--color-accent-soft);border-color:var(--color-accent);">
+            <span class="sticker-count-label">🧮 Debería haber en caja</span>
+            <span class="sticker-count-value" id="caja-esperado">$0</span>
+            <span class="sticker-count-sub">fondo de caja + ventas en efectivo</span>
+          </div>
+        </div>
+
+        <div class="quote-meta-card">
+          <div class="form-row">
+            <div class="form-group" id="caja-fondo-wrap">
+              <label class="form-label">Fondo de caja inicial ($)</label>
+              <input type="number" id="caja-fondo" class="form-input" min="0" step="0.01" placeholder="0.00" onchange="updateFondoCaja(this.value)">
+              <span class="form-hint" id="caja-fondo-hint">Cambio con el que abriste la caja.</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Efectivo contado ahora ($)</label>
+              <input type="number" id="caja-contado" class="form-input" min="0" step="0.01" placeholder="Cuenta tu caja para ver si cuadra" onchange="updateEfectivoContadoCaja(this.value)">
+            </div>
+          </div>
+          <p class="section-sub" id="caja-diferencia">Captura el efectivo contado para ver si cuadra la caja.</p>
+        </div>
+      </section>
+      <!-- ======================= /CAJA ======================= -->
+
+
       <!-- ======================= DETALLE DE UN BAZAR ======================= -->
       <section id="page-bazar-detalle" class="page-section">
         <div class="section-header" style="justify-content:space-between;">
@@ -984,6 +1038,17 @@
             <div class="form-group">
               <label class="form-label">Recargo por pedido urgente (%)</label>
               <input type="number" id="set-recargo-urgente" class="form-input" min="0" step="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Comisión de terminal (tarjeta) (%)</label>
+              <input type="number" id="set-comision-terminal" class="form-input" min="0" step="0.1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Alerta de llenado bajo del rollo (%)</label>
+              <input type="number" id="set-umbral-llenado" class="form-input" min="0" max="100" step="1">
+              <span class="form-hint">Si un lote ligado a un gasto usa menos de este % del rollo, se avisa que el costo por pieza se puede disparar.</span>
             </div>
           </div>
           <button class="btn-primary" onclick="saveSettings()">Guardar ajustes</button>
@@ -1631,13 +1696,21 @@
         <p class="section-sub" style="margin:4px 0 0;">Marca qué playeras o stickers (de diversos tamaños) salieron de esta compra.</p>
       </div>
       <div id="gasto-ligar-wrap" style="display:none;">
-        <div class="form-group">
-          <label class="form-label">Forma de repartir el costo</label>
-          <select id="gasto-reparto-modo" class="form-select" onchange="updateGastoLigarPreview()">
-            <option value="area">📐 Por área (recomendado — cada pieza paga según su tamaño)</option>
-            <option value="igual">⚖️ En partes iguales (todas pagan lo mismo)</option>
-          </select>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Forma de repartir el costo</label>
+            <select id="gasto-reparto-modo" class="form-select" onchange="updateGastoLigarPreview()">
+              <option value="area">📐 Por área (recomendado — cada pieza paga según su tamaño)</option>
+              <option value="igual">⚖️ En partes iguales (todas pagan lo mismo)</option>
+            </select>
+          </div>
+          <div class="form-group" id="gasto-metros-wrap">
+            <label class="form-label">Metros de rollo comprados</label>
+            <input type="number" id="gasto-metros" class="form-input" min="0.1" step="0.1" value="1" oninput="updateGastoLigarPreview()">
+            <span class="form-hint">Solo para calcular el % de llenado del rollo — no afecta el monto del gasto.</span>
+          </div>
         </div>
+        <p class="cost-preview" id="gasto-llenado-alerta" style="display:none;border-color:var(--color-danger);"></p>
         <div id="gasto-ligar-list" class="gasto-ligar-list"></div>
         <p class="cost-preview" id="gasto-ligar-preview">Selecciona playeras o stickers para ver el costo real por pieza.</p>
       </div>
