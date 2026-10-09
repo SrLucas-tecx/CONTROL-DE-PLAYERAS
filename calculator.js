@@ -556,3 +556,51 @@ export function agruparArtes() {
   });
   return Object.values(grupos).sort((a, b) => b.totalVendido - a.totalVendido);
 }
+
+/* ---------------------------------------------------------------
+   INTERÉS POR PRODUCTO (qué preguntaron más, no solo qué se vendió)
+--------------------------------------------------------------- */
+// Filtro de bazar para las consultas: "all" = todas, "none" = las registradas sin bazar,
+// o el id de un bazar específico.
+function consultaPasaFiltro(c, filtroBazar) {
+  if (!filtroBazar || filtroBazar === "all") return true;
+  if (filtroBazar === "none") return !c.bazarId;
+  return c.bazarId === filtroBazar;
+}
+// Nombre vigente de un producto consultado: si viene del inventario se usa su nombre
+// actual (por si lo renombraron); si fue escrito a mano, el texto capturado.
+export function nombreProductoConsulta(c) {
+  if (c.productoKey) {
+    const [tk, id] = c.productoKey.split(":");
+    const obj = tk === "p" ? AppState.playeras.find(x => x.id === id) : AppState.stickers.find(x => x.id === id);
+    if (obj) return obj.nombre;
+  }
+  return (c.nombre || "Sin nombre").trim() || "Sin nombre";
+}
+// Ranking de productos por número de veces que preguntaron por ellos (suma de `cantidad`).
+export function rankingConsultas(filtroBazar) {
+  const grupos = {};
+  AppState.consultas.filter(c => consultaPasaFiltro(c, filtroBazar)).forEach(c => {
+    const nombre = nombreProductoConsulta(c);
+    const key = c.productoKey || ("txt:" + nombre.toLowerCase());
+    if (!grupos[key]) grupos[key] = { key, nombre, productoKey: c.productoKey || "", total: 0 };
+    grupos[key].total += c.cantidad || 1;
+  });
+  return Object.values(grupos).sort((a, b) => b.total - a.total);
+}
+// Cuántas consultas hay por etiqueta (una consulta con varias etiquetas cuenta en cada una).
+export function consultasPorEtiqueta(filtroBazar) {
+  const grupos = {};
+  AppState.consultas.filter(c => consultaPasaFiltro(c, filtroBazar)).forEach(c => {
+    (c.tags || []).forEach(tid => {
+      const e = AppState.consultaEtiquetas.find(x => x.id === tid);
+      if (!e) return;
+      if (!grupos[tid]) grupos[tid] = { nombre: e.nombre, color: e.color, total: 0 };
+      grupos[tid].total += c.cantidad || 1;
+    });
+  });
+  return Object.values(grupos).sort((a, b) => b.total - a.total);
+}
+export function totalConsultas(filtroBazar) {
+  return AppState.consultas.filter(c => consultaPasaFiltro(c, filtroBazar)).reduce((s, c) => s + (c.cantidad || 1), 0);
+}

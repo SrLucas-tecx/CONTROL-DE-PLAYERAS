@@ -12,6 +12,7 @@ import {
   comisionTerminalMonto, saldoPendienteCliente, desgloseCierreBazar, desgloseCierreCajaGeneral, clienteNombre, statsCliente,
   totalMermas, totalMermasMesActual, totalMermasDeBazar, comisionConsignacion, statsConsignacion, nombreConsignacion,
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
+  rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
   totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra
 } from "./calculator.js";
@@ -75,6 +76,7 @@ const PAGE_TITLES = {
   bazares: "Mis Bazares",
   consignaciones: "Consignaciones",
   caja: "Caja",
+  interes: "Interés por producto",
   "bazar-detalle": "Detalle de bazar",
   estadisticas: "Estadísticas",
   ajustes: "Ajustes de costos"
@@ -88,6 +90,7 @@ export function switchPage(page) {
   document.getElementById("header-cta").style.display = page === "cotizador" ? "none" : "inline-block";
   if (page === "bazares") renderBazares();
   if (page === "caja") renderCaja();
+  if (page === "interes") renderInteres();
   if (page === "estadisticas") renderEstadisticas();
   if (page === "produccion") renderProduccionKanban();
   if (page === "clientes") renderClientes();
@@ -1331,6 +1334,202 @@ function updateEfectivoContadoCaja(value) {
   }
   saveState(); renderCaja(); renderBazarDetalle();
 }
+
+/* =================================================================
+   INTERÉS POR PRODUCTO (qué preguntaron más)
+================================================================= */
+let interesFiltro = "all";
+let chartInteresProductos = null;
+let chartInteresEtiquetas = null;
+function renderInteres() {
+  const sel = document.getElementById("interes-filtro");
+  if (!sel) return;
+  if (interesFiltro !== "all" && interesFiltro !== "none" && !AppState.bazares.some(b => b.id === interesFiltro)) interesFiltro = "all";
+  if (document.activeElement !== sel) {
+    sel.innerHTML = `<option value="all">Todas las consultas</option><option value="none">Solo sin bazar</option>` +
+      AppState.bazares.map(b => `<option value="${b.id}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
+    sel.value = interesFiltro;
+  } else {
+    interesFiltro = sel.value;
+  }
+  const ranking = rankingConsultas(interesFiltro);
+  document.getElementById("interes-total").textContent = totalConsultas(interesFiltro);
+  document.getElementById("interes-top").textContent = ranking.length ? ranking[0].nombre : "—";
+  document.getElementById("interes-top-sub").textContent = ranking.length ? `${ranking[0].total} consulta(s)` : "aún sin consultas";
+
+  // Etiquetas de consulta (chips con editar / eliminar)
+  const etGrid = document.getElementById("consulta-etiquetas-grid");
+  if (etGrid) {
+    etGrid.innerHTML = AppState.consultaEtiquetas.map(e => `
+      <div class="chip-item">
+        <span class="chip-swatch" style="background:${e.color}"></span>
+        <span>${escapeHtml(e.nombre)}</span>
+        <button onclick="openModalConsultaEtiqueta('${e.id}')" title="Editar">✏️</button>
+        <button onclick="deleteConsultaEtiqueta('${e.id}')" title="Eliminar">✕</button>
+      </div>`).join("");
+  }
+
+  // Gráfica: ranking de productos (top 10)
+  const top = ranking.slice(0, 10);
+  const cvP = document.getElementById("chart-interes-productos");
+  document.getElementById("chart-interes-productos-empty").style.display = top.length ? "none" : "block";
+  cvP.style.display = top.length ? "block" : "none";
+  if (chartInteresProductos) { chartInteresProductos.destroy(); chartInteresProductos = null; }
+  if (top.length && typeof Chart !== "undefined") {
+    chartInteresProductos = new Chart(cvP, {
+      type: "bar",
+      data: { labels: top.map(r => r.nombre), datasets: [{ label: "Consultas", data: top.map(r => r.total), backgroundColor: "#e3363d", borderRadius: 6 }] },
+      options: { indexAxis: "y", responsive: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+  }
+
+  // Gráfica: consultas por etiqueta
+  const porEtiqueta = consultasPorEtiqueta(interesFiltro);
+  const cvE = document.getElementById("chart-interes-etiquetas");
+  document.getElementById("chart-interes-etiquetas-empty").style.display = porEtiqueta.length ? "none" : "block";
+  cvE.style.display = porEtiqueta.length ? "block" : "none";
+  if (chartInteresEtiquetas) { chartInteresEtiquetas.destroy(); chartInteresEtiquetas = null; }
+  if (porEtiqueta.length && typeof Chart !== "undefined") {
+    chartInteresEtiquetas = new Chart(cvE, {
+      type: "doughnut",
+      data: { labels: porEtiqueta.map(e => e.nombre), datasets: [{ data: porEtiqueta.map(e => e.total), backgroundColor: porEtiqueta.map(e => e.color) }] },
+      options: { responsive: true }
+    });
+  }
+
+  // Ranking con botones para ajustar rápidamente el conteo.
+  document.getElementById("interes-ranking").innerHTML = ranking.map((r, i) => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">${i === 0 ? "🔥 " : ""}${escapeHtml(r.nombre)}</span>
+        <span class="card-badge badge-media">${r.total} consulta(s)</span>
+      </div>
+      <div class="card-actions">
+        <button class="danger" onclick="quickSubtractConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replace(/'/g, "\\'")}')">➖ −1 pregunta</button>
+        <button onclick="quickAddConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replace(/'/g, "\\'")}')">➕ +1 pregunta</button>
+      </div>
+    </div>`).join("") || `<p class="empty-hint">Todavía no registras consultas.</p>`;
+
+  // Historial reciente
+  const recientes = AppState.consultas
+    .filter(c => interesFiltro === "all" || (interesFiltro === "none" ? !c.bazarId : c.bazarId === interesFiltro))
+    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || b.id.localeCompare(a.id))
+    .slice(0, 15);
+  document.getElementById("interes-historial").innerHTML = recientes.map(c => `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">${escapeHtml(nombreProductoConsulta(c))}</span>
+        <span class="card-badge badge-media">×${c.cantidad || 1}</span>
+      </div>
+      <div class="card-meta">📅 ${escapeHtml(c.fecha || "—")}${c.bazarId ? ` · 🏪 ${escapeHtml(bazarNombre(c.bazarId))}` : ""}</div>
+      <div class="card-tags">${(c.tags || []).map(tid => {
+        const e = AppState.consultaEtiquetas.find(x => x.id === tid);
+        return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
+      }).join("")}</div>
+      ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
+      <div class="card-actions"><button class="danger" onclick="deleteConsulta('${c.id}')">🗑️ Eliminar</button></div>
+    </div>`).join("") || `<p class="empty-hint">Sin consultas registradas con este filtro.</p>`;
+}
+function openModalConsulta() {
+  const prod = document.getElementById("consulta-producto");
+  const opciones = [...AppState.playeras.map(p => ({ key: `p:${p.id}`, nombre: p.nombre, etiqueta: `👕 ${p.nombre}` })),
+                    ...AppState.stickers.map(s => ({ key: `s:${s.id}`, nombre: s.nombre, etiqueta: `🏷️ ${s.nombre}` }))]
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  prod.innerHTML = `<option value="">✍️ Otro (escribir nombre)</option>` +
+    opciones.map(o => `<option value="${o.key}">${escapeHtml(o.etiqueta)}</option>`).join("");
+  prod.value = "";
+  setVal("consulta-nombre", ""); setVal("consulta-cantidad", 1);
+  setVal("consulta-fecha", new Date().toISOString().slice(0, 10)); setVal("consulta-notas", "");
+  document.getElementById("consulta-bazar").innerHTML = `<option value="">— Sin bazar —</option>` +
+    AppState.bazares.map(b => `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`).join("");
+  // Si ya estás viendo un bazar específico en el filtro, lo preselecciona.
+  setVal("consulta-bazar", (interesFiltro !== "all" && interesFiltro !== "none") ? interesFiltro : "");
+  document.getElementById("consulta-tags-container").innerHTML = AppState.consultaEtiquetas.map(e => `
+    <label class="tag-checkbox" style="border-color:${e.color}">
+      <input type="checkbox" value="${e.id}" class="consulta-tag-cb"> ${escapeHtml(e.nombre)}
+    </label>`).join("") || `<span class="card-meta">Crea una etiqueta primero.</span>`;
+  onConsultaProductoChange();
+  openModal("modal-consulta");
+}
+function onConsultaProductoChange() {
+  document.getElementById("consulta-nombre-wrap").style.display = val("consulta-producto") ? "none" : "block";
+}
+function saveConsulta() {
+  const productoKey = val("consulta-producto");
+  let nombre = val("consulta-nombre").trim();
+  if (productoKey) {
+    const [tk, id] = productoKey.split(":");
+    const obj = tk === "p" ? AppState.playeras.find(x => x.id === id) : AppState.stickers.find(x => x.id === id);
+    nombre = obj ? obj.nombre : nombre;
+  }
+  if (!nombre) return showToast("Indica por qué producto preguntaron.", "error");
+  AppState.consultas.push({
+    id: uid(), productoKey, nombre,
+    cantidad: Math.max(1, parseInt(num("consulta-cantidad")) || 1),
+    fecha: val("consulta-fecha"), bazarId: val("consulta-bazar") || "",
+    tags: Array.from(document.querySelectorAll(".consulta-tag-cb:checked")).map(cb => cb.value),
+    notas: val("consulta-notas")
+  });
+  saveState(); closeModal("modal-consulta"); renderInteres();
+  showToast("Consulta registrada.");
+}
+// Registro rápido: suma una consulta más a un producto con un toque, ligada al bazar que
+// estés filtrando (o sin bazar si el filtro es "todas" / "sin bazar").
+function quickAddConsulta(productoKey, nombre) {
+  AppState.consultas.push({
+    id: uid(), productoKey: productoKey || "", nombre, cantidad: 1,
+    fecha: new Date().toISOString().slice(0, 10),
+    bazarId: (interesFiltro !== "all" && interesFiltro !== "none") ? interesFiltro : "",
+    tags: [], notas: ""
+  });
+  saveState(); renderInteres();
+}
+function quickSubtractConsulta(productoKey, nombre) {
+  const nombreNormalizado = nombre.trim().toLowerCase();
+  const consulta = AppState.consultas
+    .filter(c => (interesFiltro === "all" || (interesFiltro === "none" ? !c.bazarId : c.bazarId === interesFiltro)))
+    .filter(c => productoKey ? c.productoKey === productoKey :
+      !c.productoKey && nombreProductoConsulta(c).toLowerCase() === nombreNormalizado)
+    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || b.id.localeCompare(a.id))[0];
+  if (!consulta) return;
+
+  if ((consulta.cantidad || 1) > 1) consulta.cantidad -= 1;
+  else AppState.consultas = AppState.consultas.filter(c => c.id !== consulta.id);
+  saveState(); renderInteres();
+  showToast("Se restó una pregunta.");
+}
+function deleteConsulta(id) {
+  AppState.consultas = AppState.consultas.filter(x => x.id !== id);
+  saveState(); renderInteres();
+}
+function openModalConsultaEtiqueta(id) {
+  setVal("cqt-id", id || "");
+  document.getElementById("modal-consulta-etiqueta-title").textContent = id ? "Editar etiqueta de consulta" : "Nueva etiqueta de consulta";
+  if (id) {
+    const e = AppState.consultaEtiquetas.find(x => x.id === id);
+    setVal("cqt-nombre", e.nombre); setVal("cqt-color", e.color);
+  } else {
+    setVal("cqt-nombre", ""); setVal("cqt-color", "#e0a23a");
+  }
+  openModal("modal-consulta-etiqueta");
+}
+function saveConsultaEtiqueta() {
+  const nombre = val("cqt-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre a la etiqueta.", "error");
+  const id = val("cqt-id");
+  const data = { nombre, color: val("cqt-color") };
+  if (id) Object.assign(AppState.consultaEtiquetas.find(x => x.id === id), data);
+  else AppState.consultaEtiquetas.push(Object.assign({ id: uid() }, data));
+  saveState(); closeModal("modal-consulta-etiqueta"); renderInteres();
+  showToast("Etiqueta guardada.");
+}
+function deleteConsultaEtiqueta(id) {
+  if (!confirm("¿Eliminar esta etiqueta? Se quitará de las consultas que la usan.")) return;
+  AppState.consultaEtiquetas = AppState.consultaEtiquetas.filter(x => x.id !== id);
+  AppState.consultas.forEach(c => { c.tags = (c.tags || []).filter(t => t !== id); });
+  saveState(); renderInteres();
+}
+
 function renderBazares() {
   const body = document.getElementById("bazares-table-body");
   document.getElementById("bazares-empty-hint").style.display = AppState.bazares.length ? "none" : "block";
@@ -3697,6 +3896,7 @@ export function renderAll() {
   renderBazares();
   renderConsignaciones();
   renderCaja();
+  renderInteres();
   renderAjustes();
   renderPlayeras();
   renderStickers();
@@ -3732,6 +3932,8 @@ Object.assign(window, {
   openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
   addBazarExpense, removeBazarExpense, updateBazarCostTotal, updateEfectivoContadoBazar, updateMermaCostoPreview,
   renderCaja, updateFondoCaja, updateEfectivoContadoCaja,
+  renderInteres, openModalConsulta, onConsultaProductoChange, saveConsulta, quickAddConsulta, quickSubtractConsulta, deleteConsulta,
+  openModalConsultaEtiqueta, saveConsultaEtiqueta, deleteConsultaEtiqueta,
   saveAsignarConsignacion, saveConsignacion, saveMerma,
   removeQuoteItem, removeQuoteSticker, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
   resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveCliente, saveClienteEtiqueta, saveColor, saveEtiqueta, saveEtiquetaOp,

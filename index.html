@@ -54,6 +54,7 @@
 
       <div class="nav-group-label">Reportes</div>
       <button class="nav-item" data-page="estadisticas">📊 Estadísticas</button>
+      <button class="nav-item" data-page="interes">❓ Interés por producto</button>
 
       <div class="nav-group-label">Sistema</div>
       <button class="nav-item" data-page="ajustes">⚙️ Ajustes de costos</button>
@@ -702,6 +703,60 @@
         </div>
       </section>
       <!-- ======================= /CAJA ======================= -->
+
+      <!-- ======================= INTERÉS POR PRODUCTO ======================= -->
+      <section id="page-interes" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Interés por producto</h2>
+            <p class="section-sub">Qué diseños preguntan más los clientes, aunque no los compren. Úsalo en un bazar o fuera de él.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="interes-filtro" class="form-select" onchange="renderInteres()"></select>
+            <button class="btn-primary" onclick="openModalConsulta()">+ Registrar consulta</button>
+          </div>
+        </div>
+
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">❓ Consultas totales</span>
+            <span class="sticker-count-value" id="interes-total">0</span>
+            <span class="sticker-count-sub">según el filtro elegido</span>
+          </div>
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">🔥 Producto más preguntado</span>
+            <span class="sticker-count-value" id="interes-top" style="font-size:var(--fs-lg);">—</span>
+            <span class="sticker-count-sub" id="interes-top-sub">aún sin consultas</span>
+          </div>
+        </div>
+
+        <div class="chips-grid" style="align-items:center;justify-content:space-between;">
+          <span class="form-label" style="margin:0;">Etiquetas de consulta</span>
+          <button class="btn-secondary" onclick="openModalConsultaEtiqueta()">🏷️ + Etiqueta</button>
+        </div>
+        <div id="consulta-etiquetas-grid" class="chips-grid"></div>
+
+        <div class="cards-grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr));">
+          <div class="card">
+            <div class="card-top"><span class="card-title">🏆 Ranking de productos</span></div>
+            <canvas id="chart-interes-productos" height="220"></canvas>
+            <p class="empty-hint" id="chart-interes-productos-empty">Registra consultas para ver el ranking.</p>
+          </div>
+          <div class="card">
+            <div class="card-top"><span class="card-title">🏷️ Consultas por etiqueta</span></div>
+            <canvas id="chart-interes-etiquetas" height="220"></canvas>
+            <p class="empty-hint" id="chart-interes-etiquetas-empty">Aún no hay consultas con etiquetas.</p>
+          </div>
+        </div>
+
+        <h3 class="section-title" style="font-size:var(--fs-md);margin:var(--space-5) 0 var(--space-3);">Ranking (suma un "+1" con un toque)</h3>
+        <div id="interes-ranking" class="cards-grid"></div>
+
+        <h3 class="section-title" style="font-size:var(--fs-md);margin:var(--space-5) 0 var(--space-3);">Últimas consultas</h3>
+        <div id="interes-historial" class="cards-grid"></div>
+      </section>
+      <!-- ======================= /INTERÉS POR PRODUCTO ======================= -->
+
 
 
       <!-- ======================= DETALLE DE UN BAZAR ======================= -->
@@ -1563,6 +1618,76 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-cliente-etiqueta">Cancelar</button>
       <button class="btn-primary" onclick="saveClienteEtiqueta()">Guardar etiqueta</button>
+    </div>
+  </div>
+</div>
+
+
+<div class="modal-overlay" id="modal-consulta">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Registrar consulta</h2>
+      <button class="modal-close" data-modal="modal-consulta">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Producto</label>
+        <select id="consulta-producto" class="form-select" onchange="onConsultaProductoChange()"></select>
+      </div>
+      <div class="form-group" id="consulta-nombre-wrap">
+        <label class="form-label">Nombre del producto</label>
+        <input type="text" id="consulta-nombre" class="form-input" placeholder="Ej. Diseño que no tengo en inventario">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">¿Cuántas veces preguntaron?</label>
+          <input type="number" id="consulta-cantidad" class="form-input" min="1" step="1" value="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input type="date" id="consulta-fecha" class="form-input">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bazar (opcional)</label>
+        <select id="consulta-bazar" class="form-select"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Etiquetas</label>
+        <div id="consulta-tags-container" class="tag-checkbox-list"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <input type="text" id="consulta-notas" class="form-input" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-consulta">Cancelar</button>
+      <button class="btn-primary" onclick="saveConsulta()">Guardar consulta</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-consulta-etiqueta">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-consulta-etiqueta-title">Nueva etiqueta de consulta</h2>
+      <button class="modal-close" data-modal="modal-consulta-etiqueta">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cqt-id">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="cqt-nombre" class="form-input" placeholder="Ej. Preguntó por envío">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Color</label>
+        <input type="color" id="cqt-color" class="form-input" value="#e0a23a">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-consulta-etiqueta">Cancelar</button>
+      <button class="btn-primary" onclick="saveConsultaEtiqueta()">Guardar etiqueta</button>
     </div>
   </div>
 </div>

@@ -82,7 +82,7 @@ export function getSectionData(section) {
     catalogo: { colores: AppState.colores, etiquetas: AppState.etiquetas, tallaEtiquetas: AppState.tallaEtiquetas, artistas: AppState.artistas, proveedores: AppState.proveedores, etiquetasOperativas: AppState.etiquetasOperativas, clientes: AppState.clientes, clienteEtiquetas: AppState.clienteEtiquetas },
     finanzas: { gastos: AppState.gastos, comprasPendientes: AppState.comprasPendientes, mermas: AppState.mermas },
     bazares: { bazares: AppState.bazares, consignaciones: AppState.consignaciones, cajaGeneral: AppState.cajaGeneral },
-    reportes: { graficas: AppState.graficas },
+    reportes: { graficas: AppState.graficas, consultas: AppState.consultas, consultaEtiquetas: AppState.consultaEtiquetas },
     ajustes: { settings: AppState.settings }
   };
   return sections[section] || {};

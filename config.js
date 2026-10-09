@@ -64,6 +64,14 @@ export function defaultState() {
     mermas: [],
     consignaciones: [],
     cajaGeneral: { fondoCaja: 0, efectivoContado: null },
+    consultas: [],
+    consultaEtiquetas: [
+      { id: "cq1", nombre: "Preguntó precio", color: "#e0a23a" },
+      { id: "cq2", nombre: "Pidió otra talla", color: "#5d8bd8" },
+      { id: "cq3", nombre: "Pidió otro color", color: "#c56bdb" },
+      { id: "cq4", nombre: "No lo teníamos", color: "#e3363d" },
+      { id: "cq5", nombre: "Muy interesado", color: "#3fb87f" }
+    ],
     etiquetasOperativas: [
       { id: "eo1", nombre: "Urgente", color: "#e3363d" },
       { id: "eo2", nombre: "Retrabajo", color: "#e0a23a" },
