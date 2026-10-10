@@ -108,10 +108,21 @@
 
       <!-- ======================= COTIZADOR RÁPIDO ======================= -->
       <section id="page-cotizador" class="page-section active">
+        <input type="hidden" id="quote-editing-id">
 
-        <div class="quote-meta-card">
-          <input type="hidden" id="quote-editing-id">
-          <div class="form-row">
+        <!-- Barra de pasos -->
+        <nav class="quote-stepper" id="quote-stepper" aria-label="Pasos de la cotización">
+          <button type="button" class="qstep active" data-step="1"><span class="qstep-num">1</span><span class="qstep-label">Cliente</span></button>
+          <button type="button" class="qstep" data-step="2"><span class="qstep-num">2</span><span class="qstep-label">Prendas</span><span class="qstep-badge" id="qstep-badge-2"></span></button>
+          <button type="button" class="qstep" data-step="3"><span class="qstep-num">3</span><span class="qstep-label">Extras y pago</span><span class="qstep-badge" id="qstep-badge-3"></span></button>
+          <button type="button" class="qstep" data-step="4"><span class="qstep-num">4</span><span class="qstep-label">Resumen</span></button>
+        </nav>
+
+        <!-- PASO 1: CLIENTE Y PEDIDO -->
+        <div class="quote-step active" data-step="1">
+          <div class="quote-meta-card">
+            <h2 class="quote-step-title">Cliente y pedido</h2>
+            <div class="form-row">
             <div class="form-group">
               <label class="form-label">Cliente guardado (opcional)</label>
               <select id="q-cliente-select" class="form-select" onchange="onQuoteClienteSelectChange(this.value)"><option value="">— Cliente nuevo / sin guardar —</option></select>
@@ -143,6 +154,62 @@
             </div>
           </div>
           <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Tipo de venta</label>
+                <select id="q-tipo-venta" class="form-select" onchange="onQuoteTipoVentaChange()">
+                  <option value="Menudeo">🛍️ Menudeo</option>
+                  <option value="Mayoreo">📦 Mayoreo</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+            <label class="form-label">Etiquetas operativas</label>
+            <div id="q-tags-operativos-container" class="tag-checkbox-list"></div>
+          </div>
+          
+          </div>
+        </div>
+
+        <!-- PASO 2: PRENDAS -->
+        <div class="quote-step" data-step="2">
+          <div class="section-header" style="justify-content:space-between;">
+            <h2 class="quote-step-title" style="margin:0;">Prendas de la cotización</h2>
+            <button class="btn-secondary" onclick="addQuoteItem()">+ Agregar prenda</button>
+          </div>
+          <div id="quote-items-list" class="quote-items-list"></div>
+          <div class="quote-add-space" id="quote-add-space">
+            <span class="quote-add-space-icon">👕</span>
+            <strong>Agrega prendas a esta cotización</strong>
+            <span>Selecciona una playera del inventario o captura una prenda personalizada.</span>
+            <button class="btn-primary" onclick="addQuoteItem()">+ Agregar prenda</button>
+          </div>
+
+          <details class="quote-fold" id="quote-stickers-fold">
+            <summary>✂️ Stickers de la cotización</summary>
+            <div class="quote-fold-body">
+              <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-3);">
+                <button class="btn-secondary" onclick="addQuoteSticker()">+ Agregar sticker</button>
+              </div>
+              <div class="quote-table-wrap">
+          <table class="quote-table quote-stickers-table">
+            <thead>
+              <tr><th>Producto</th><th>Tamaño</th><th>Ancho (cm)</th><th>Largo (cm)</th><th>Cant.</th><th>Costo producción c/u</th><th>Precio venta c/u</th><th>Ganancia</th><th></th></tr>
+            </thead>
+            <tbody id="quote-stickers-body"></tbody>
+          </table>
+          <p class="empty-hint" id="quote-stickers-empty">No agregas stickers a esta cotización.</p>
+        </div>
+
+        
+            </div>
+          </details>
+        </div>
+
+        <!-- PASO 3: EXTRAS Y PAGO -->
+        <div class="quote-step" data-step="3">
+          <div class="quote-meta-card">
+            <h2 class="quote-step-title">Pago y ajustes</h2>
+            <div class="form-row">
             <div class="form-group">
               <label class="form-label">Método de pago</label>
               <select id="q-metodo-pago" class="form-select" onchange="onQuoteMetodoPagoChange()">
@@ -162,29 +229,21 @@
             </div>
           </div>
           <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Tipo de venta</label>
-              <select id="q-tipo-venta" class="form-select" onchange="onQuoteTipoVentaChange()">
-                <option value="Menudeo">🛍️ Menudeo</option>
-                <option value="Mayoreo">📦 Mayoreo</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex:2;min-width:260px;">
-              <label class="form-label">&nbsp;</label>
-              <div class="form-switch" style="background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3);">
-                <span class="switch-label">🎁 Venta nula (regalo / cortesía, no cuenta como ingreso)</span>
-                <label class="switch">
-                  <input type="checkbox" id="q-venta-nula" onchange="onQuoteVentaNulaChange()">
-                  <span class="slider"></span>
-                </label>
+              <div class="form-group" style="flex:2;min-width:260px;">
+                <div class="form-switch" style="background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3);">
+                  <span class="switch-label">🎁 Venta nula (regalo / cortesía, no cuenta como ingreso)</span>
+                  <label class="switch">
+                    <input type="checkbox" id="q-venta-nula" onchange="onQuoteVentaNulaChange()">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="form-group" id="q-venta-nula-motivo-wrap" style="display:none;">
+                <label class="form-label">Motivo</label>
+                <input type="text" id="q-venta-nula-motivo" class="form-input" placeholder="Ej. regalo de cumpleaños">
               </div>
             </div>
-            <div class="form-group" id="q-venta-nula-motivo-wrap" style="display:none;">
-              <label class="form-label">Motivo</label>
-              <input type="text" id="q-venta-nula-motivo" class="form-input" placeholder="Ej. regalo de cumpleaños">
-            </div>
-          </div>
-          <div class="form-row">
+            <div class="form-row">
             <div class="form-group">
               <label class="form-label">Descuento (0% – 15%)</label>
               <input type="number" id="q-descuento-pct" class="form-input" min="0" max="15" step="1" value="0" oninput="updateQuoteSummary()">
@@ -200,61 +259,9 @@
               </div>
             </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Etiquetas operativas</label>
-            <div id="q-tags-operativos-container" class="tag-checkbox-list"></div>
+          
           </div>
-          <p class="cost-preview" style="margin-bottom:0;">🏪 Este cotizador ya no asigna el bazar. Cuando guardes la cotización, ve a “Cotizaciones guardadas” y usa el botón <b>🏪 Asignar a bazar</b> para ligarla al bazar donde la vendiste.</p>
-        </div>
-
-        <div class="section-header" style="justify-content:space-between;">
-          <h2 class="section-title">Prendas de la cotización</h2>
-          <button class="btn-secondary" onclick="addQuoteItem()">+ Agregar prenda</button>
-        </div>
-
-        <div class="quote-table-wrap">
-          <table class="quote-table">
-            <thead>
-              <tr>
-                <th style="min-width:170px;">Producto</th>
-                <th>Tipo de prenda</th>
-                <th>Talla</th>
-                <th>Color</th>
-                <th>Cant.</th>
-                <th title="Prenda del cliente">🎁 Prenda cliente</th>
-                <th>Costo playera</th>
-                <th>Impresión (área / Gang Sheet)</th>
-                <th>Precio venta c/u</th>
-                <th>Ganancia</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="quote-items-body"></tbody>
-          </table>
-          <p class="empty-hint" id="quote-empty-hint">Aún no agregas prendas. Usa “+ Agregar prenda” — puedes añadir todas las que necesites.</p>
-          <div class="quote-add-space" id="quote-add-space">
-            <span class="quote-add-space-icon">👕</span>
-            <strong>Agrega prendas a esta cotización</strong>
-            <span>Selecciona una playera del inventario o captura una prenda personalizada.</span>
-            <button class="btn-primary" onclick="addQuoteItem()">+ Agregar prenda</button>
-          </div>
-        </div>
-
-        <div class="section-header" style="justify-content:space-between;margin-top:24px;">
-          <h2 class="section-title">Stickers de la cotización</h2>
-          <button class="btn-secondary" onclick="addQuoteSticker()">+ Agregar sticker</button>
-        </div>
-        <div class="quote-table-wrap">
-          <table class="quote-table quote-stickers-table">
-            <thead>
-              <tr><th>Producto</th><th>Tamaño</th><th>Ancho (cm)</th><th>Largo (cm)</th><th>Cant.</th><th>Costo producción c/u</th><th>Precio venta c/u</th><th>Ganancia</th><th></th></tr>
-            </thead>
-            <tbody id="quote-stickers-body"></tbody>
-          </table>
-          <p class="empty-hint" id="quote-stickers-empty">No agregas stickers a esta cotización.</p>
-        </div>
-
-        <div class="section-header" style="justify-content:space-between;margin-top:24px;">
+          <div class="section-header" style="justify-content:space-between;margin-top:24px;">
           <h2 class="section-title">Servicios extra</h2>
           <button class="btn-secondary" onclick="openModalServicioExtra()">+ Agregar servicio extra</button>
         </div>
@@ -268,7 +275,13 @@
         </div>
         <p class="empty-hint" id="quote-servicios-extra-empty">Sin servicios extra en esta cotización (planchado especial, empaque, envío, etc.).</p>
 
-        <div class="quote-summary">
+        
+        </div>
+
+        <!-- PASO 4: RESUMEN -->
+        <div class="quote-step" data-step="4">
+          <h2 class="quote-step-title">Resumen</h2>
+          <div class="quote-summary">
           <div class="summary-card">
             <span class="summary-label">Total de venta</span>
             <span class="summary-value" id="sum-venta">$0.00</span>
@@ -323,6 +336,23 @@
           <button class="btn-secondary" onclick="resetQuoteForm()">🗑️ Nueva cotización</button>
           <button class="btn-primary" onclick="openPreviewCotizacion()">📤 Vista previa / Compartir</button>
           <button class="btn-primary" onclick="saveQuote()">💾 Guardar cotización</button>
+        </div>
+
+
+          <p class="cost-preview">🏪 Este cotizador ya no asigna el bazar. Cuando guardes la cotización, ve a “Cotizaciones guardadas” y usa el botón <b>🏪 Asignar a bazar</b> para ligarla al bazar donde la vendiste.</p>
+
+        </div>
+
+        <!-- Barra fija inferior: totales + navegación -->
+        <div class="quote-bar" id="quote-bar">
+          <div class="quote-bar-totals">
+            <div><span class="qb-label">Total</span><b id="qb-total">$0.00</b></div>
+            <div><span class="qb-label">Ganancia</span><b id="qb-ganancia">$0.00</b></div>
+          </div>
+          <div class="quote-bar-nav">
+            <button type="button" class="btn-secondary" id="qb-prev">← Atrás</button>
+            <button type="button" class="btn-primary" id="qb-next">Siguiente →</button>
+          </div>
         </div>
 
       </section>
@@ -411,7 +441,16 @@
       <!-- ======================= INVENTARIO PLAYERAS ======================= -->
       <section id="page-playeras" class="page-section">
         <div id="playeras-sorpresa-alerta"></div>
-        <div class="filter-bar">
+        <div class="inv-toolbar">
+          <button type="button" class="btn-secondary" id="inv-filtros-btn" onclick="toggleFiltrosPlayeras()" aria-expanded="false">🔎 Filtros <span class="inv-count" id="inv-filtros-count" style="display:none;"></span></button>
+          <button type="button" class="btn-secondary" id="inv-filtros-limpiar" onclick="limpiarFiltrosPlayeras()" style="display:none;">Limpiar filtros</button>
+          <div class="view-toggle" id="inv-vista-toggle">
+            <button type="button" data-vista="cuadricula" onclick="cambiarVistaPlayeras('cuadricula')" title="Ver en cuadrícula">▦</button>
+            <button type="button" data-vista="lista" onclick="cambiarVistaPlayeras('lista')" title="Ver en lista">☰</button>
+          </div>
+          <button class="btn-primary" style="margin-left:auto;" onclick="openModalPlayera()">+ Nueva playera</button>
+        </div>
+        <div class="filter-bar filter-panel" id="inv-filtros-panel">
           <button class="filter-chip active" data-tag="all" onclick="setPlayeraTagFilter('all',this)">Todas las etiquetas</button>
           <div id="playera-tag-chips" style="display:inline-flex;gap:8px;flex-wrap:wrap;"></div>
           <select class="filter-select" id="filter-playera-estado" onchange="renderPlayeras()">
@@ -426,7 +465,6 @@
           <select class="filter-select" id="filter-playera-talla" onchange="renderPlayeras()">
             <option value="all">Todas las tallas</option>
           </select>
-          <button class="btn-primary" style="margin-left:auto;" onclick="openModalPlayera()">+ Nueva playera</button>
         </div>
         <div id="playeras-grid" class="cards-grid"></div>
         <p class="empty-hint" id="playeras-empty-hint">No hay playeras registradas todavía.</p>
@@ -2135,6 +2173,74 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-servicio-extra">Cancelar</button>
       <button class="btn-primary" onclick="saveServicioExtra()">Guardar servicio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR PRENDA DE LA COTIZACIÓN -->
+<div class="modal-overlay" id="modal-quote-prenda">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="qp-title">Prenda</h2>
+      <button class="modal-close" data-modal="modal-quote-prenda">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Producto</label>
+        <select id="qp-producto" class="form-select" onchange="onQuotePrendaProductoChange(this.value)"></select>
+      </div>
+      <div class="form-group" id="qp-nombre-wrap">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="qp-nombre" class="form-input" placeholder="Nombre de la prenda" onchange="updateQuotePrendaField('nombre', this.value)">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo de prenda</label>
+          <select id="qp-tipo" class="form-select" onchange="updateQuotePrendaField('tipo', this.value)"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Talla</label>
+          <input type="text" id="qp-talla" class="form-input" onchange="updateQuotePrendaField('talla', this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <select id="qp-color" class="form-select" onchange="updateQuotePrendaField('colorId', this.value)"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cantidad</label>
+          <input type="number" id="qp-cantidad" class="form-input" min="1" step="1" onchange="updateQuotePrendaField('cantidad', this.value)">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <div class="form-switch">
+            <span class="switch-label">🎁 Prenda del cliente (costo $0.00)</span>
+            <label class="switch">
+              <input type="checkbox" id="qp-prenda-cliente" onchange="onQuotePrendaClienteChange(this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Costo de la playera ($)</label>
+          <input type="number" id="qp-costo" class="form-input" min="0" step="0.01" onchange="updateQuotePrendaField('costoPlayera', this.value)">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Impresión</label>
+          <button type="button" class="area-edit-btn" id="qp-impresion-btn" onclick="abrirImpresionDesdePrenda()" style="padding:var(--space-3);width:100%;text-align:left;">—</button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Precio de venta c/u ($)</label>
+          <input type="number" id="qp-precio" class="form-input" min="0" step="0.01" onchange="updateQuotePrendaField('precioVenta', this.value)">
+        </div>
+      </div>
+      <p class="cost-preview" id="qp-preview">—</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" onclick="quitarPrendaDesdeModal()" style="margin-right:auto;">🗑️ Quitar prenda</button>
+      <button class="btn-primary" data-modal="modal-quote-prenda">Listo</button>
     </div>
   </div>
 </div>

@@ -1,0 +1,256 @@
+/* ============================================================
+   LUCXSTUDIO — redesign.css  (Rediseño · Sprint 1)
+   Se carga DESPUÉS de styles.css (lo inyecta nav.js).
+   Solo sobreescribe lo necesario; no hay que tocar styles.css.
+   ============================================================ */
+
+/* ============ MENÚ LATERAL: 6 SECCIONES ============ */
+.sidebar-nav{padding:var(--space-2) var(--space-3);display:flex;flex-direction:column;gap:var(--space-1);}
+.sidebar-nav .nav-item{
+  gap:var(--space-3);padding:var(--space-3) var(--space-4);
+  font-size:var(--fs-base);border-radius:var(--radius-md);
+  border-left:3px solid transparent;
+}
+.sidebar-nav .nav-ico{font-size:1.2rem;width:1.7rem;text-align:center;flex-shrink:0;}
+.sidebar-nav .nav-item.active{
+  border-left-color:var(--color-accent);
+  background:var(--color-accent-soft);color:var(--color-text);
+}
+.sidebar-nav .nav-item:focus-visible,
+.subnav-tab:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;}
+
+/* ============ PESTAÑAS DE LA SECCIÓN ============ */
+.subnav{
+  display:flex;gap:var(--space-1);overflow-x:auto;
+  margin:0 0 var(--space-5);
+  border-bottom:1px solid var(--color-border);
+  scrollbar-width:none;
+}
+.subnav::-webkit-scrollbar{display:none;}
+.subnav-tab{
+  flex-shrink:0;padding:var(--space-3) var(--space-4);
+  font-size:var(--fs-sm);font-weight:700;color:var(--color-text-muted);
+  border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;
+  transition:color var(--transition),border-color var(--transition);
+}
+.subnav-tab:hover{color:var(--color-text);}
+.subnav-tab.active{color:var(--color-accent);border-bottom-color:var(--color-accent);}
+
+/* ============ MODALES: MÁS LIGEROS ============ */
+body.modal-open{overflow:hidden;}
+.modal-overlay{background:rgba(8,8,10,.66);backdrop-filter:blur(3px);}
+.modal-overlay.open{animation:overlayin .18s ease;}
+.modal-overlay.open .modal-box{animation:modalin .22s cubic-bezier(.2,.8,.3,1);}
+.confirm-overlay{z-index:150;align-items:center;}
+.modal-header{padding:var(--space-4) var(--space-5);}
+.modal-title{
+  font-size:var(--fs-lg);letter-spacing:-.01em;line-height:1.2;
+}
+.modal-body{padding:var(--space-5);}
+.modal-footer{padding:var(--space-4) var(--space-5);}
+@keyframes overlayin{from{opacity:0;}to{opacity:1;}}
+@keyframes modalin{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:none;}}
+
+/* ============ POP-UP DE DETALLE RÁPIDO ============ */
+.qd-box{max-width:440px;min-height:0;}
+.qd-hero{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);}
+.qd-icon{
+  width:44px;height:44px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:1.4rem;
+  background:var(--color-accent-soft);
+}
+.qd-subtitle{font-size:var(--fs-base);color:var(--color-text-muted);line-height:1.4;}
+.qd-section{margin-bottom:var(--space-4);}
+.qd-section-title{font-weight:700;font-size:var(--fs-sm);margin-bottom:var(--space-2);}
+.qd-row{
+  display:flex;justify-content:space-between;gap:var(--space-4);
+  padding:var(--space-2) 0;border-top:1px dashed var(--color-border);font-size:var(--fs-sm);
+}
+.qd-label{color:var(--color-text-muted);}
+.qd-value{font-weight:700;text-align:right;}
+.qd-row.tone-good .qd-value{color:var(--color-success);}
+.qd-row.tone-bad .qd-value{color:var(--color-danger);}
+.qd-row.tone-accent .qd-value{color:var(--color-accent);}
+.qd-text{font-size:var(--fs-base);line-height:1.5;color:var(--color-text-muted);}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:900px){
+  .subnav{margin-left:calc(var(--space-4) * -1);margin-right:calc(var(--space-4) * -1);padding:0 var(--space-4);}
+  .modal-overlay{padding:var(--space-4) var(--space-3);}
+}
+
+/* ============ ACCESIBILIDAD: MENOS MOVIMIENTO ============ */
+@media (prefers-reduced-motion:reduce){
+  .modal-overlay.open,
+  .modal-overlay.open .modal-box{animation:none;}
+}
+
+/* ============================================================
+   SPRINT 2 — INVENTARIO LIMPIO
+   ============================================================ */
+
+/* ---- Barra superior: filtros + vista + nueva ---- */
+.inv-toolbar{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-4);}
+.inv-count{
+  display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;
+  margin-left:6px;border-radius:var(--radius-full);background:var(--color-accent);color:#fff;
+  font-size:var(--fs-xs);font-weight:800;
+}
+.view-toggle{display:inline-flex;border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden;}
+.view-toggle button{
+  padding:var(--space-2) var(--space-4);font-size:var(--fs-md);color:var(--color-text-muted);
+  background:var(--color-surface-alt);
+}
+.view-toggle button + button{border-left:1px solid var(--color-border);}
+.view-toggle button.active{background:var(--color-accent-soft);color:var(--color-accent);}
+
+/* ---- Panel de filtros desplegable ---- */
+.filter-bar.filter-panel{
+  display:none;padding:var(--space-4);margin-bottom:var(--space-4);
+  background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+}
+.filter-bar.filter-panel.open{display:flex;animation:overlayin .18s ease;}
+
+/* ---- Tarjeta compacta de playera ---- */
+.pcard{
+  display:grid;grid-template-columns:auto minmax(0,1fr);
+  gap:var(--space-3);align-items:center;padding:var(--space-4);
+}
+.pcard-swatch{
+  width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  border:1px solid var(--color-border);box-shadow:inset 0 0 0 2px var(--color-surface);
+}
+.pcard-main{min-width:0;display:flex;flex-direction:column;gap:2px;}
+.pcard-name{
+  font-family:var(--font-display);font-weight:700;font-size:var(--fs-md);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.pcard-meta{font-size:var(--fs-xs);color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pcard .card-tags{margin-top:4px;}
+.pcard-nums{
+  grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:var(--space-2);padding-top:var(--space-3);border-top:1px dashed var(--color-border);
+}
+.pcard-num{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.pcard-num-label{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.pcard-num-value{font-weight:800;font-size:var(--fs-md);white-space:nowrap;}
+.pcard-actions{grid-column:1 / -1;display:flex;gap:var(--space-2);}
+.pcard-actions .btn-primary,
+.pcard-actions .btn-secondary{padding:var(--space-2) var(--space-4);font-size:var(--fs-sm);}
+.pcard-more{flex:1;}
+
+/* ---- Vista en lista: una fila por playera ---- */
+.cards-grid.vista-lista{grid-template-columns:1fr;gap:var(--space-2);}
+.vista-lista .pcard{
+  grid-template-columns:auto minmax(0,2fr) minmax(0,2fr) auto;
+  padding:var(--space-3) var(--space-4);
+}
+.vista-lista .pcard-nums{grid-column:auto;border-top:none;padding-top:0;}
+.vista-lista .pcard-actions{grid-column:auto;}
+.vista-lista .pcard .card-tags{display:none;}
+
+@media (max-width:760px){
+  .vista-lista .pcard{grid-template-columns:auto minmax(0,1fr);}
+  .vista-lista .pcard-nums{grid-column:1 / -1;border-top:1px dashed var(--color-border);padding-top:var(--space-3);}
+  .vista-lista .pcard-actions{grid-column:1 / -1;}
+  .vista-lista .pcard .card-tags{display:flex;}
+}
+
+/* ============================================================
+   SPRINT 3 — COTIZADOR POR PASOS
+   ============================================================ */
+
+/* ---- Barra de pasos ---- */
+.quote-stepper{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2);
+  margin-bottom:var(--space-5);
+}
+.qstep{
+  display:flex;align-items:center;gap:var(--space-2);padding:var(--space-3) var(--space-4);
+  border-radius:var(--radius-md);background:var(--color-surface);border:1px solid var(--color-border);
+  font-size:var(--fs-sm);font-weight:700;color:var(--color-text-muted);text-align:left;
+  transition:border-color var(--transition),color var(--transition),background var(--transition);
+}
+.qstep:hover{border-color:var(--color-gray);}
+.qstep-num{
+  width:24px;height:24px;border-radius:50%;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--color-surface-alt);border:1px solid var(--color-border);font-size:var(--fs-xs);
+}
+.qstep-label{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.qstep-badge{
+  display:none;min-width:20px;height:20px;padding:0 6px;margin-left:auto;border-radius:var(--radius-full);
+  align-items:center;justify-content:center;background:var(--color-gray-soft);color:var(--color-text);
+  font-size:var(--fs-xs);font-weight:800;
+}
+.qstep.active{border-color:var(--color-accent);color:var(--color-text);background:var(--color-accent-soft);}
+.qstep.active .qstep-num{background:var(--color-accent);border-color:var(--color-accent);color:#fff;}
+.qstep.done .qstep-num{background:var(--color-success-soft);border-color:var(--color-success);color:var(--color-success);}
+.qstep:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;}
+
+/* ---- Paneles de cada paso ---- */
+.quote-step{display:none;}
+.quote-step.active{display:block;animation:overlayin .2s ease;}
+.quote-step-title{font-family:var(--font-display);font-weight:700;font-size:var(--fs-lg);margin-bottom:var(--space-4);}
+.quote-step .quote-meta-card{margin-bottom:var(--space-4);}
+
+/* ---- Prendas como tarjetas ---- */
+.quote-items-list{display:flex;flex-direction:column;gap:var(--space-3);margin-bottom:var(--space-4);}
+.qitem{
+  display:grid;grid-template-columns:minmax(0,2fr) minmax(0,2fr) auto;gap:var(--space-4);align-items:center;
+  background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  padding:var(--space-4);
+}
+.qitem-main{min-width:0;display:flex;flex-direction:column;gap:2px;}
+.qitem-name{font-family:var(--font-display);font-weight:700;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.qitem-meta{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.qitem .card-tags{margin-top:4px;}
+.qitem-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);}
+.qitem-num{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.qitem-num-label{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.qitem-num-value{font-weight:800;font-size:var(--fs-base);white-space:nowrap;}
+.qitem-actions{display:flex;align-items:center;gap:var(--space-2);}
+.qitem-actions .btn-primary{padding:var(--space-2) var(--space-4);font-size:var(--fs-sm);}
+.quote-items-list:empty{display:none;}
+
+/* ---- Stickers plegables ---- */
+.quote-fold{
+  margin-top:var(--space-4);background:var(--color-surface);
+  border:1px solid var(--color-border);border-radius:var(--radius-lg);
+}
+.quote-fold > summary{
+  cursor:pointer;padding:var(--space-4);font-weight:700;font-size:var(--fs-sm);list-style:none;
+}
+.quote-fold > summary::-webkit-details-marker{display:none;}
+.quote-fold > summary::after{content:"＋";float:right;color:var(--color-text-muted);}
+.quote-fold[open] > summary::after{content:"－";}
+.quote-fold-body{padding:0 var(--space-4) var(--space-4);}
+
+/* ---- Barra fija inferior ---- */
+.quote-bar{
+  position:sticky;bottom:0;z-index:20;margin-top:var(--space-6);
+  display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap;
+  padding:var(--space-3) var(--space-4);
+  background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);
+}
+.quote-bar-totals{display:flex;gap:var(--space-6);}
+.quote-bar-totals > div{display:flex;flex-direction:column;}
+.qb-label{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.quote-bar-totals b{font-family:var(--font-display);font-size:var(--fs-lg);}
+.quote-bar-nav{display:flex;gap:var(--space-2);}
+
+/* ---- Responsive ---- */
+@media (max-width:900px){
+  .quote-stepper{grid-template-columns:repeat(4,auto);overflow-x:auto;scrollbar-width:none;}
+  .qstep:not(.active) .qstep-label{display:none;}
+  .qstep:not(.active) .qstep-badge{margin-left:0;}
+  .qitem{grid-template-columns:minmax(0,1fr) auto;}
+  .qitem-nums{grid-column:1 / -1;order:3;padding-top:var(--space-3);border-top:1px dashed var(--color-border);}
+}
+@media (max-width:560px){
+  .quote-bar{padding:var(--space-3);}
+  .quote-bar-totals{gap:var(--space-4);}
+  .quote-bar-nav{width:100%;}
+  .quote-bar-nav button{flex:1;}
+}

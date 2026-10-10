@@ -20,7 +20,10 @@ import {
 /* ---------------------------------------------------------------
    ESTADO DE UI (filtros, selección activa, etc.)
 --------------------------------------------------------------- */
-let uiFilters = { playeraTag: "all", stickerSize: "all" };
+let uiFilters = {
+  playeraTag: "all", stickerSize: "all",
+  playeraVista: (function () { try { return localStorage.getItem("LUCXSTUDIO_VISTA_PLAYERAS") || "cuadricula"; } catch (e) { return "cuadricula"; } })()
+};
 let activeBazarId = "";
 let assignmentModalContext = null;
 
@@ -1886,8 +1889,12 @@ function savePlayera() {
   saveState(); closeModal("modal-playera"); refreshAllSelects(); renderPlayeras(); renderTallaEtiquetas();
   showToast("Playera guardada.");
 }
-function deletePlayera(id) {
-  if (!confirm("¿Eliminar esta playera del inventario?")) return;
+async function deletePlayera(id) {
+  const p0 = AppState.playeras.find(x => x.id === id);
+  const ok = typeof window.confirmPopup === "function"
+    ? await window.confirmPopup({ title: "Eliminar playera", message: `¿Eliminar "${p0 ? p0.nombre : "esta playera"}" del inventario? Esta acción no se puede deshacer.`, confirmLabel: "Eliminar", danger: true })
+    : confirm("¿Eliminar esta playera del inventario?");
+  if (!ok) return;
   const p = AppState.playeras.find(x => x.id === id);
   liberarEtiquetaTallaDePlayera(p);
   AppState.playeras = AppState.playeras.filter(x => x.id !== id);
@@ -1941,65 +1948,133 @@ function renderPlayeras() {
   });
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
-  grid.innerHTML = list.map(p => {
-    const cEst = costoImpresion(p);
-    const cTotal = costoTotalPlayera(p);
-    const ganancia = p.precioVenta - cTotal;
-    const comision = comisionPlayera(p);
-    const nombreArtista = p.artistaId ? ((AppState.artistas.find(a => a.id === p.artistaId) || {}).nombre || "—") : "";
-    const gastoLigado = p.gastoVinculadoId ? AppState.gastos.find(g => g.id === p.gastoVinculadoId) : null;
-    const stockBajo = (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
-    const esGangSheet = p.modoCosteo === "gangsheet";
-    const etiquetaImpresion = esGangSheet
-      ? `Gang Sheet (${(p.gangSheetMetros||0)} m${p.gangSheetBlancoSolido ? ", blanco sólido" : ""})`
-      : `Estampado (${(p.estampados||[]).length} · ${areaTotalCm2(p.estampados).toFixed(0)} cm²)${p.dtfEspecial ? " ✨" : ""}`;
-    const tagsHtml = (p.tags || []).map(tid => {
-      const e = AppState.etiquetas.find(x => x.id === tid);
-      return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
-    }).join("");
-    const bazarEstado = bazarIdsDe(p).length ? (p.bazarEstado || "Disponible") : "";
-    return `
-    <div class="card">
-      <div class="card-top">
-        <span class="card-title">${escapeHtml(p.nombre)}</span>
-        <span class="card-swatch" style="background:${colorHex(p.colorId)}" title="${colorNombre(p.colorId)}"></span>
-      </div>
-      <div class="card-meta">
-        <span>${escapeHtml(p.tipo)}</span>·<span>Talla ${escapeHtml(p.talla) || "—"}</span>·<span>${colorNombre(p.colorId)}</span>
-        ${p.tieneEtiquetaTalla ? `·<span>🏷️ ${p.etiquetaTallaConsumo ? `${p.etiquetaTallaConsumo.cantidad} etiqueta(s) usada(s)` : "con etiqueta"}</span>` : ""}
-      </div>
-      ${p.clienteId ? `<div class="card-meta">👤 Encargo para: ${escapeHtml(clienteNombre(p.clienteId) || "—")}</div>` : ""}
-      ${p.consignacionId ? `<div class="card-meta">🤝 ${escapeHtml(nombreConsignacion(p.consignacionId))} · ${escapeHtml(p.consignacionEstado || "En consignación")}</div>` : ""}
-      <div class="card-row"><span>Stock</span><span>${p.stock} pza(s)</span></div>
-      <div class="card-row"><span>Costo playera</span><span>${p.prendaCliente ? "🎁 Prenda del cliente ($0.00)" : fmt(p.costoPlayera)}</span></div>
-      <div class="card-row"><span>${etiquetaImpresion}${gastoLigado ? " (estimado)" : ""}</span><span>${fmt(cEst)}</span></div>
-      ${gastoLigado ? `<div class="card-row"><span>🔗 Costo real (de "${escapeHtml(gastoLigado.concepto)}")</span><span style="color:var(--color-accent);">${fmt(p.costoImpresionManual)}</span></div>` : ""}
-      ${gastoLigado && gastoLigado.pctLlenado != null ? `<div class="card-meta">📐 Lote al ${gastoLigado.pctLlenado}% de llenado del rollo</div>` : ""}
-      <div class="card-row"><span>Costo total</span><span>${fmt(cTotal)}</span></div>
-      <div class="card-row"><span>Precio de venta</span><span>${fmt(p.precioVenta)}</span></div>
-      ${p.precioMayoreo ? `<div class="card-row"><span>Precio mayoreo</span><span>${fmt(p.precioMayoreo)}</span></div>` : ""}
-      <div class="card-row"><span>Ganancia</span><span style="color:${ganancia >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(ganancia)}</span></div>
-      ${nombreArtista ? `<div class="card-row"><span>🎨 ${escapeHtml(nombreArtista)} (${comision.pctArtista}%)</span><span>${fmt(comision.parteArtista)}</span></div>` : ""}
-      <div class="card-tags">
-        <span class="card-badge ${estadoBadgeClass(p.estado)}">${p.estado}</span>
-        <span class="card-badge ${prioridadBadgeClass(p.prioridad)}">${p.prioridad}</span>
-        ${bazarEstado ? `<span class="card-badge ${bazarEstadoBadgeClass(bazarEstado)}">${bazarEstado === "Vendida" ? " Vendida✅" : bazarEstado === "Venta nula" ? "🎁 Venta nula" : "🟢 En bazar"}</span>` : ""}
-        ${bazarIdsDe(p).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(p))}</span>` : ""}
-        ${p.prendaCliente ? `<span class="card-badge badge-media">🎁 Prenda del cliente</span>` : ""}
-        ${esGangSheet ? `<span class="card-badge badge-alta">🧻 Gang Sheet</span>` : (p.dtfEspecial ? `<span class="card-badge badge-alta">✨ DTF especial</span>` : "")}
-        ${stockBajo ? `<span class="card-badge badge-agotado">⚠️ Stock bajo</span>` : ""}
-        ${tagsHtml}
-      </div>
-      <div class="card-actions">
-        <button onclick="openModalPlayera('${p.id}')">✏️ Editar</button>
-        <button onclick="openModalAsignarPlayeraBazar('${p.id}')">🏪 Bazar</button>
-        <button onclick="openModalAsignarConsignacion('${p.id}')">🤝 Consignar</button>
-        ${gastoLigado ? `<button onclick="desvincularCostoRealDePieza('playera','${p.id}')">🔓 Desvincular costo real</button>` : ""}
-        <button onclick="openModalMermaDesdePlayera('${p.id}')">📉 Merma</button>
-        <button class="danger" onclick="deletePlayera('${p.id}')">🗑️ Eliminar</button>
-      </div>
-    </div>`;
-  }).join("");
+  grid.classList.toggle("vista-lista", uiFilters.playeraVista === "lista");
+  grid.innerHTML = list.map(playeraCardCompacta).join("");
+  actualizarBarraFiltrosPlayeras();
+}
+
+/* ---------------------------------------------------------------
+   REDISEÑO SPRINT 2 — tarjeta compacta + pop-up "Ver más"
+   La tarjeta solo muestra lo esencial; el detalle sale en un pop-up.
+--------------------------------------------------------------- */
+function playeraCardCompacta(p) {
+  const cTotal = costoTotalPlayera(p);
+  const ganancia = (p.precioVenta || 0) - cTotal;
+  const stockBajo = (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
+  const bazarEstado = bazarIdsDe(p).length ? (p.bazarEstado || "Disponible") : "";
+  const badges = [`<span class="card-badge ${estadoBadgeClass(p.estado)}">${escapeHtml(p.estado)}</span>`];
+  if (stockBajo) badges.push(`<span class="card-badge badge-agotado">⚠️ Stock bajo</span>`);
+  if (bazarEstado === "Vendida") badges.push(`<span class="card-badge badge-agotado">Vendida ✅</span>`);
+  else if (bazarEstado === "Venta nula") badges.push(`<span class="card-badge badge-agotado">🎁 Venta nula</span>`);
+  return `
+  <div class="card pcard">
+    <span class="pcard-swatch" style="background:${colorHex(p.colorId)}" title="${escapeHtml(colorNombre(p.colorId))}"></span>
+    <div class="pcard-main">
+      <div class="pcard-name">${escapeHtml(p.nombre)}</div>
+      <div class="pcard-meta">Talla ${escapeHtml(p.talla) || "—"} · ${escapeHtml(colorNombre(p.colorId))} · ${escapeHtml(p.tipo)}</div>
+      <div class="card-tags">${badges.join("")}</div>
+    </div>
+    <div class="pcard-nums">
+      <div class="pcard-num"><span class="pcard-num-label">Stock</span><span class="pcard-num-value">${p.stock || 0}</span></div>
+      <div class="pcard-num"><span class="pcard-num-label">Precio</span><span class="pcard-num-value">${fmt(p.precioVenta)}</span></div>
+      <div class="pcard-num"><span class="pcard-num-label">Ganancia</span><span class="pcard-num-value" style="color:${ganancia >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(ganancia)}</span></div>
+    </div>
+    <div class="pcard-actions">
+      <button type="button" class="btn-primary pcard-more" onclick="verDetallePlayera('${p.id}')">Ver más</button>
+      <button type="button" class="btn-secondary" onclick="openModalPlayera('${p.id}')" title="Editar">✏️</button>
+    </div>
+  </div>`;
+}
+function verDetallePlayera(id) {
+  const p = AppState.playeras.find(x => x.id === id);
+  if (!p || typeof window.openQuickDetail !== "function") return;
+  const cEst = costoImpresion(p);
+  const cTotal = costoTotalPlayera(p);
+  const ganancia = (p.precioVenta || 0) - cTotal;
+  const comision = comisionPlayera(p);
+  const gastoLigado = p.gastoVinculadoId ? AppState.gastos.find(g => g.id === p.gastoVinculadoId) : null;
+  const esGangSheet = p.modoCosteo === "gangsheet";
+  const etiquetaImpresion = esGangSheet
+    ? `Gang Sheet (${p.gangSheetMetros || 0} m${p.gangSheetBlancoSolido ? ", blanco sólido" : ""})`
+    : `Estampado (${(p.estampados || []).length} · ${areaTotalCm2(p.estampados).toFixed(0)} cm²)${p.dtfEspecial ? " ✨" : ""}`;
+  const sobrecargo = sobrecargoTalla(p.talla);
+
+  const costos = [
+    ["Costo de la playera", p.prendaCliente ? "Prenda del cliente ($0.00)" : fmt(p.costoPlayera)],
+    [etiquetaImpresion + (gastoLigado ? " · estimado" : ""), fmt(cEst)]
+  ];
+  if (gastoLigado) costos.push([`Costo real (${gastoLigado.concepto})`, fmt(p.costoImpresionManual), "accent"]);
+  if (sobrecargo) costos.push(["Sobrecargo de talla", fmt(sobrecargo)]);
+  costos.push(["Costo total", fmt(cTotal)]);
+  costos.push(["Precio de venta", fmt(p.precioVenta)]);
+  if (p.precioMayoreo) costos.push(["Precio de mayoreo", fmt(p.precioMayoreo)]);
+  costos.push(["Ganancia", fmt(ganancia), ganancia >= 0 ? "good" : "bad"]);
+  const secciones = [{ title: "Costos y ganancia", rows: costos }];
+
+  const artista = p.artistaId ? AppState.artistas.find(a => a.id === p.artistaId) : null;
+  if (artista) {
+    secciones.push({ title: "Reparto de la ganancia", rows: [
+      [`🎨 ${artista.nombre} (${comision.pctArtista}%)`, fmt(comision.parteArtista)],
+      [`Estudio (${comision.pctEstudio}%)`, fmt(comision.parteEstudio), "good"]
+    ] });
+  }
+
+  const nombresTags = (p.tags || []).map(tid => (AppState.etiquetas.find(e => e.id === tid) || {}).nombre).filter(Boolean);
+  const inventario = [["Stock", `${p.stock || 0} pza(s)`]];
+  if ((p.stockMinimo || 0) > 0) inventario.push(["Stock mínimo", String(p.stockMinimo)]);
+  inventario.push(["Prioridad de venta", p.prioridad || "—"]);
+  if (nombresTags.length) inventario.push(["Etiquetas", nombresTags.join(", ")]);
+  if (p.tieneEtiquetaTalla) inventario.push(["Etiqueta de talla", p.etiquetaTallaConsumo ? `${p.etiquetaTallaConsumo.cantidad} usada(s)` : "Lleva etiqueta"]);
+  secciones.push({ title: "Inventario", rows: inventario });
+
+  const ubicacion = [];
+  if (bazarIdsDe(p).length) ubicacion.push(["Bazares", `${nombresBazares(p)} · ${p.bazarEstado || "Disponible"}`]);
+  if (p.consignacionId) ubicacion.push(["Consignación", `${nombreConsignacion(p.consignacionId)} · ${p.consignacionEstado || "En consignación"}`]);
+  if (p.clienteId) ubicacion.push(["Encargo para", clienteNombre(p.clienteId) || "—"]);
+  if (ubicacion.length) secciones.push({ title: "Dónde está", rows: ubicacion });
+  if (p.notas) secciones.push({ title: "Notas", text: p.notas });
+
+  const acciones = [
+    { label: "✏️ Editar", variant: "primary", onClick: () => openModalPlayera(id) },
+    { label: "🏪 Bazar", onClick: () => openModalAsignarPlayeraBazar(id) },
+    { label: "🤝 Consignar", onClick: () => openModalAsignarConsignacion(id) },
+    { label: "📉 Merma", onClick: () => openModalMermaDesdePlayera(id) }
+  ];
+  if (gastoLigado) acciones.push({ label: "🔓 Desvincular costo real", onClick: () => desvincularCostoRealDePiezaBoton("playera", id) });
+  acciones.push({ label: "🗑️ Eliminar", variant: "danger", onClick: () => deletePlayera(id) });
+
+  window.openQuickDetail({
+    icon: "👕", title: p.nombre,
+    subtitle: `${p.tipo} · Talla ${p.talla || "—"} · ${colorNombre(p.colorId)}`,
+    sections: secciones, actions: acciones
+  });
+}
+// Panel de filtros desplegable + contador de filtros activos + vista cuadrícula / lista.
+function actualizarBarraFiltrosPlayeras() {
+  const activos = (uiFilters.playeraTag !== "all" ? 1 : 0) +
+    ["filter-playera-estado", "filter-playera-color", "filter-playera-talla"].filter(id => val(id) && val(id) !== "all").length;
+  const badge = document.getElementById("inv-filtros-count");
+  if (badge) { badge.textContent = activos ? String(activos) : ""; badge.style.display = activos ? "inline-flex" : "none"; }
+  const limpiar = document.getElementById("inv-filtros-limpiar");
+  if (limpiar) limpiar.style.display = activos ? "inline-block" : "none";
+  document.querySelectorAll("#inv-vista-toggle button").forEach(b => b.classList.toggle("active", b.dataset.vista === uiFilters.playeraVista));
+}
+function toggleFiltrosPlayeras() {
+  const panel = document.getElementById("inv-filtros-panel");
+  const btn = document.getElementById("inv-filtros-btn");
+  if (!panel) return;
+  const abierto = panel.classList.toggle("open");
+  if (btn) btn.setAttribute("aria-expanded", abierto ? "true" : "false");
+}
+function limpiarFiltrosPlayeras() {
+  ["filter-playera-estado", "filter-playera-color", "filter-playera-talla"].forEach(id => setVal(id, "all"));
+  const todas = document.querySelector('#page-playeras .filter-chip[data-tag="all"]');
+  if (todas) setPlayeraTagFilter("all", todas); else renderPlayeras();
+}
+function cambiarVistaPlayeras(vista) {
+  uiFilters.playeraVista = vista === "lista" ? "lista" : "cuadricula";
+  try { localStorage.setItem("LUCXSTUDIO_VISTA_PLAYERAS", uiFilters.playeraVista); } catch (e) { /* sin almacenamiento */ }
+  renderPlayeras();
 }
 
 /* =================================================================
@@ -2071,6 +2146,7 @@ function quoteStickerFromInventory(id) {
   });
   switchPage("cotizador");
   renderQuoteItems();
+  if (typeof window.irAPasoCotizador === "function") window.irAPasoCotizador(2);
   showToast("Sticker agregado al cotizador.");
 }
 function setStickerSizeFilter(size, btn) {
@@ -2159,8 +2235,93 @@ function blankQuoteItem() {
     prendaCliente: false, dtfEspecial: false };
 }
 function addQuoteItem() {
-  quoteItems.push(blankQuoteItem());
+  const nuevo = blankQuoteItem();
+  quoteItems.push(nuevo);
   renderQuoteItems();
+  openModalQuotePrenda(nuevo.rowId);
+}
+
+/* ---------------------------------------------------------------
+   REDISEÑO SPRINT 3 — POP-UP PARA EDITAR UNA PRENDA DEL COTIZADOR
+   Reusa updateQuoteItemField / onQuoteItemProductChange / toggleQuoteItemFlag,
+   así que la lógica de costos y precios no cambia.
+--------------------------------------------------------------- */
+let editingQuotePrendaRowId = null;
+function itemPrendaEnEdicion() {
+  return quoteItems.find(i => i.rowId === editingQuotePrendaRowId) || null;
+}
+function openModalQuotePrenda(rowId) {
+  const item = quoteItems.find(i => i.rowId === rowId);
+  if (!item) return;
+  editingQuotePrendaRowId = rowId;
+  const playerasOrdenadas = [...AppState.playeras].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+  document.getElementById("qp-producto").innerHTML = `<option value="">— Manual / personalizado —</option>` +
+    playerasOrdenadas.map(p => `<option value="${p.id}">${escapeHtml(p.nombre)} · ${escapeHtml(p.talla) || "—"} · ${escapeHtml(colorNombre(p.colorId))}</option>`).join("");
+  document.getElementById("qp-tipo").innerHTML = TIPOS_PRENDA.map(t => `<option value="${t}">${t}</option>`).join("");
+  document.getElementById("qp-color").innerHTML = `<option value="">—</option>` +
+    AppState.colores.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
+  llenarModalPrenda(item);
+  openModal("modal-quote-prenda");
+}
+function llenarModalPrenda(item) {
+  setVal("qp-producto", item.playeraId || "");
+  setVal("qp-nombre", item.nombre || "");
+  document.getElementById("qp-nombre-wrap").style.display = item.playeraId ? "none" : "block";
+  setVal("qp-tipo", item.tipo || "Playera");
+  setVal("qp-talla", item.talla || "");
+  setVal("qp-color", item.colorId || "");
+  setVal("qp-cantidad", item.cantidad || 1);
+  setChecked("qp-prenda-cliente", !!item.prendaCliente);
+  setVal("qp-costo", item.costoPlayera || 0);
+  document.getElementById("qp-costo").disabled = !!item.prendaCliente;
+  setVal("qp-precio", item.precioVenta || 0);
+  refrescarPreviewPrenda(item);
+}
+// Actualiza solo lo calculado (título, botón de impresión y vista previa de ganancia),
+// sin tocar los campos que la persona está escribiendo.
+function refrescarPreviewPrenda(item) {
+  const cEst = getCostoEstampadoEfectivo(item);
+  const costoUnit = costoUnitarioItem(item);
+  const gananciaUnit = (item.precioVenta || 0) - costoUnit;
+  const impresionLabel = item.modoCosteo === "gangsheet"
+    ? `🧻 Gang Sheet · ${item.gangSheetMetros || 0} m${item.gangSheetBlancoSolido ? " (blanco)" : ""}`
+    : `📐 ${(item.estampados || []).length} estampado(s) · ${areaTotalCm2(item.estampados).toFixed(0)} cm²${item.dtfEspecial ? " ✨" : ""}`;
+  document.getElementById("qp-title").textContent = item.nombre ? `Prenda — ${item.nombre}` : "Nueva prenda";
+  document.getElementById("qp-impresion-btn").textContent = `${impresionLabel} · ${fmt(cEst)}`;
+  const color = gananciaUnit >= 0 ? "var(--color-success)" : "var(--color-danger)";
+  document.getElementById("qp-preview").innerHTML =
+    `Costo por pieza: <b>${fmt(costoUnit)}</b> — Ganancia por pieza: <b style="color:${color}">${fmt(gananciaUnit)}</b> — Ganancia de ${item.cantidad} pza(s): <b style="color:${color}">${fmt(gananciaUnit * item.cantidad)}</b>`;
+}
+function refrescarModalPrendaSiAbierto() {
+  const modal = document.getElementById("modal-quote-prenda");
+  if (!modal || !modal.classList.contains("open")) return;
+  const item = itemPrendaEnEdicion();
+  if (item) refrescarPreviewPrenda(item);
+}
+function onQuotePrendaProductoChange(playeraId) {
+  if (!editingQuotePrendaRowId) return;
+  onQuoteItemProductChange(editingQuotePrendaRowId, playeraId);
+  const item = itemPrendaEnEdicion();
+  if (item) llenarModalPrenda(item);
+}
+function updateQuotePrendaField(field, value) {
+  if (!editingQuotePrendaRowId) return;
+  updateQuoteItemField(editingQuotePrendaRowId, field, value);
+}
+function onQuotePrendaClienteChange(isChecked) {
+  if (!editingQuotePrendaRowId) return;
+  toggleQuoteItemFlag(editingQuotePrendaRowId, "prendaCliente", isChecked);
+  const item = itemPrendaEnEdicion();
+  if (item) llenarModalPrenda(item);
+}
+function abrirImpresionDesdePrenda() {
+  if (editingQuotePrendaRowId) openModalQuoteEstampados(editingQuotePrendaRowId);
+}
+function quitarPrendaDesdeModal() {
+  if (!editingQuotePrendaRowId) return;
+  removeQuoteItem(editingQuotePrendaRowId);
+  editingQuotePrendaRowId = null;
+  closeModal("modal-quote-prenda");
 }
 function addQuoteSticker() {
   const sticker = AppState.stickers.find(s => (s.stock || 0) > 0) || AppState.stickers[0];
@@ -2352,58 +2513,35 @@ function currentQuoteCommission() {
   return a ? { pctArtista: a.pctArtista, pctEstudio: a.pctEstudio, nombre: a.nombre } : { pctArtista: 0, pctEstudio: 100, nombre: "" };
 }
 function renderQuoteItems() {
-  const body = document.getElementById("quote-items-body");
+  const body = document.getElementById("quote-items-list");
   const hasQuoteContent = quoteItems.length || quoteStickerItems.length;
-  document.getElementById("quote-empty-hint").style.display = hasQuoteContent ? "none" : "block";
+  const emptyHintEl = document.getElementById("quote-empty-hint");
+  if (emptyHintEl) emptyHintEl.style.display = hasQuoteContent ? "none" : "block";
   const addSpace = document.getElementById("quote-add-space");
   if (addSpace) addSpace.style.display = hasQuoteContent ? "none" : "flex";
-  const playeraOptions = AppState.playeras.map(p => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join("");
-
   body.innerHTML = quoteItems.map(item => {
-    const cEst = getCostoEstampadoEfectivo(item);
-    const cTotalUnit = costoUnitarioItem(item);
-    const gananciaUnit = item.precioVenta - cTotalUnit;
-    const esGangSheet = item.modoCosteo === "gangsheet";
-    const numEstampados = (item.estampados || []).length;
-    const impresionLabel = esGangSheet
-      ? `🧻 ${item.gangSheetMetros || 0} m${item.gangSheetBlancoSolido ? " (blanco)" : ""}`
-      : `📐 ${numEstampados}× · ${areaTotalCm2(item.estampados).toFixed(0)} cm²`;
+    const gananciaUnit = (item.precioVenta || 0) - costoUnitarioItem(item);
+    const flags = [];
+    if (item.prendaCliente) flags.push(`<span class="card-badge badge-media">🎁 Prenda del cliente</span>`);
+    if (item.modoCosteo === "gangsheet") flags.push(`<span class="card-badge badge-alta">🧻 Gang Sheet</span>`);
+    else if (item.dtfEspecial) flags.push(`<span class="card-badge badge-alta">✨ DTF especial</span>`);
     return `
-    <tr>
-      <td>
-        <div class="quote-product-cell">
-          <select onchange="onQuoteItemProductChange('${item.rowId}', this.value)">
-            <option value="">— Manual / personalizado —</option>
-            ${playeraOptions}
-          </select>
-          ${!item.playeraId ? `<input type="text" placeholder="Nombre" value="${escapeHtml(item.nombre)}" onchange="updateQuoteItemField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta">${escapeHtml(item.nombre)}</div>`}
-        </div>
-      </td>
-      <td>
-        <select onchange="updateQuoteItemField('${item.rowId}','tipo',this.value)" style="min-width:110px;">
-          ${TIPOS_PRENDA.map(t => `<option value="${t}" ${item.tipo===t?"selected":""}>${t}</option>`).join("")}
-        </select>
-      </td>
-      <td><input type="text" value="${escapeHtml(item.talla)}" onchange="updateQuoteItemField('${item.rowId}','talla',this.value)" style="width:60px;"></td>
-      <td>
-        <select onchange="updateQuoteItemField('${item.rowId}','colorId',this.value)">
-          <option value="">—</option>
-          ${AppState.colores.map(c => `<option value="${c.id}" ${item.colorId===c.id?"selected":""}>${escapeHtml(c.nombre)}</option>`).join("")}
-        </select>
-      </td>
-      <td><input type="number" min="1" step="1" value="${item.cantidad}" onchange="updateQuoteItemField('${item.rowId}','cantidad',this.value)" style="width:60px;"></td>
-      <td style="text-align:center;" title="Prenda del cliente (costo de playera $0.00)">
-        <input type="checkbox" ${item.prendaCliente ? "checked" : ""} onchange="toggleQuoteItemFlag('${item.rowId}','prendaCliente', this.checked)">
-      </td>
-      <td><input type="number" min="0" step="0.01" value="${item.costoPlayera}" ${item.prendaCliente ? "disabled" : ""} onchange="updateQuoteItemField('${item.rowId}','costoPlayera',this.value)" style="width:80px;"></td>
-      <td>
-        <button class="area-edit-btn" onclick="openModalQuoteEstampados('${item.rowId}')" title="Editar impresión (áreas o Gang Sheet)">${impresionLabel}</button>
-        <div class="card-meta">${fmt(cEst)}</div>
-      </td>
-      <td><input type="number" min="0" step="0.01" value="${item.precioVenta}" onchange="updateQuoteItemField('${item.rowId}','precioVenta',this.value)" style="width:85px;"></td>
-      <td class="readonly-cell" style="color:${gananciaUnit>=0?'var(--color-success)':'var(--color-danger)'}">${fmt(gananciaUnit * item.cantidad)}</td>
-      <td><button class="remove-row" onclick="removeQuoteItem('${item.rowId}')" title="Quitar">✕</button></td>
-    </tr>`;
+    <div class="qitem">
+      <div class="qitem-main">
+        <div class="qitem-name">${escapeHtml(item.nombre) || "Prenda sin nombre"}</div>
+        <div class="qitem-meta">${escapeHtml(item.tipo || "Playera")} · Talla ${escapeHtml(item.talla) || "—"} · ${escapeHtml(colorNombre(item.colorId))} · ×${item.cantidad}</div>
+        ${flags.length ? `<div class="card-tags">${flags.join("")}</div>` : ""}
+      </div>
+      <div class="qitem-nums">
+        <div class="qitem-num"><span class="qitem-num-label">Precio c/u</span><span class="qitem-num-value">${fmt(item.precioVenta)}</span></div>
+        <div class="qitem-num"><span class="qitem-num-label">Total</span><span class="qitem-num-value">${fmt((item.precioVenta || 0) * item.cantidad)}</span></div>
+        <div class="qitem-num"><span class="qitem-num-label">Ganancia</span><span class="qitem-num-value" style="color:${gananciaUnit >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(gananciaUnit * item.cantidad)}</span></div>
+      </div>
+      <div class="qitem-actions">
+        <button type="button" class="btn-primary" onclick="openModalQuotePrenda('${item.rowId}')">✏️ Editar</button>
+        <button type="button" class="remove-row" onclick="removeQuoteItem('${item.rowId}')" title="Quitar">✕</button>
+      </div>
+    </div>`;
   }).join("");
 
   const stickerBody = document.getElementById("quote-stickers-body");
@@ -2434,8 +2572,11 @@ function renderQuoteItems() {
     if (stickerEmpty) stickerEmpty.style.display = quoteStickerItems.length ? "none" : "block";
   }
 
+  const stickersFold = document.getElementById("quote-stickers-fold");
+  if (stickersFold && quoteStickerItems.length) stickersFold.open = true;
   renderServiciosExtra();
   updateQuoteSummary();
+  refrescarModalPrendaSiAbierto();
 }
 function computeQuoteTotals() {
   let ventaBruta = 0, totalCosto = 0;
@@ -2505,6 +2646,13 @@ function updateQuoteSummary() {
   if (saldoCard) {
     saldoCard.style.display = t.anticipo > 0 ? "flex" : "none";
     document.getElementById("sum-saldo-pendiente").textContent = fmt(t.saldoPendiente);
+  }
+  // Barra de pasos del cotizador (steps.js): totales y contadores
+  if (typeof window.actualizarPasosCotizador === "function") {
+    window.actualizarPasosCotizador({
+      prendas: quoteItems.length, stickers: quoteStickerItems.length, extras: quoteServiciosExtra.length,
+      total: fmt(t.totalVenta), ganancia: fmt(t.ganancia)
+    });
   }
 }
 // Muestra/oculta el campo de "monto con tarjeta" y lo autocompleta según el método
@@ -2591,6 +2739,7 @@ function resetQuoteForm() {
   document.getElementById("venta-nula-banner").style.display = "none";
   renderQuoteTagsOperativos();
   renderQuoteItems();
+  if (typeof window.irAPasoCotizador === "function") window.irAPasoCotizador(1);
 }
 function saveQuote() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker.", "error");
@@ -2967,6 +3116,7 @@ function editCotizacion() {
   renderQuoteTagsOperativos();
   renderQuoteItems();
   switchPage("cotizador");
+  if (typeof window.irAPasoCotizador === "function") window.irAPasoCotizador(1);
 }
 function duplicateCotizacion(id) {
   const c = AppState.cotizaciones.find(x => x.id === id);
@@ -3912,6 +4062,8 @@ export function renderAll() {
    funciones ya no son globales por defecto.
 ================================================================= */
 Object.assign(window, {
+  openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
+  verDetallePlayera, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
