@@ -7,6 +7,7 @@
 <link rel="icon" type="image/png" href="OJITOS-crop.png">
 <link rel="apple-touch-icon" href="OJITOS-crop.png">
 <link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#121214">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -91,7 +92,7 @@
   <main class="main-area">
     <header class="header">
       <button class="btn-icon" id="sidebar-toggle" title="Menú">☰</button>
-      <h1 class="header-title" id="page-title">Cotizador rápido</h1>
+      <h1 class="header-title" id="page-title">Inicio</h1>
       <div class="bazar-activo-bar">
         <span class="bazar-activo-label">🏪 Bazar activo</span>
         <select id="header-bazar-activo" class="form-select" onchange="onHeaderBazarChange()"></select>
@@ -107,7 +108,53 @@
     <div class="page-content" id="page-content">
 
       <!-- ======================= COTIZADOR RÁPIDO ======================= -->
-      <section id="page-cotizador" class="page-section active">
+      <!-- ======================= INICIO (PANEL) ======================= -->
+      <section id="page-inicio" class="page-section active">
+        <div class="home-head">
+          <h2 class="quote-step-title" id="home-titulo" style="margin-bottom:2px;">Resumen del mes</h2>
+          <p class="section-sub" id="home-fecha"></p>
+        </div>
+
+        <div class="home-kpis">
+          <button type="button" class="kpi-card" data-kpi="vendido">
+            <span class="kpi-label">Vendido este mes</span>
+            <span class="kpi-value" id="kpi-vendido">$0</span>
+            <span class="kpi-sub" id="kpi-vendido-sub">—</span>
+          </button>
+          <button type="button" class="kpi-card kpi-accent" data-kpi="ganancia">
+            <span class="kpi-label">Ganancia del mes</span>
+            <span class="kpi-value" id="kpi-ganancia">$0</span>
+            <span class="kpi-sub" id="kpi-ganancia-sub">—</span>
+          </button>
+          <button type="button" class="kpi-card" data-kpi="pendientes">
+            <span class="kpi-label">Pedidos pendientes</span>
+            <span class="kpi-value" id="kpi-pendientes">0</span>
+            <span class="kpi-sub" id="kpi-pendientes-sub">—</span>
+          </button>
+          <button type="button" class="kpi-card" data-kpi="stock">
+            <span class="kpi-label">Stock bajo</span>
+            <span class="kpi-value" id="kpi-stock">0</span>
+            <span class="kpi-sub" id="kpi-stock-sub">—</span>
+          </button>
+        </div>
+
+        <h3 class="home-subtitle">Accesos rápidos</h3>
+        <div class="home-actions">
+          <button type="button" class="btn-primary" onclick="switchPage('cotizador')">🧮 Cotizar</button>
+          <button type="button" class="btn-secondary" onclick="openModalConsulta()">❓ Registrar consulta</button>
+          <button type="button" class="btn-secondary" onclick="openVentaRapida()">⚡ Venta rápida</button>
+          <button type="button" class="btn-secondary" onclick="openModoBazar()">🛍️ Modo bazar</button>
+          <button type="button" class="btn-secondary" onclick="switchPage('caja')">💰 Abrir caja</button>
+          <button type="button" class="btn-secondary" onclick="openModalPlayera()">👕 Nueva playera</button>
+          <button type="button" class="btn-secondary" onclick="openModalGasto()">💸 Nuevo gasto</button>
+        </div>
+
+        <h3 class="home-subtitle">Requiere atención</h3>
+        <div id="home-atencion" class="home-list"></div>
+      </section>
+      <!-- ======================= /INICIO ======================= -->
+
+      <section id="page-cotizador" class="page-section">
         <input type="hidden" id="quote-editing-id">
 
         <!-- Barra de pasos -->
@@ -190,15 +237,8 @@
               <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-3);">
                 <button class="btn-secondary" onclick="addQuoteSticker()">+ Agregar sticker</button>
               </div>
-              <div class="quote-table-wrap">
-          <table class="quote-table quote-stickers-table">
-            <thead>
-              <tr><th>Producto</th><th>Tamaño</th><th>Ancho (cm)</th><th>Largo (cm)</th><th>Cant.</th><th>Costo producción c/u</th><th>Precio venta c/u</th><th>Ganancia</th><th></th></tr>
-            </thead>
-            <tbody id="quote-stickers-body"></tbody>
-          </table>
-          <p class="empty-hint" id="quote-stickers-empty">No agregas stickers a esta cotización.</p>
-        </div>
+              <div id="quote-stickers-list" class="quote-items-list"></div>
+              <p class="empty-hint" id="quote-stickers-empty">No agregas stickers a esta cotización.</p>
 
         
             </div>
@@ -379,7 +419,7 @@
           </select>
         </div>
         <div id="cotizaciones-grid" class="cards-grid"></div>
-        <p class="empty-hint" id="cotizaciones-empty-hint">Todavía no guardas ninguna cotización.</p>
+        <div class="empty-state" id="cotizaciones-empty-hint"><div class="empty-ico">🧾</div><strong>Aún no hay cotizaciones guardadas</strong><span>Crea la primera desde el cotizador y aparecerá aquí.</span><button type="button" class="btn-primary" onclick="switchPage('cotizador')">🧮 Ir al cotizador</button></div>
       </section>
       <!-- ======================= /COTIZACIONES GUARDADAS ======================= -->
 
@@ -412,7 +452,7 @@
         </div>
         <div id="cliente-etiquetas-grid" class="chips-grid"></div>
         <div id="clientes-grid" class="cards-grid"></div>
-        <p class="empty-hint" id="clientes-empty-hint">Todavía no tienes clientes registrados.</p>
+        <div class="empty-state" id="clientes-empty-hint"><div class="empty-ico">👥</div><strong>Aún no hay clientes</strong><span>Guarda a tus clientes para ver su historial de compras.</span><button type="button" class="btn-primary" onclick="openModalCliente()">+ Nuevo cliente</button></div>
       </section>
       <!-- ======================= /CLIENTES ======================= -->
 
@@ -433,7 +473,7 @@
             <tbody id="artes-table-body"></tbody>
           </table>
         </div>
-        <p class="empty-hint" id="artes-empty-hint">Todavía no hay ventas registradas.</p>
+        <div class="empty-state" id="artes-empty-hint"><div class="empty-ico">🎨</div><strong>Todavía no hay ventas registradas</strong><span>Cuando vendas diseños aparecerán aquí, del más vendido al menos vendido.</span></div>
       </section>
       <!-- ======================= /HISTORIAL DE ARTES ======================= -->
 
@@ -467,7 +507,7 @@
           </select>
         </div>
         <div id="playeras-grid" class="cards-grid"></div>
-        <p class="empty-hint" id="playeras-empty-hint">No hay playeras registradas todavía.</p>
+        <div class="empty-state" id="playeras-empty-hint"><div class="empty-ico">👕</div><strong id="playeras-empty-title">Aún no hay playeras</strong><span id="playeras-empty-text">Registra tu primera playera para empezar a controlar tu inventario.</span><button type="button" class="btn-primary" id="playeras-empty-btn" onclick="openModalPlayera()">+ Nueva playera</button></div>
       </section>
       <!-- ======================= /INVENTARIO PLAYERAS ======================= -->
 
@@ -505,7 +545,7 @@
           <button class="btn-primary" style="margin-left:auto;" onclick="openModalSticker()">+ Nuevo estampado</button>
         </div>
         <div id="stickers-grid" class="cards-grid"></div>
-        <p class="empty-hint" id="stickers-empty-hint">No hay estampados registrados todavía.</p>
+        <div class="empty-state" id="stickers-empty-hint"><div class="empty-ico">✂️</div><strong>Aún no hay estampados</strong><span>Registra tus stickers con su tamaño y precio.</span><button type="button" class="btn-primary" onclick="openModalSticker()">+ Nuevo estampado</button></div>
       </section>
       <!-- ======================= /INVENTARIO STICKERS ======================= -->
 
@@ -670,7 +710,7 @@
             <tbody id="bazares-table-body"></tbody>
           </table>
         </div>
-        <p class="empty-hint" id="bazares-empty-hint">Aún no registras bazares o lugares de venta.</p>
+        <div class="empty-state" id="bazares-empty-hint"><div class="empty-ico">🏪</div><strong>Aún no hay bazares</strong><span>Registra un bazar para ver cuánto vendes y si ya cubriste el costo del puesto.</span><button type="button" class="btn-primary" onclick="openModalBazar()">+ Nuevo Bazar</button></div>
       </section>
       <!-- ======================= /BAZARES ======================= -->
 
@@ -685,7 +725,7 @@
           <button class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button>
         </div>
         <div id="consignaciones-grid" class="cards-grid"></div>
-        <p class="empty-hint" id="consignaciones-empty-hint">Aún no registras consignaciones.</p>
+        <div class="empty-state" id="consignaciones-empty-hint"><div class="empty-ico">🤝</div><strong>Aún no hay consignaciones</strong><span>Úsalas cuando le das playeras a alguien más para que las venda.</span><button type="button" class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button></div>
       </section>
       <!-- ======================= /CONSIGNACIONES ======================= -->
 
@@ -1145,6 +1185,16 @@
             </div>
           </div>
           <button class="btn-primary" onclick="saveSettings()">Guardar ajustes</button>
+        </div>
+
+        <div class="section-header" style="margin-top:32px;">
+          <div>
+            <h2 class="section-title">Apariencia</h2>
+            <p class="section-sub">Elige el color principal de la app. Se recuerda en este navegador.</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div id="accent-swatches" class="accent-swatches"></div>
         </div>
 
         <div class="section-header" style="margin-top:32px;">
@@ -2173,6 +2223,64 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-servicio-extra">Cancelar</button>
       <button class="btn-primary" onclick="saveServicioExtra()">Guardar servicio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR STICKER DE LA COTIZACIÓN -->
+<div class="modal-overlay" id="modal-quote-sticker">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 class="modal-title" id="qs-title">Sticker</h2>
+      <button class="modal-close" data-modal="modal-quote-sticker">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Producto</label>
+        <select id="qs-producto" class="form-select" onchange="onQuoteStickerProductoChange(this.value)"></select>
+      </div>
+      <div class="form-row" id="qs-manual-wrap">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">Nombre del sticker</label>
+          <input type="text" id="qs-nombre" class="form-input" placeholder="Nombre del sticker" onchange="updateQuoteStickerFieldDesdeModal('nombre', this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tamaño</label>
+          <select id="qs-tamano" class="form-select" onchange="updateQuoteStickerFieldDesdeModal('tamano', this.value)">
+            <option>Chico</option><option>Mediano</option><option>Grande</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Ancho (cm)</label>
+          <input type="number" id="qs-ancho" class="form-input" min="0" step="0.01" onchange="updateQuoteStickerFieldDesdeModal('anchoCm', this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Largo (cm)</label>
+          <input type="number" id="qs-largo" class="form-input" min="0" step="0.01" onchange="updateQuoteStickerFieldDesdeModal('largoCm', this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cantidad</label>
+          <input type="number" id="qs-cantidad" class="form-input" min="1" step="1" onchange="updateQuoteStickerFieldDesdeModal('cantidad', this.value)">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Costo de producción c/u ($)</label>
+          <input type="number" id="qs-costo" class="form-input" readonly>
+          <span class="form-hint">Se calcula con el ancho y largo.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Precio de venta c/u ($)</label>
+          <input type="number" id="qs-precio" class="form-input" min="0" step="0.01" onchange="updateQuoteStickerFieldDesdeModal('precioVenta', this.value)">
+        </div>
+      </div>
+      <p class="cost-preview" id="qs-preview">—</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger" onclick="quitarStickerDesdeModal()" style="margin-right:auto;">🗑️ Quitar sticker</button>
+      <button class="btn-primary" data-modal="modal-quote-sticker">Listo</button>
     </div>
   </div>
 </div>

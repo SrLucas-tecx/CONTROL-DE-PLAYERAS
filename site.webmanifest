@@ -1,7 +1,7 @@
 {
   "name": "LUCXSTUDIO - Control de Playeras",
   "short_name": "LUCXSTUDIO",
-  "description": "Control de inventario, cotizaciones y bazares de LUCXSTUDIO.",
+  "description": "Control de inventario, cotizaciones, caja y bazares de LUCXSTUDIO.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#121214",
@@ -13,5 +13,13 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "id": "./index.html",
+  "scope": "./",
+  "lang": "es-MX",
+  "orientation": "any",
+  "categories": [
+    "business",
+    "productivity"
   ]
 }

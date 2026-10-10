@@ -1,6 +1,6 @@
 /* ============================================================
    LUCXSTUDIO — nav.js  (Rediseño · Sprint 1)
-   - Menú lateral de 6 secciones + pestañas por sección
+   - Menú lateral de secciones + pestañas por sección
    - Pulido de modales (ESC, bloqueo de scroll, enfoque)
    - Pop-up reutilizable de "detalle rápido": openQuickDetail()
    - Pop-up de confirmación bonito: confirmPopup()
@@ -11,6 +11,7 @@
    MAPA DEL MENÚ
 --------------------------------------------------------------- */
 const SECCIONES = [
+  { id: "inicio",     icon: "🏠", label: "Inicio",     paginas: ["inicio"] },
   { id: "ventas",     icon: "🧮", label: "Ventas",     paginas: ["cotizador", "cotizaciones", "clientes"] },
   { id: "produccion", icon: "🚦", label: "Producción", paginas: ["produccion", "artes"] },
   { id: "inventario", icon: "👕", label: "Inventario", paginas: ["playeras", "stickers", "etiquetas", "mermas"] },
@@ -19,6 +20,7 @@ const SECCIONES = [
   { id: "ajustes",    icon: "⚙️", label: "Ajustes",    paginas: ["ajustes"] }
 ];
 const TAB_LABEL = {
+  inicio: "🏠 Inicio",
   cotizador: "🧮 Cotizador", cotizaciones: "📁 Guardadas", clientes: "👥 Clientes",
   produccion: "🚦 Kanban", artes: "🎨 Artes",
   playeras: "👕 Playeras", stickers: "✂️ Stickers", etiquetas: "🏷️ Etiquetas", mermas: "📉 Mermas",
@@ -300,7 +302,7 @@ function mostrarTipMenu() {
     openQuickDetail({
       icon: "✨",
       title: "Menú renovado",
-      subtitle: "Ahora todo está en 6 secciones",
+      subtitle: "Ahora todo está organizado en secciones",
       sections: [{
         title: "Cómo moverte",
         rows: [
@@ -316,9 +318,27 @@ function mostrarTipMenu() {
 }
 
 /* ---------------------------------------------------------------
+   GRÁFICAS: colores de texto y rejilla según modo claro / oscuro
+--------------------------------------------------------------- */
+function temaGraficas() {
+  if (typeof Chart === "undefined") return;
+  const estilos = getComputedStyle(document.body);
+  const claro = document.body.classList.contains("light");
+  Chart.defaults.color = estilos.getPropertyValue("--color-text-muted").trim() || (claro ? "#6b6870" : "#a3a1a6");
+  Chart.defaults.borderColor = claro ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.08)";
+}
+function iniciarTemaGraficas() {
+  temaGraficas();
+  const btn = document.getElementById("dark-mode-btn");
+  // ui.js ya alterna la clase; aquí solo actualizamos los colores para las próximas gráficas
+  if (btn) btn.addEventListener("click", () => setTimeout(temaGraficas, 0));
+}
+
+/* ---------------------------------------------------------------
    INICIO
 --------------------------------------------------------------- */
 function iniciar() {
+  iniciarTemaGraficas();
   cargarCss();
   construirSidebar();
   asegurarSubnav();

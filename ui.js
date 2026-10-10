@@ -42,15 +42,92 @@ function rangoBazarFecha(bazar) {
   return inicio === fin ? inicio : `${inicio} al ${fin}`;
 }
 
-export function showToast(message, type = "success") {
+export function showToast(message, type = "success", opciones) {
   const box = document.getElementById("toast");
   const item = document.createElement("div");
   item.className = "toast-item " + type;
-  item.textContent = message;
+  const texto = document.createElement("span");
+  texto.textContent = message;
+  item.appendChild(texto);
+  // Aviso con botón (ej. "Deshacer")
+  if (opciones && opciones.accion && typeof opciones.alAccionar === "function") {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "toast-accion";
+    b.textContent = opciones.accion;
+    b.addEventListener("click", () => { item.remove(); opciones.alAccionar(); });
+    item.appendChild(b);
+  }
   box.appendChild(item);
-  setTimeout(() => item.remove(), 3200);
+  setTimeout(() => item.remove(), (opciones && opciones.duracion) || 3200);
 }
 setToastHandler(showToast);
+
+/* ---------------------------------------------------------------
+   REDISEÑO SPRINT 5 — CONFIRMACIÓN EN POP-UP + DESHACER
+   pedirConfirmacion() reemplaza al confirm() del navegador. Si se
+   confirma una eliminación, se guarda una copia del estado ANTES de
+   borrar y se muestra un aviso con el botón "Deshacer" (7 segundos).
+--------------------------------------------------------------- */
+let instantaneaDeshacer = null;
+async function pedirConfirmacion(mensaje, opciones) {
+  const o = Object.assign({ titulo: "Confirmar eliminación", confirmLabel: "Eliminar", danger: true, deshacer: true, aviso: "Eliminado." }, opciones || {});
+  const ok = typeof window.confirmPopup === "function"
+    ? await window.confirmPopup({ title: o.titulo, message: mensaje, confirmLabel: o.confirmLabel, danger: o.danger })
+    : confirm(mensaje);
+  if (ok && o.deshacer) {
+    const copia = JSON.stringify(AppState);
+    // El borrado ocurre justo después de este return; el aviso sale cuando ya terminó.
+    setTimeout(() => {
+      instantaneaDeshacer = copia;
+      showToast(o.aviso, "success", { accion: "↩️ Deshacer", alAccionar: deshacerUltimaEliminacion, duracion: 7000 });
+    }, 0);
+  }
+  return ok;
+}
+// Vuelve a dibujar la pantalla que se está viendo (después de deshacer o de registrar ventas).
+function refrescarVistaActual() {
+  const actual = document.querySelector(".page-section.active").id.replace("page-", "");
+  renderAll({ conservarCotizador: true });
+  if (actual === "bazar-detalle") {
+    if (AppState.bazares.some(b => b.id === activeBazarId)) { renderBazarDetalle(); } else { switchPage("bazares"); }
+  } else {
+    switchPage(actual);
+  }
+  // Avisa a los módulos externos (modo bazar, venta rápida) que los datos cambiaron.
+  document.dispatchEvent(new CustomEvent("lucx:estado-cambio"));
+}
+function tomarCopiaEstado() { return JSON.stringify(AppState); }
+// Muestra el aviso con "Deshacer" para una copia de estado tomada ANTES del cambio.
+function ofrecerDeshacer(aviso, copia) {
+  instantaneaDeshacer = copia;
+  showToast(aviso, "success", { accion: "↩️ Deshacer", alAccionar: deshacerUltimaEliminacion, duracion: 7000 });
+}
+function deshacerUltimaEliminacion() {
+  if (!instantaneaDeshacer) return;
+  const copia = instantaneaDeshacer;
+  instantaneaDeshacer = null;
+  try {
+    importData(JSON.parse(copia));
+    saveState();
+    refrescarVistaActual();
+    showToast("Listo, se deshizo el último cambio.");
+  } catch (e) {
+    console.error("No se pudo deshacer:", e);
+    showToast("No se pudo deshacer.", "error");
+  }
+}
+
+// Color principal vigente (lo puede cambiar el usuario en Ajustes → Apariencia).
+function colorAcento() {
+  return getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim() || "#e3363d";
+}
+
+/* Estado vacío reutilizable: ícono + mensaje + botón de acción opcional. */
+function estadoVacio(icono, titulo, texto, accion) {
+  const boton = accion ? `<button type="button" class="btn-primary" onclick="${accion.onclick}">${escapeHtml(accion.label)}</button>` : "";
+  return `<div class="empty-state"><div class="empty-ico">${icono}</div><strong>${escapeHtml(titulo)}</strong><span>${escapeHtml(texto)}</span>${boton}</div>`;
+}
 
 function openModal(id) { document.getElementById(id).classList.add("open"); }
 function closeModal(id) { document.getElementById(id).classList.remove("open"); }
@@ -63,6 +140,7 @@ document.addEventListener("click", (e) => {
    NAVEGACIÓN
 --------------------------------------------------------------- */
 const PAGE_TITLES = {
+  inicio: "Inicio",
   cotizador: "Cotizador rápido",
   cotizaciones: "Cotizaciones guardadas",
   produccion: "Producción (semáforo)",
@@ -91,6 +169,7 @@ export function switchPage(page) {
   document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.page === navHighlight));
   document.getElementById("page-title").textContent = PAGE_TITLES[page] || "LUCXSTUDIO";
   document.getElementById("header-cta").style.display = page === "cotizador" ? "none" : "inline-block";
+  if (page === "inicio" && typeof window.renderInicio === "function") window.renderInicio();
   if (page === "bazares") renderBazares();
   if (page === "caja") renderCaja();
   if (page === "interes") renderInteres();
@@ -205,8 +284,8 @@ document.addEventListener("click", (e) => {
     document.getElementById("backup-menu").classList.remove("open");
   }
 });
-export function confirmResetAll() {
-  if (confirm("¿Seguro que quieres borrar TODOS los datos? Esta acción no se puede deshacer. Te recomendamos descargar un respaldo antes.")) {
+export async function confirmResetAll() {
+  if (await pedirConfirmacion("¿Seguro que quieres borrar TODOS los datos? Esta acción no se puede deshacer. Te recomendamos descargar un respaldo antes.", { titulo: "Borrar todos los datos", confirmLabel: "Borrar todo", deshacer: false })) {
     resetState();
     saveState();
     renderAll();
@@ -241,8 +320,8 @@ function saveColor() {
   saveState(); closeModal("modal-color"); renderColores(); refreshAllSelects();
   showToast("Color guardado.");
 }
-function deleteColor(id) {
-  if (!confirm("¿Eliminar este color?")) return;
+async function deleteColor(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este color?", { aviso: "Color eliminado." }))) return;
   AppState.colores = AppState.colores.filter(x => x.id !== id);
   saveState(); renderColores(); refreshAllSelects();
 }
@@ -284,8 +363,8 @@ function saveEtiqueta() {
   saveState(); closeModal("modal-etiqueta"); renderEtiquetas(); renderPlayeraTagChips(); renderAll();
   showToast("Etiqueta guardada.");
 }
-function deleteEtiqueta(id) {
-  if (!confirm("¿Eliminar esta etiqueta? Se quitará de todas las playeras.")) return;
+async function deleteEtiqueta(id) {
+  if (!(await pedirConfirmacion("¿Eliminar esta etiqueta? Se quitará de todas las playeras.", { aviso: "Etiqueta eliminada." }))) return;
   AppState.etiquetas = AppState.etiquetas.filter(x => x.id !== id);
   AppState.playeras.forEach(p => { p.tags = (p.tags || []).filter(t => t !== id); });
   saveState(); renderEtiquetas(); renderPlayeraTagChips(); renderPlayeras();
@@ -328,8 +407,8 @@ function saveEtiquetaOp() {
   saveState(); closeModal("modal-etiqueta-op"); renderEtiquetasOperativas(); refreshAllSelects();
   showToast("Etiqueta operativa guardada.");
 }
-function deleteEtiquetaOp(id) {
-  if (!confirm("¿Eliminar esta etiqueta operativa? Se quitará de todas las cotizaciones.")) return;
+async function deleteEtiquetaOp(id) {
+  if (!(await pedirConfirmacion("¿Eliminar esta etiqueta operativa? Se quitará de todas las cotizaciones.", { aviso: "Etiqueta operativa eliminada." }))) return;
   AppState.etiquetasOperativas = AppState.etiquetasOperativas.filter(x => x.id !== id);
   AppState.cotizaciones.forEach(c => { c.tagsOperativos = (c.tagsOperativos || []).filter(t => t !== id); });
   saveState(); renderEtiquetasOperativas(); refreshAllSelects(); renderCotizacionesGuardadas();
@@ -373,8 +452,8 @@ function saveTallaEtiqueta() {
   saveState(); closeModal("modal-talla-etiqueta"); renderTallaEtiquetas();
   showToast("Stock de etiquetas actualizado.");
 }
-function deleteTallaEtiqueta(id) {
-  if (!confirm("¿Eliminar este registro de etiquetas?")) return;
+async function deleteTallaEtiqueta(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este registro de etiquetas?", { aviso: "Registro eliminado." }))) return;
   AppState.tallaEtiquetas = AppState.tallaEtiquetas.filter(x => x.id !== id);
   saveState(); renderTallaEtiquetas();
 }
@@ -450,8 +529,8 @@ function saveArtista() {
   saveState(); closeModal("modal-artista"); renderArtistas(); refreshAllSelects();
   showToast("Artista guardado.");
 }
-function deleteArtista(id) {
-  if (!confirm("¿Eliminar este artista?")) return;
+async function deleteArtista(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este artista?", { aviso: "Artista eliminado." }))) return;
   AppState.artistas = AppState.artistas.filter(x => x.id !== id);
   saveState(); renderArtistas(); refreshAllSelects();
 }
@@ -469,7 +548,7 @@ function renderArtistas() {
         <button onclick="openModalArtista('${a.id}')">✏️ Editar</button>
         <button class="danger" onclick="deleteArtista('${a.id}')">🗑️ Eliminar</button>
       </div>
-    </div>`).join("") || `<p class="empty-hint">Aún no registras artistas.</p>`;
+    </div>`).join("") || estadoVacio("🎨", "Aún no hay artistas", "Registra a quien diseña contigo para repartir su comisión automáticamente.", { label: "+ Nuevo artista", onclick: "openModalArtista()" });
 }
 
 /* =================================================================
@@ -500,8 +579,8 @@ function saveProveedor() {
   saveState(); closeModal("modal-proveedor"); renderProveedores();
   showToast("Proveedor guardado.");
 }
-function deleteProveedor(id) {
-  if (!confirm("¿Eliminar este proveedor?")) return;
+async function deleteProveedor(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este proveedor?", { aviso: "Proveedor eliminado." }))) return;
   AppState.proveedores = AppState.proveedores.filter(x => x.id !== id);
   saveState(); renderProveedores();
 }
@@ -520,7 +599,7 @@ function renderProveedores() {
         <button onclick="openModalProveedor('${pr.id}')">✏️ Editar</button>
         <button class="danger" onclick="deleteProveedor('${pr.id}')">🗑️ Eliminar</button>
       </div>
-    </div>`).join("") || `<p class="empty-hint">Aún no registras proveedores.</p>`;
+    </div>`).join("") || estadoVacio("🚚", "Aún no hay proveedores", "Guarda a quien te surte tela, DTF o empaques.", { label: "+ Nuevo proveedor", onclick: "openModalProveedor()" });
 }
 
 /* ---------------------------------------------------------------
@@ -755,8 +834,8 @@ function recalcularRepartoGasto(id) {
   saveState(); renderGastos(); renderPlayeras(); renderStickers();
   showToast("Reparto recalculado.");
 }
-function deleteGasto(id) {
-  if (!confirm("¿Eliminar este gasto?")) return;
+async function deleteGasto(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este gasto?", { aviso: "Gasto eliminado." }))) return;
   const g = AppState.gastos.find(x => x.id === id);
   (g?.piezasLigadas || []).forEach(key => {
     const [tipoKey, pid] = key.split(":");
@@ -805,7 +884,7 @@ function renderGastos() {
         <button class="danger" onclick="deleteGasto('${g.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
-  }).join("") || `<p class="empty-hint">Aún no registras gastos generales.</p>`;
+  }).join("") || estadoVacio("💸", "Aún no hay gastos", "Anota materiales, renta o servicios para saber cuánto gastas al mes.", { label: "+ Nuevo gasto", onclick: "openModalGasto()" });
 }
 
 /* ---------------------------------------------------------------
@@ -910,13 +989,13 @@ function saveMerma() {
 // Deshace una merma mal registrada: si estaba ligada a una playera del inventario, le
 // regresa exactamente la cantidad que se le había descontado (declasifica el registro),
 // y luego lo elimina. Así nunca se pierde stock por un error de captura.
-function deleteMerma(id) {
+async function deleteMerma(id) {
   const m = AppState.mermas.find(x => x.id === id);
   if (!m) return;
   const mensaje = m.playeraId
     ? `¿Eliminar esta merma? Se le regresarán ${m.cantidad} pieza(s) al stock de "${m.nombre}".`
     : "¿Eliminar este registro de merma?";
-  if (!confirm(mensaje)) return;
+  if (!(await pedirConfirmacion(mensaje, { aviso: "Merma eliminada." }))) return;
   if (m.playeraId) {
     const p = AppState.playeras.find(x => x.id === m.playeraId);
     if (p) p.stock = (p.stock || 0) + (m.cantidad || 0);
@@ -949,7 +1028,7 @@ function renderMermas() {
         <button onclick="openModalMerma('${m.id}')">✏️ Editar</button>
         <button class="danger" onclick="deleteMerma('${m.id}')">🗑️ Eliminar</button>
       </div>
-    </div>`).join("") || `<p class="empty-hint">Aún no registras mermas — ¡que se mantenga así!</p>`;
+    </div>`).join("") || estadoVacio("📉", "Sin mermas registradas", "¡Que se mantenga así! Aquí se anotan las piezas dañadas o perdidas.", { label: "+ Nueva merma", onclick: "openModalMerma()" });
 }
 
 /* ---------------------------------------------------------------
@@ -985,8 +1064,8 @@ function saveCompra() {
   saveState(); closeModal("modal-compra"); renderComprasPendientes();
   showToast("Compra pendiente guardada.");
 }
-function deleteCompra(id) {
-  if (!confirm("¿Eliminar esta compra pendiente?")) return;
+async function deleteCompra(id) {
+  if (!(await pedirConfirmacion("¿Eliminar esta compra pendiente?", { aviso: "Compra eliminada." }))) return;
   AppState.comprasPendientes = AppState.comprasPendientes.filter(x => x.id !== id);
   saveState(); renderComprasPendientes();
 }
@@ -1034,7 +1113,7 @@ function renderComprasPendientes() {
         <button class="danger" onclick="deleteCompra('${c.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
-  }).join("") || `<p class="empty-hint">Aún no tienes compras pendientes por registrar.</p>`;
+  }).join("") || estadoVacio("🎯", "Sin compras pendientes", "Agrega lo que quieres comprar y ve cuánto llevas ahorrado.", { label: "+ Nueva compra", onclick: "openModalCompra()" });
 }
 
 /* =================================================================
@@ -1209,8 +1288,8 @@ function saveBazar() {
   }
   showToast("Bazar guardado.");
 }
-function deleteBazar(id) {
-  if (!confirm("¿Eliminar este bazar? Las cotizaciones y playeras ligadas quedarán sin bazar asignado.")) return;
+async function deleteBazar(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este bazar? Las cotizaciones y playeras ligadas quedarán sin bazar asignado.", { aviso: "Bazar eliminado." }))) return;
   AppState.bazares = AppState.bazares.filter(x => x.id !== id);
   AppState.cotizaciones.forEach(c => {
     c.bazarIds = bazarIdsDe(c).filter(bazarId => bazarId !== id);
@@ -1222,11 +1301,12 @@ function deleteBazar(id) {
   });
   if (activeBazarId === id) activeBazarId = "";
   saveState(); renderBazares(); refreshAllSelects(); renderCotizacionesGuardadas(); renderPlayeras();
+  return true;
 }
-function deleteBazarFromDetalle() {
+async function deleteBazarFromDetalle() {
   if (!activeBazarId) return;
-  deleteBazar(activeBazarId);
-  switchPage("bazares");
+  const eliminado = await deleteBazar(activeBazarId);
+  if (eliminado) switchPage("bazares");
 }
 function renderAssignmentBazares(selectedIds) {
   const list = document.getElementById("ab-bazares-list");
@@ -1381,7 +1461,7 @@ function renderInteres() {
   if (top.length && typeof Chart !== "undefined") {
     chartInteresProductos = new Chart(cvP, {
       type: "bar",
-      data: { labels: top.map(r => r.nombre), datasets: [{ label: "Consultas", data: top.map(r => r.total), backgroundColor: "#e3363d", borderRadius: 6 }] },
+      data: { labels: top.map(r => r.nombre), datasets: [{ label: "Consultas", data: top.map(r => r.total), backgroundColor: colorAcento(), borderRadius: 6 }] },
       options: { indexAxis: "y", responsive: true, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     });
   }
@@ -1411,7 +1491,7 @@ function renderInteres() {
         <button class="danger" onclick="quickSubtractConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replace(/'/g, "\\'")}')">➖ −1 pregunta</button>
         <button onclick="quickAddConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replace(/'/g, "\\'")}')">➕ +1 pregunta</button>
       </div>
-    </div>`).join("") || `<p class="empty-hint">Todavía no registras consultas.</p>`;
+    </div>`).join("") || estadoVacio("❓", "Aún no hay consultas", "Registra lo que preguntan los clientes para ver qué diseños tienen más interés.", { label: "+ Registrar consulta", onclick: "openModalConsulta()" });
 
   // Historial reciente
   const recientes = AppState.consultas
@@ -1526,8 +1606,8 @@ function saveConsultaEtiqueta() {
   saveState(); closeModal("modal-consulta-etiqueta"); renderInteres();
   showToast("Etiqueta guardada.");
 }
-function deleteConsultaEtiqueta(id) {
-  if (!confirm("¿Eliminar esta etiqueta? Se quitará de las consultas que la usan.")) return;
+async function deleteConsultaEtiqueta(id) {
+  if (!(await pedirConfirmacion("¿Eliminar esta etiqueta? Se quitará de las consultas que la usan.", { aviso: "Etiqueta eliminada." }))) return;
   AppState.consultaEtiquetas = AppState.consultaEtiquetas.filter(x => x.id !== id);
   AppState.consultas.forEach(c => { c.tags = (c.tags || []).filter(t => t !== id); });
   saveState(); renderInteres();
@@ -1891,9 +1971,7 @@ function savePlayera() {
 }
 async function deletePlayera(id) {
   const p0 = AppState.playeras.find(x => x.id === id);
-  const ok = typeof window.confirmPopup === "function"
-    ? await window.confirmPopup({ title: "Eliminar playera", message: `¿Eliminar "${p0 ? p0.nombre : "esta playera"}" del inventario? Esta acción no se puede deshacer.`, confirmLabel: "Eliminar", danger: true })
-    : confirm("¿Eliminar esta playera del inventario?");
+  const ok = await pedirConfirmacion(`¿Eliminar "${p0 ? p0.nombre : "esta playera"}" del inventario?`, { titulo: "Eliminar playera", aviso: "Playera eliminada." });
   if (!ok) return;
   const p = AppState.playeras.find(x => x.id === id);
   liberarEtiquetaTallaDePlayera(p);
@@ -1948,6 +2026,16 @@ function renderPlayeras() {
   });
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
+  if (!list.length) {
+    const hayInventario = AppState.playeras.length > 0;
+    document.getElementById("playeras-empty-title").textContent = hayInventario ? "Ninguna playera coincide" : "Aún no hay playeras";
+    document.getElementById("playeras-empty-text").textContent = hayInventario
+      ? "Prueba quitando algunos filtros o cambia lo que buscas."
+      : "Registra tu primera playera para empezar a controlar tu inventario.";
+    const btnVacio = document.getElementById("playeras-empty-btn");
+    btnVacio.textContent = hayInventario ? "Limpiar filtros" : "+ Nueva playera";
+    btnVacio.onclick = hayInventario ? () => limpiarFiltrosPlayeras() : () => openModalPlayera();
+  }
   grid.classList.toggle("vista-lista", uiFilters.playeraVista === "lista");
   grid.innerHTML = list.map(playeraCardCompacta).join("");
   actualizarBarraFiltrosPlayeras();
@@ -2132,8 +2220,8 @@ function saveSticker() {
   saveState(); closeModal("modal-sticker"); renderStickers();
   showToast("Estampado guardado.");
 }
-function deleteSticker(id) {
-  if (!confirm("¿Eliminar este estampado?")) return;
+async function deleteSticker(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este estampado?", { aviso: "Estampado eliminado." }))) return;
   AppState.stickers = AppState.stickers.filter(x => x.id !== id);
   saveState(); renderStickers();
 }
@@ -2332,6 +2420,67 @@ function addQuoteSticker() {
     cantidad: 1, precioVenta: sticker ? (sticker.precioVenta || sticker.costo) : 0
   });
   renderQuoteItems();
+  openModalQuoteSticker(quoteStickerItems[quoteStickerItems.length - 1].rowId);
+}
+
+/* ---------------------------------------------------------------
+   REDISEÑO SPRINT 4 — POP-UP PARA EDITAR UN STICKER DEL COTIZADOR
+   Reusa updateQuoteStickerField, así que el costo por área no cambia.
+--------------------------------------------------------------- */
+let editingQuoteStickerRowId = null;
+function itemStickerEnEdicion() {
+  return quoteStickerItems.find(i => i.rowId === editingQuoteStickerRowId) || null;
+}
+function openModalQuoteSticker(rowId) {
+  const item = quoteStickerItems.find(i => i.rowId === rowId);
+  if (!item) return;
+  editingQuoteStickerRowId = rowId;
+  const ordenados = [...AppState.stickers].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+  document.getElementById("qs-producto").innerHTML = `<option value="">— Manual / personalizado —</option>` +
+    ordenados.map(s => `<option value="${s.id}">${escapeHtml(s.nombre)} · ${escapeHtml(s.tamano)}</option>`).join("");
+  llenarModalSticker(item);
+  openModal("modal-quote-sticker");
+}
+function llenarModalSticker(item) {
+  setVal("qs-producto", item.stickerId || "");
+  document.getElementById("qs-manual-wrap").style.display = item.stickerId ? "none" : "flex";
+  setVal("qs-nombre", item.nombre || "");
+  setVal("qs-tamano", item.tamano || "Chico");
+  setVal("qs-ancho", item.anchoCm || 0);
+  setVal("qs-largo", item.largoCm || 0);
+  setVal("qs-cantidad", item.cantidad || 1);
+  setVal("qs-precio", item.precioVenta || 0);
+  refrescarPreviewSticker(item);
+}
+function refrescarPreviewSticker(item) {
+  const gananciaUnit = (item.precioVenta || 0) - (item.costo || 0);
+  const color = gananciaUnit >= 0 ? "var(--color-success)" : "var(--color-danger)";
+  document.getElementById("qs-title").textContent = item.nombre ? `Sticker — ${item.nombre}` : "Nuevo sticker";
+  setVal("qs-costo", Number(item.costo || 0).toFixed(2));
+  document.getElementById("qs-preview").innerHTML =
+    `Ganancia por pieza: <b style="color:${color}">${fmt(gananciaUnit)}</b> — Ganancia de ${item.cantidad} pza(s): <b style="color:${color}">${fmt(gananciaUnit * item.cantidad)}</b>`;
+}
+function refrescarModalStickerSiAbierto() {
+  const modal = document.getElementById("modal-quote-sticker");
+  if (!modal || !modal.classList.contains("open")) return;
+  const item = itemStickerEnEdicion();
+  if (item) refrescarPreviewSticker(item);
+}
+function onQuoteStickerProductoChange(stickerId) {
+  if (!editingQuoteStickerRowId) return;
+  updateQuoteStickerField(editingQuoteStickerRowId, "stickerId", stickerId);
+  const item = itemStickerEnEdicion();
+  if (item) llenarModalSticker(item);
+}
+function updateQuoteStickerFieldDesdeModal(field, value) {
+  if (!editingQuoteStickerRowId) return;
+  updateQuoteStickerField(editingQuoteStickerRowId, field, value);
+}
+function quitarStickerDesdeModal() {
+  if (!editingQuoteStickerRowId) return;
+  removeQuoteSticker(editingQuoteStickerRowId);
+  editingQuoteStickerRowId = null;
+  closeModal("modal-quote-sticker");
 }
 function removeQuoteSticker(rowId) {
   quoteStickerItems = quoteStickerItems.filter(item => item.rowId !== rowId);
@@ -2544,31 +2693,28 @@ function renderQuoteItems() {
     </div>`;
   }).join("");
 
-  const stickerBody = document.getElementById("quote-stickers-body");
+  const stickerList = document.getElementById("quote-stickers-list");
   const stickerEmpty = document.getElementById("quote-stickers-empty");
-  if (stickerBody) {
-    const stickerOptions = AppState.stickers.map(sticker => `<option value="${sticker.id}">${escapeHtml(sticker.nombre)}</option>`).join("");
-    stickerBody.innerHTML = quoteStickerItems.map(item => `
-      <tr>
-        <td>
-          <div class="quote-product-cell">
-            <select onchange="updateQuoteStickerField('${item.rowId}','stickerId',this.value)"><option value="">— Manual / personalizado —</option>${stickerOptions}</select>
-            ${!item.stickerId ? `<input type="text" placeholder="Nombre del sticker" value="${escapeHtml(item.nombre)}" onchange="updateQuoteStickerField('${item.rowId}','nombre',this.value)">` : `<div class="card-meta">${escapeHtml(item.nombre)}</div>`}
-          </div>
-        </td>
-        <td>${!item.stickerId ? `<select onchange="updateQuoteStickerField('${item.rowId}','tamano',this.value)"><option ${item.tamano === "Chico" ? "selected" : ""}>Chico</option><option ${item.tamano === "Mediano" ? "selected" : ""}>Mediano</option><option ${item.tamano === "Grande" ? "selected" : ""}>Grande</option></select>` : escapeHtml(item.tamano)}</td>
-        <td><input type="number" min="0" step="0.01" value="${Number(item.anchoCm || 0).toFixed(2)}" onchange="updateQuoteStickerField('${item.rowId}','anchoCm',this.value)"></td>
-        <td><input type="number" min="0" step="0.01" value="${Number(item.largoCm || 0).toFixed(2)}" onchange="updateQuoteStickerField('${item.rowId}','largoCm',this.value)"></td>
-        <td><input type="number" min="1" step="1" value="${item.cantidad}" onchange="updateQuoteStickerField('${item.rowId}','cantidad',this.value)"></td>
-        <td><input type="number" min="0" step="0.01" value="${Number(item.costo || 0).toFixed(2)}" readonly></td>
-        <td><input type="number" min="0" step="0.01" value="${Number(item.precioVenta || 0).toFixed(2)}" onchange="updateQuoteStickerField('${item.rowId}','precioVenta',this.value)"></td>
-        <td class="readonly-cell" style="color:${item.precioVenta - item.costo >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${fmt((item.precioVenta - item.costo) * item.cantidad)}</td>
-        <td><button class="remove-row" onclick="removeQuoteSticker('${item.rowId}')" title="Quitar">✕</button></td>
-      </tr>`).join("");
-    quoteStickerItems.forEach(item => {
-      const select = stickerBody.querySelector(`select[onchange*="${item.rowId}"]`);
-      if (select) select.value = item.stickerId;
-    });
+  if (stickerList) {
+    stickerList.innerHTML = quoteStickerItems.map(item => {
+      const gananciaUnit = (item.precioVenta || 0) - (item.costo || 0);
+      return `
+    <div class="qitem">
+      <div class="qitem-main">
+        <div class="qitem-name">✂️ ${escapeHtml(item.nombre) || "Sticker sin nombre"}</div>
+        <div class="qitem-meta">${escapeHtml(item.tamano || "Chico")}${(item.anchoCm || item.largoCm) ? ` · ${Number(item.anchoCm || 0).toFixed(1)} × ${Number(item.largoCm || 0).toFixed(1)} cm` : ""} · ×${item.cantidad}</div>
+      </div>
+      <div class="qitem-nums">
+        <div class="qitem-num"><span class="qitem-num-label">Precio c/u</span><span class="qitem-num-value">${fmt(item.precioVenta)}</span></div>
+        <div class="qitem-num"><span class="qitem-num-label">Total</span><span class="qitem-num-value">${fmt((item.precioVenta || 0) * item.cantidad)}</span></div>
+        <div class="qitem-num"><span class="qitem-num-label">Ganancia</span><span class="qitem-num-value" style="color:${gananciaUnit >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(gananciaUnit * item.cantidad)}</span></div>
+      </div>
+      <div class="qitem-actions">
+        <button type="button" class="btn-primary" onclick="openModalQuoteSticker('${item.rowId}')">✏️ Editar</button>
+        <button type="button" class="remove-row" onclick="removeQuoteSticker('${item.rowId}')" title="Quitar">✕</button>
+      </div>
+    </div>`;
+    }).join("");
     if (stickerEmpty) stickerEmpty.style.display = quoteStickerItems.length ? "none" : "block";
   }
 
@@ -2577,6 +2723,7 @@ function renderQuoteItems() {
   renderServiciosExtra();
   updateQuoteSummary();
   refrescarModalPrendaSiAbierto();
+  refrescarModalStickerSiAbierto();
 }
 function computeQuoteTotals() {
   let ventaBruta = 0, totalCosto = 0;
@@ -3127,8 +3274,8 @@ function duplicateCotizacion(id) {
   saveState(); renderCotizacionesGuardadas();
   showToast("Cotización duplicada.");
 }
-function deleteCotizacion() {
-  if (!confirm("¿Eliminar esta cotización?")) return;
+async function deleteCotizacion() {
+  if (!(await pedirConfirmacion("¿Eliminar esta cotización?", { aviso: "Cotización eliminada." }))) return;
   AppState.cotizaciones = AppState.cotizaciones.filter(x => x.id !== viewingCotizacionId);
   saveState(); closeModal("modal-ver-cotizacion"); renderCotizacionesGuardadas();
 }
@@ -3207,8 +3354,8 @@ function saveConsignacion() {
 }
 // Al borrar la consignación, las playeras que seguían con ella vuelven a quedar libres
 // (sin consignacionId), en vez de quedar apuntando a un registro que ya no existe.
-function deleteConsignacion(id) {
-  if (!confirm("¿Eliminar esta consignación? Las playeras que seguían con ella quedarán libres.")) return;
+async function deleteConsignacion(id) {
+  if (!(await pedirConfirmacion("¿Eliminar esta consignación? Las playeras que seguían con ella quedarán libres.", { aviso: "Consignación eliminada." }))) return;
   AppState.playeras.forEach(p => {
     if (p.consignacionId === id) { p.consignacionId = ""; p.consignacionEstado = ""; }
   });
@@ -3298,8 +3445,8 @@ function saveClienteEtiqueta() {
   saveState(); closeModal("modal-cliente-etiqueta"); renderClientes();
   showToast("Etiqueta de cliente guardada.");
 }
-function deleteClienteEtiqueta(id) {
-  if (!confirm("¿Eliminar esta etiqueta? Se quitará de todos los clientes.")) return;
+async function deleteClienteEtiqueta(id) {
+  if (!(await pedirConfirmacion("¿Eliminar esta etiqueta? Se quitará de todos los clientes.", { aviso: "Etiqueta eliminada." }))) return;
   AppState.clienteEtiquetas = AppState.clienteEtiquetas.filter(x => x.id !== id);
   AppState.clientes.forEach(c => { c.tags = (c.tags || []).filter(t => t !== id); });
   if (clienteEtiquetaFiltro === id) clienteEtiquetaFiltro = "all";
@@ -3340,8 +3487,8 @@ function saveCliente() {
   saveState(); closeModal("modal-cliente"); refreshAllSelects(); renderClientes();
   showToast("Cliente guardado.");
 }
-function deleteCliente(id) {
-  if (!confirm("¿Eliminar este cliente? Sus cotizaciones anteriores se conservan, solo se quita el registro.")) return;
+async function deleteCliente(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este cliente? Sus cotizaciones anteriores se conservan, solo se quita el registro.", { aviso: "Cliente eliminado." }))) return;
   AppState.clientes = AppState.clientes.filter(x => x.id !== id);
   saveState(); refreshAllSelects(); renderClientes();
 }
@@ -3645,7 +3792,7 @@ function renderBazarDetalle() {
   if (fechas.length) {
     chartBazarFecha = new Chart(canvasFecha, {
       type: "bar",
-      data: { labels: fechas, datasets: [{ label: "Vendido ($)", data: valoresFecha, backgroundColor: "#e3363d", borderRadius: 6 }] },
+      data: { labels: fechas, datasets: [{ label: "Vendido ($)", data: valoresFecha, backgroundColor: colorAcento(), borderRadius: 6 }] },
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
   }
@@ -3680,7 +3827,7 @@ function renderBazarDetalle() {
     etiquetasVendidas[nombre] = (etiquetasVendidas[nombre] || 0) + (p.stock || 0);
   }));
   const etiquetasOrdenadas = Object.entries(etiquetasVendidas).sort((a, b) => b[1] - a[1]);
-  chartBazarVendidas = renderBazarChart(chartBazarVendidas, "chart-bazar-vendidas", "chart-bazar-vendidas-empty", vendidasLabels, vendidasValores, "Playeras vendidas", "#e3363d");
+  chartBazarVendidas = renderBazarChart(chartBazarVendidas, "chart-bazar-vendidas", "chart-bazar-vendidas-empty", vendidasLabels, vendidasValores, "Playeras vendidas", colorAcento());
   chartBazarDisponibles = renderBazarChart(chartBazarDisponibles, "chart-bazar-disponibles", "chart-bazar-disponibles-empty", disponiblesLabels, disponiblesValores, "Playeras disponibles", "#8b8b93");
   chartBazarEtiquetas = renderBazarChart(chartBazarEtiquetas, "chart-bazar-etiquetas", "chart-bazar-etiquetas-empty", etiquetasOrdenadas.map(([nombre]) => nombre), etiquetasOrdenadas.map(([, cantidad]) => cantidad), "Etiquetas vendidas", "#e0a23a");
 
@@ -3816,10 +3963,10 @@ function saveIngresoExtra() {
   saveState(); closeModal("modal-ingreso-extra"); renderBazarDetalle(); renderBazares();
   showToast("Ingreso extra guardado.");
 }
-function deleteIngresoExtra(id) {
+async function deleteIngresoExtra(id) {
   const b = AppState.bazares.find(x => x.id === activeBazarId);
   if (!b) return;
-  if (!confirm("¿Eliminar este ingreso extra?")) return;
+  if (!(await pedirConfirmacion("¿Eliminar este ingreso extra?", { aviso: "Ingreso extra eliminado." }))) return;
   b.ingresosExtra = (b.ingresosExtra || []).filter(x => x.id !== id);
   saveState(); renderBazarDetalle(); renderBazares();
 }
@@ -3879,7 +4026,7 @@ function renderEstadisticas() {
   if (bazarLabels.length) {
     chartBazares = new Chart(chartBazarCanvas, {
       type: "bar",
-      data: { labels: bazarLabels, datasets: [{ label: "Total vendido ($)", data: bazarValues, backgroundColor: "#e3363d", borderRadius: 6 }] },
+      data: { labels: bazarLabels, datasets: [{ label: "Total vendido ($)", data: bazarValues, backgroundColor: colorAcento(), borderRadius: 6 }] },
       options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
   }
@@ -3983,8 +4130,8 @@ function saveGrafica() {
   showToast(id ? "Gráfica actualizada." : "Gráfica agregada.");
 }
 
-function deleteGrafica(id) {
-  if (!confirm("¿Eliminar esta gráfica?")) return;
+async function deleteGrafica(id) {
+  if (!(await pedirConfirmacion("¿Eliminar esta gráfica?", { aviso: "Gráfica eliminada." }))) return;
   AppState.graficas = AppState.graficas.filter(g => g.id !== id);
   if (customChartInstances[id]) {
     customChartInstances[id].destroy();
@@ -4022,7 +4169,7 @@ function renderGraficasPersonalizadas() {
       type: g.tipo,
       data: {
         labels: data.labels,
-        datasets: [{ label: data.label, data: data.values, backgroundColor: ["#e3363d", "#3fb87f", "#e0a23a", "#8b8b93"], borderColor: "#e3363d", borderWidth: 2, tension: .25 }]
+        datasets: [{ label: data.label, data: data.values, backgroundColor: [colorAcento(), "#3fb87f", "#e0a23a", "#8b8b93"], borderColor: colorAcento(), borderWidth: 2, tension: .25 }]
       },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } }, scales: g.tipo === "doughnut" || g.tipo === "pie" ? {} : { y: { beginAtZero: true } } }
     });
@@ -4032,7 +4179,7 @@ function renderGraficasPersonalizadas() {
 /* =================================================================
    INICIALIZACIÓN
 ================================================================= */
-export function renderAll() {
+export function renderAll(opciones) {
   refreshAllSelects();
   renderColores();
   renderEtiquetas();
@@ -4051,7 +4198,8 @@ export function renderAll() {
   renderPlayeras();
   renderStickers();
   renderCotizacionesGuardadas();
-  resetQuoteForm();
+  if (!(opciones && opciones.conservarCotizador)) resetQuoteForm();
+  if (typeof window.renderInicio === "function") window.renderInicio();
 }
 
 /* =================================================================
@@ -4062,6 +4210,8 @@ export function renderAll() {
    funciones ya no son globales por defecto.
 ================================================================= */
 Object.assign(window, {
+  refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
+  openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
   verDetallePlayera, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
