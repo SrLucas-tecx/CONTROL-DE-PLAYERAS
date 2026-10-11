@@ -44,6 +44,7 @@ export function defaultState() {
     ],
     playeras: [],
     stickers: [],
+    ventasStickers: [],
     artistas: [
       { id: "a1", nombre: "SrLucas", modo: "ninguno", pctArtista: 0, pctEstudio: 100, notas: "Estudio principal" },
       { id: "a2", nombre: "Obake", modo: "venta", pctArtista: 30, pctEstudio: 70, notas: "" }

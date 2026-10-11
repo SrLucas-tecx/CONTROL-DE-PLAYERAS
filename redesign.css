@@ -517,3 +517,98 @@ kbd{
 .accent-swatch:hover{border-color:var(--color-gray);}
 .accent-swatch.active{border-color:var(--color-text);}
 .accent-dot{width:24px;height:24px;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);}
+
+/* ---- Fila de detalle con botón (ej. "Anular") ---- */
+.qd-row{align-items:center;}
+.qd-row-btn{
+  flex-shrink:0;padding:var(--space-1) var(--space-3);border-radius:var(--radius-sm);
+  background:var(--color-danger-soft);color:var(--color-danger);font-size:var(--fs-xs);font-weight:800;
+}
+.qd-row-btn:hover{background:var(--color-danger);color:#fff;}
+.qd-row .qd-label{flex:1;min-width:0;}
+
+/* ============================================================
+   SPRINT 7 — MODO BAZAR: STICKERS, APARTADAS Y VENDIDO HOY
+   ============================================================ */
+
+/* Los pop-ups se ven por encima del modo bazar */
+body.modo-bazar-activo .modal-overlay{z-index:130;}
+body.modo-bazar-activo .confirm-overlay{z-index:150;}
+
+/* "Vendido hoy" ahora es un botón */
+button.mb-hoy{background:none;border-radius:var(--radius-md);padding:var(--space-1) var(--space-3);text-align:right;cursor:pointer;}
+button.mb-hoy:hover{background:var(--color-accent-soft);}
+
+/* Pestañas Playeras / Stickers */
+.mb-tabs{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;padding:var(--space-3) var(--space-4) 0;}
+.mb-tab{
+  min-height:44px;padding:0 var(--space-5);border-radius:var(--radius-full);font-weight:800;font-size:var(--fs-base);
+  background:var(--color-surface-alt);border:2px solid var(--color-border);color:var(--color-text-muted);
+}
+.mb-tab.active{border-color:var(--color-accent);background:var(--color-accent-soft);color:var(--color-text);}
+.mb-chk{
+  margin-left:auto;display:inline-flex;align-items:center;gap:var(--space-2);
+  font-size:var(--fs-sm);font-weight:700;color:var(--color-text-muted);cursor:pointer;
+}
+.mb-chk input{accent-color:var(--color-accent);width:20px;height:20px;}
+
+/* Stickers y apartadas */
+.mb-glyph{font-size:1.1rem;line-height:1;}
+.mb-seccion{
+  grid-column:1 / -1;margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px dashed var(--color-border);
+  font-size:var(--fs-sm);font-weight:800;color:var(--color-text-muted);
+}
+.mb-tile.apartada{opacity:.7;border-style:dashed;background:var(--color-surface-alt);}
+.mb-tile.apartada:hover{opacity:1;border-color:var(--color-gray);}
+.mb-tile-motivo{font-size:var(--fs-xs);font-weight:700;color:var(--color-warning);margin-top:auto;}
+
+/* ============================================================
+   SELECTOR DE BAZAR ACTIVO — desplegable con tarjetas
+   ============================================================ */
+.bazar-activo-bar{position:relative;}
+.bazar-activo-bar .bazar-select-oculto{
+  position:absolute !important;opacity:0;pointer-events:none;width:1px !important;height:1px;max-width:none;padding:0;
+}
+.bazar-picker-btn{
+  display:flex;align-items:center;gap:var(--space-2);max-width:200px;min-width:0;
+  padding:4px var(--space-2);border-radius:var(--radius-full);
+  font-size:var(--fs-sm);font-weight:700;color:var(--color-text);
+  transition:background var(--transition);
+}
+.bazar-picker-btn:hover{background:var(--color-surface);}
+.bazar-picker-btn:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;}
+.bazar-picker-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bazar-picker-flecha{flex-shrink:0;font-size:var(--fs-xs);color:var(--color-text-muted);}
+
+.bazar-picker-panel{
+  position:absolute;top:calc(100% + 10px);left:0;z-index:60;
+  width:340px;max-width:calc(100vw - 2rem);max-height:60vh;overflow-y:auto;
+  display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);
+  background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);animation:overlayin .15s ease;
+}
+.bazar-picker-panel[hidden]{display:none;}
+.bazar-picker-titulo{
+  font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--color-text-muted);padding:var(--space-1) var(--space-1) 0;
+}
+.bazar-card{
+  display:flex;align-items:center;gap:var(--space-3);width:100%;text-align:left;
+  padding:var(--space-3);border-radius:var(--radius-md);
+  background:var(--color-surface-alt);border:1px solid var(--color-border);
+  transition:border-color var(--transition),background var(--transition);
+}
+.bazar-card:hover{border-color:var(--color-gray);}
+.bazar-card.active{border-color:var(--color-accent);background:var(--color-accent-soft);}
+.bazar-card:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;}
+.bazar-card-ico{font-size:1.2rem;width:1.8rem;text-align:center;flex-shrink:0;}
+.bazar-card-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.bazar-card-name{font-weight:700;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bazar-card-meta{font-size:var(--fs-xs);color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bazar-card-tag{
+  flex-shrink:0;padding:2px 9px;border-radius:var(--radius-full);
+  background:var(--color-accent);color:#fff;font-size:var(--fs-xs);font-weight:800;
+}
+.bazar-card-monto{flex-shrink:0;font-size:var(--fs-xs);font-weight:700;color:var(--color-text-muted);}
+.bazar-card-nuevo{border-style:dashed;color:var(--color-text-muted);font-weight:700;}
+.bazar-card-nuevo:hover{color:var(--color-text);border-color:var(--color-accent);}

@@ -6,7 +6,7 @@
    ============================================================ */
 import { AppState } from "./storage.js";
 import { ETAPAS_PRODUCCION } from "./config.js";
-import { fmt, escapeHtml, semaforoCotizacion } from "./calculator.js";
+import { fmt, escapeHtml, semaforoCotizacion, costoTotalPlayera } from "./calculator.js";
 
 const $ = id => document.getElementById(id);
 
@@ -25,23 +25,37 @@ const enMes = (fecha, ym) => (fecha || "").startsWith(ym);
 /* ---------------------------------------------------------------
    CÁLCULOS DEL PANEL
 --------------------------------------------------------------- */
+// Ventas sueltas (venta rápida y modo bazar) de un mes: playeras y stickers.
+function ventasRapidasDelMes(ym) {
+  const playeras = AppState.playeras.filter(p => p.ventaRapida && p.bazarEstado === "Vendida" && enMes(p.fechaVenta, ym));
+  const stickers = (AppState.ventasStickers || []).filter(v => enMes(v.fecha, ym));
+  const total = playeras.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0)
+    + stickers.reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0);
+  const tarjeta = playeras.reduce((s, p) => s + (p.montoTarjeta || 0), 0) + stickers.reduce((s, v) => s + (v.montoTarjeta || 0), 0);
+  const ganancia = playeras.reduce((s, p) => s + ((p.precioVenta || 0) - costoTotalPlayera(p)) * (p.stock || 0) - (p.comisionTerminal || 0), 0)
+    + stickers.reduce((s, v) => s + ((v.precioVenta || 0) - (v.costoUnitario || 0)) * (v.cantidad || 0) - (v.comisionTerminal || 0), 0);
+  return { total, tarjeta, ganancia, cuenta: playeras.length + stickers.length };
+}
 function calcular() {
   const ym = mesLocal(0), ymAnt = mesLocal(-1);
   const cotsValidas = AppState.cotizaciones.filter(c => !c.ventaNula);
   const delMes = cotsValidas.filter(c => enMes(c.fecha, ym));
   const delMesAnt = cotsValidas.filter(c => enMes(c.fecha, ymAnt));
 
-  const vendido = delMes.reduce((s, c) => s + (c.totalVenta || 0), 0);
-  const vendidoAnt = delMesAnt.reduce((s, c) => s + (c.totalVenta || 0), 0);
-  const menudeo = delMes.filter(c => c.tipoVenta !== "Mayoreo").reduce((s, c) => s + (c.totalVenta || 0), 0);
-  const mayoreo = vendido - menudeo;
-  const tarjeta = delMes.reduce((s, c) => s + (c.montoTarjeta || 0), 0);
+  const rapidas = ventasRapidasDelMes(ym);
+  const rapidasAnt = ventasRapidasDelMes(ymAnt);
+  const vendidoCots = delMes.reduce((s, c) => s + (c.totalVenta || 0), 0);
+  const vendido = vendidoCots + rapidas.total;
+  const vendidoAnt = delMesAnt.reduce((s, c) => s + (c.totalVenta || 0), 0) + rapidasAnt.total;
+  const menudeo = delMes.filter(c => c.tipoVenta !== "Mayoreo").reduce((s, c) => s + (c.totalVenta || 0), 0) + rapidas.total;
+  const mayoreo = vendidoCots - (menudeo - rapidas.total);
+  const tarjeta = delMes.reduce((s, c) => s + (c.montoTarjeta || 0), 0) + rapidas.tarjeta;
   const efectivo = Math.max(0, vendido - tarjeta);
   const porCobrar = cotsValidas
     .filter(c => (c.anticipo || 0) > 0 && c.estado !== "Pagado")
     .reduce((s, c) => s + Math.max(0, (c.totalVenta || 0) - (c.anticipo || 0)), 0);
 
-  const gananciaCots = delMes.reduce((s, c) => s + (c.ganancia || 0), 0);
+  const gananciaCots = delMes.reduce((s, c) => s + (c.ganancia || 0), 0) + rapidas.ganancia;
   const mermas = AppState.mermas.filter(m => enMes(m.fecha, ym)).reduce((s, m) => s + (m.costoTotal || 0), 0);
   const gastos = AppState.gastos.filter(g => enMes(g.fecha, ym)).reduce((s, g) => s + (g.monto || 0), 0);
   const gananciaNeta = gananciaCots - mermas;
@@ -55,7 +69,7 @@ function calcular() {
   const stickersBajos = AppState.stickers.filter(s => (s.stockMinimo || 0) > 0 && (s.stock || 0) <= s.stockMinimo);
 
   return {
-    ym, delMes, vendido, vendidoAnt, menudeo, mayoreo, efectivo, tarjeta, porCobrar,
+    ym, delMes, rapidas, vendidoCots, vendido, vendidoAnt, menudeo, mayoreo, efectivo, tarjeta, porCobrar,
     gananciaCots, mermas, gastos, gananciaNeta,
     pendientes, atrasados, playerasBajas, stickersBajos
   };
@@ -72,7 +86,7 @@ function renderInicio() {
   $("home-fecha").textContent = mesTxt.charAt(0).toUpperCase() + mesTxt.slice(1);
 
   $("kpi-vendido").textContent = fmt(d.vendido);
-  $("kpi-vendido-sub").textContent = `${d.delMes.length} cotización(es)`;
+  $("kpi-vendido-sub").textContent = d.rapidas.cuenta ? `${d.delMes.length} cotización(es) · ${d.rapidas.cuenta} venta(s) rápida(s)` : `${d.delMes.length} cotización(es)`;
 
   $("kpi-ganancia").textContent = fmt(d.gananciaNeta);
   $("kpi-ganancia").style.color = d.gananciaNeta < 0 ? "var(--color-danger)" : "";
@@ -113,7 +127,8 @@ function detalleVendido() {
   let comparacion = ["Mes anterior", fmt(d.vendidoAnt)];
   const filas = [
     ["Total vendido", fmt(d.vendido), "accent"],
-    ["Cotizaciones", String(d.delMes.length)],
+    ["Cotizaciones", fmt(d.vendidoCots) + " · " + d.delMes.length],
+    ["Ventas rápidas y modo bazar", fmt(d.rapidas.total) + " · " + d.rapidas.cuenta],
     ["Menudeo", fmt(d.menudeo)],
     ["Mayoreo", fmt(d.mayoreo)]
   ];
@@ -136,10 +151,10 @@ function detalleVendido() {
 function detalleGanancia() {
   const d = calcular();
   window.openQuickDetail({
-    icon: "📈", title: "Ganancia del mes", subtitle: "Cotizaciones guardadas del mes en curso",
+    icon: "📈", title: "Ganancia del mes", subtitle: "Cotizaciones y ventas rápidas del mes en curso",
     sections: [
       { title: "Cálculo", rows: [
-        ["Ganancia de cotizaciones", fmt(d.gananciaCots)],
+        ["Ganancia de ventas (cotizaciones y ventas rápidas)", fmt(d.gananciaCots)],
         ["Mermas del mes", "− " + fmt(d.mermas), d.mermas ? "bad" : ""],
         ["Ganancia neta", fmt(d.gananciaNeta), d.gananciaNeta >= 0 ? "good" : "bad"]
       ] },

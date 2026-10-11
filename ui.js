@@ -14,7 +14,7 @@ import {
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
-  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
@@ -3652,12 +3652,13 @@ function renderBazarDetalle() {
     if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
     return s + costoTotalPlayera(p) * (p.stock || 0);
   }, 0);
-  const totalVendido = validas.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras;
+  const stickersBazar = resumenVentasStickers(b.id);
+  const totalVendido = validas.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras + stickersBazar.total;
   const perdidaCotsNulas = nulas.reduce((s, c) => s + (c.totalCosto || 0), 0);
   // Ganancia ESTIMADA por catálogo: suma del margen que cada playera/cotización trae
   // calculado por su costeo de área DTF. Es solo referencia para comparar diseños,
   // nunca se resta contra el costo del bazar (eso causaba el doble conteo).
-  const gananciaVentas = validas.reduce((s, c) => s + c.ganancia, 0) + gananciaVentasPlayeras - perdidaCotsNulas - perdidaPlayerasNulas;
+  const gananciaVentas = validas.reduce((s, c) => s + c.ganancia, 0) + gananciaVentasPlayeras + stickersBazar.ganancia - perdidaCotsNulas - perdidaPlayerasNulas;
   const totalRegalado = perdidaCotsNulas + perdidaPlayerasNulas;
   const desglose = gastosBazarPorTipo(b);
   const costoReal = costoBazarReal(b);
@@ -4000,9 +4001,10 @@ function renderEstadisticas() {
     if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
     return s + costoTotalPlayera(p) * (p.stock || 0);
   }, 0);
-  const totalVendido = validCots.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras;
+  const stickersTodos = resumenVentasStickers();
+  const totalVendido = validCots.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras + stickersTodos.total;
   const perdidaCotsNulas = nullCots.reduce((s, c) => s + (c.totalCosto || 0), 0);
-  const totalGanancia = validCots.reduce((s, c) => s + c.ganancia, 0) + totalGananciaPlayeras - perdidaCotsNulas - perdidaPlayerasNulas;
+  const totalGanancia = validCots.reduce((s, c) => s + c.ganancia, 0) + totalGananciaPlayeras + stickersTodos.ganancia - perdidaCotsNulas - perdidaPlayerasNulas;
   const totalMayoreo = validCots.filter(c => c.tipoVenta === "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
   const totalRegalado = perdidaCotsNulas + perdidaPlayerasNulas;
 

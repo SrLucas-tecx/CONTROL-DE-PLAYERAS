@@ -198,7 +198,7 @@ export function saldoPendienteCliente(cotizacion) {
 // contar y de dónde sacar el fondo de caja/efectivo contado, arma el mismo desglose
 // (ventas en efectivo, en tarjeta, comisión de terminal, efectivo esperado vs. contado).
 // Lo usan tanto el cierre de un bazar como la Caja general (sin bazar) — Sprint 4.
-function desgloseCierreCajaBase(filtroCot, filtroPlayera, fondoCaja, efectivoContadoRaw) {
+function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCaja, efectivoContadoRaw) {
   const cots = AppState.cotizaciones.filter(c => !c.ventaNula && filtroCot(c));
   const playerasVendidas = AppState.playeras.filter(p => (p.bazarEstado || "Disponible") === "Vendida" && (p.stock || 0) > 0 && filtroPlayera(p));
   let ventasTarjeta = 0, comisionTerminal = 0, totalVendido = 0;
@@ -212,6 +212,11 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, fondoCaja, efectivoCon
     ventasTarjeta += p.montoTarjeta || 0;
     comisionTerminal += p.comisionTerminal || 0;
   });
+  (AppState.ventasStickers || []).filter(filtroSticker).forEach(v => {
+    totalVendido += (v.precioVenta || 0) * (v.cantidad || 0);
+    ventasTarjeta += v.montoTarjeta || 0;
+    comisionTerminal += v.comisionTerminal || 0;
+  });
   const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
   const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo;
   const tieneConteo = efectivoContadoRaw !== null && efectivoContadoRaw !== undefined && efectivoContadoRaw !== "";
@@ -222,7 +227,7 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, fondoCaja, efectivoCon
   };
 }
 export function desgloseCierreBazar(bazar) {
-  return desgloseCierreCajaBase(c => bazarTiene(c, bazar.id), p => bazarTiene(p, bazar.id), bazar.fondoCaja, bazar.efectivoContado);
+  return desgloseCierreCajaBase(c => bazarTiene(c, bazar.id), p => bazarTiene(p, bazar.id), v => bazarTiene(v, bazar.id), bazar.fondoCaja, bazar.efectivoContado);
 }
 // Caja general (sin bazar): cuenta las ventas que NO tienen ningún bazar asignado — así
 // sirve para el día a día del taller, fuera de cualquier evento.
@@ -231,6 +236,7 @@ export function desgloseCierreCajaGeneral() {
   return desgloseCierreCajaBase(
     c => bazarIdsDe(c).length === 0,
     p => bazarIdsDe(p).length === 0,
+    v => bazarIdsDe(v).length === 0,
     cg.fondoCaja, cg.efectivoContado
   );
 }
@@ -272,6 +278,14 @@ export function bazarTiene(registro, bazarId) {
 export function nombresBazares(registro) {
   return bazarIdsDe(registro).map(bazarId => bazarNombre(bazarId)).filter(Boolean).join(", ");
 }
+// Ventas sueltas de stickers (venta rápida / modo bazar): total vendido, ganancia y número
+// de ventas. `bazarId` = id de un bazar, o undefined para sumar todas.
+export function resumenVentasStickers(bazarId) {
+  const ventas = (AppState.ventasStickers || []).filter(v => bazarId === undefined || bazarTiene(v, bazarId));
+  const total = ventas.reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0);
+  const ganancia = ventas.reduce((s, v) => s + ((v.precioVenta || 0) - (v.costoUnitario || 0)) * (v.cantidad || 0), 0);
+  return { total, ganancia, count: ventas.length };
+}
 export function getBazarVentasYGanancia(bazarId) {
   const cotsAsignadas = AppState.cotizaciones.filter(c => bazarTiene(c, bazarId));
   const cots = cotsAsignadas.filter(c => !c.ventaNula);
@@ -294,10 +308,11 @@ export function getBazarVentasYGanancia(bazarId) {
     return s + costoTotalPlayera(p) * (p.stock || 0);
   }, 0);
 
+  const stickers = resumenVentasStickers(bazarId);
   return {
-    totalVendido: totalVendidoCots + totalVendidoPlayeras,
-    gananciaVentas: gananciaVentasCots + gananciaVentasPlayeras - perdidaCotsNulas - perdidaPlayerasNulas,
-    cotsCount: cotsAsignadas.length + playerasAsignadas.length
+    totalVendido: totalVendidoCots + totalVendidoPlayeras + stickers.total,
+    gananciaVentas: gananciaVentasCots + gananciaVentasPlayeras + stickers.ganancia - perdidaCotsNulas - perdidaPlayerasNulas,
+    cotsCount: cotsAsignadas.length + playerasAsignadas.length + stickers.count
   };
 }
 
@@ -553,6 +568,10 @@ export function agruparArtes() {
     const monto = (p.precioVenta || 0) * (p.stock || 0);
     const ganancia = ((p.precioVenta || 0) - costoTotalPlayera(p)) * (p.stock || 0);
     agregar(p.nombre, p.stock || 0, monto, ganancia);
+  });
+  (AppState.ventasStickers || []).forEach(v => {
+    const cant = v.cantidad || 0;
+    agregar(v.nombre, cant, (v.precioVenta || 0) * cant, ((v.precioVenta || 0) - (v.costoUnitario || 0)) * cant);
   });
   return Object.values(grupos).sort((a, b) => b.totalVendido - a.totalVendido);
 }

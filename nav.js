@@ -218,6 +218,16 @@ export function openQuickDetail(cfg) {
       const row = el("div", "qd-row" + (r[2] ? " tone-" + r[2] : ""));
       row.appendChild(el("span", "qd-label", r[0]));
       row.appendChild(el("span", "qd-value", r[1]));
+      // 4º elemento opcional: { texto, onClick } agrega un botón chico a la fila
+      if (r[3] && typeof r[3].onClick === "function") {
+        const bt = el("button", "qd-row-btn", r[3].texto || "Acción");
+        bt.type = "button";
+        bt.addEventListener("click", () => {
+          document.getElementById("modal-quick-detail").classList.remove("open");
+          r[3].onClick();
+        });
+        row.appendChild(bt);
+      }
       box.appendChild(row);
     });
     if (sec.text) box.appendChild(el("p", "qd-text", sec.text));
