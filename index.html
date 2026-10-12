@@ -533,7 +533,8 @@
       <section id="page-playeras" class="page-section">
         <div id="playeras-sorpresa-alerta"></div>
         <div class="inv-tabs" id="inv-tabs" role="tablist">
-          <button type="button" class="active" data-seccion="inventario" onclick="cambiarSeccionPlayeras('inventario')">📦 En inventario <span class="inv-tab-n" id="inv-tab-n-inventario">0</span></button>
+          <button type="button" class="active" data-seccion="stock" onclick="cambiarSeccionPlayeras('stock')">📦 En stock <span class="inv-tab-n" id="inv-tab-n-stock">0</span></button>
+          <button type="button" data-seccion="completo" onclick="cambiarSeccionPlayeras('completo')">🗂️ Inventario completo <span class="inv-tab-n" id="inv-tab-n-completo">0</span></button>
           <button type="button" data-seccion="vendidas" onclick="cambiarSeccionPlayeras('vendidas')">✅ Vendidas y regaladas <span class="inv-tab-n" id="inv-tab-n-vendidas">0</span></button>
         </div>
         <div class="inv-toolbar">
@@ -1464,6 +1465,25 @@
           <label class="form-label">Estado</label>
           <select id="p-estado" class="form-select">
             <option>En stock</option><option>En proceso</option><option>Agotado</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">¿Ya salió del inventario?</label>
+          <select id="p-estado-venta" class="form-select" onchange="onPlayeraEstadoVentaChange()">
+            <option value="Disponible">🟢 No, sigue disponible</option>
+            <option value="Vendida">✅ Vendida</option>
+            <option value="Venta nula">🎁 Regalada (venta nula)</option>
+          </select>
+          <span class="form-hint">Al guardar, pasa sola a la pestaña "Vendidas y regaladas". Puedes cambiarla cuando quieras.</span>
+        </div>
+        <div class="form-group" id="p-metodo-pago-wrap" style="display:none;">
+          <label class="form-label">Método de pago</label>
+          <select id="p-metodo-pago" class="form-select">
+            <option value="Efectivo">💵 Efectivo</option>
+            <option value="Tarjeta">💳 Tarjeta</option>
           </select>
         </div>
       </div>

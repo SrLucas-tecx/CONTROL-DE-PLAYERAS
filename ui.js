@@ -21,7 +21,7 @@ import {
    ESTADO DE UI (filtros, selección activa, etc.)
 --------------------------------------------------------------- */
 let uiFilters = {
-  playeraTag: "all", stickerSize: "all", playeraSeccion: "inventario",
+  playeraTag: "all", stickerSize: "all", playeraSeccion: "stock",
   playeraVista: (function () { try { return localStorage.getItem("LUCXSTUDIO_VISTA_PLAYERAS") || "cuadricula"; } catch (e) { return "cuadricula"; } })()
 };
 let activeBazarId = "";
@@ -1779,6 +1779,7 @@ function openModalPlayera(id) {
     setChecked("p-dtf-especial", !!p.dtfEspecial);
     setVal("p-stock-minimo", p.stockMinimo ?? AppState.settings.stockMinimoDefault ?? 0);
     setVal("p-precio-venta", p.precioVenta); setVal("p-precio-mayoreo", p.precioMayoreo || ""); setVal("p-prioridad", p.prioridad); setVal("p-estado", p.estado);
+    setVal("p-estado-venta", p.bazarEstado || "Disponible"); setVal("p-metodo-pago", p.metodoPago || "Efectivo");
     setVal("p-notas", p.notas || "");
     document.querySelectorAll(".p-tag-cb").forEach(cb => cb.checked = (p.tags || []).includes(cb.value));
     playeraEstampadosDraft = JSON.parse(JSON.stringify(p.estampados && p.estampados.length ? p.estampados : [{ id: uid(), anchoCm: 0, largoCm: 0 }]));
@@ -1797,6 +1798,7 @@ function openModalPlayera(id) {
     setChecked("p-prenda-cliente", false); setChecked("p-dtf-especial", false);
     setVal("p-stock-minimo", AppState.settings.stockMinimoDefault || 0);
     setVal("p-precio-venta", ""); setVal("p-precio-mayoreo", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En stock");
+    setVal("p-estado-venta", "Disponible"); setVal("p-metodo-pago", "Efectivo");
     playeraEstampadosDraft = [{ id: uid(), anchoCm: 0, largoCm: 0 }];
     setVal("p-num-estampados", 1);
     setVal("p-modo-costeo", "area");
@@ -1807,6 +1809,14 @@ function openModalPlayera(id) {
     setVal("p-cliente", "");
   }
   document.getElementById("p-costo-playera").disabled = checked("p-prenda-cliente");
+  {
+    // Una venta rápida no se cambia aquí: se anula desde su detalle o desde Ventas rápidas.
+    const esVentaRapida = !!(id && (AppState.playeras.find(x => x.id === id) || {}).ventaRapida);
+    const selVenta = document.getElementById("p-estado-venta");
+    selVenta.disabled = esVentaRapida;
+    selVenta.title = esVentaRapida ? "Es una venta rápida: para deshacerla usa Anular venta." : "";
+    onPlayeraEstadoVentaChange();
+  }
   renderPlayeraEstampadosList();
   onPlayeraModoCosteoChange();
   onPlayeraTieneEtiquetaChange();
@@ -1934,6 +1944,10 @@ function savePlayera() {
   const existing = id ? AppState.playeras.find(x => x.id === id) : null;
   const tags = Array.from(document.querySelectorAll(".p-tag-cb:checked")).map(cb => cb.value);
   const prendaCliente = checked("p-prenda-cliente");
+  const antesVendida = existing ? playeraVendidaORegalada(existing) : false;
+  const estadoVenta = (existing && existing.ventaRapida) ? "Vendida" : (val("p-estado-venta") || "Disponible");
+  const metodoVenta = estadoVenta === "Vendida" ? (val("p-metodo-pago") || "Efectivo") : "";
+  const montoTarjetaVenta = metodoVenta === "Tarjeta" ? (parseFloat(num("p-precio-venta")) || 0) * (parseInt(num("p-stock")) || 0) : 0;
   const data = {
     nombre, tipo: val("p-tipo"), talla: val("p-talla").trim(), colorId: val("p-color"),
     stock: parseInt(num("p-stock")) || 0,
@@ -1955,9 +1969,12 @@ function savePlayera() {
     gastoVinculadoId: (existing && existing.gastoVinculadoId) || "",
     bazarId: (existing && existing.bazarId) || "",
     bazarIds: (existing && bazarIdsDe(existing)) || [],
-    bazarEstado: (existing && existing.bazarEstado) || "Disponible",
+    bazarEstado: estadoVenta, metodoPago: metodoVenta, montoTarjeta: montoTarjetaVenta,
+    comisionTerminal: comisionTerminalMonto(montoTarjetaVenta, AppState.settings.comisionTerminalPct),
+    fechaVenta: (existing && existing.fechaVenta) || (estadoVenta === "Vendida" ? new Date().toLocaleDateString("sv-SE") : ""),
     tags, notas: val("p-notas")
   };
+  let guardada = null;
   if (id) {
     // Libera lo que esta playera ya había reclamado ANTES de aplicar los datos nuevos,
     // para que el reclamo se recalcule limpio (por si cambió talla, color, stock o el
@@ -1965,13 +1982,17 @@ function savePlayera() {
     liberarEtiquetaTallaDePlayera(existing);
     Object.assign(existing, data);
     reclamarEtiquetaTallaParaPlayera(existing);
+    guardada = existing;
   } else {
     const nueva = Object.assign({ id: uid() }, data);
     reclamarEtiquetaTallaParaPlayera(nueva);
     AppState.playeras.push(nueva);
+    guardada = nueva;
   }
   saveState(); closeModal("modal-playera"); refreshAllSelects(); renderPlayeras(); renderTallaEtiquetas();
-  showToast("Playera guardada.");
+  const despuesVendida = playeraVendidaORegalada(guardada);
+  if (despuesVendida !== antesVendida) avisarCambioVenta(guardada, antesVendida, despuesVendida);
+  else showToast("Playera guardada.");
 }
 async function deletePlayera(id) {
   const p0 = AppState.playeras.find(x => x.id === id);
@@ -2007,8 +2028,11 @@ function renderPlayeras() {
   const colorF = document.getElementById("filter-playera-color").value;
   const tallaF = document.getElementById("filter-playera-talla").value;
   let list = AppState.playeras.filter(p => {
-    // Inventario principal = lo que aún tienes; "Vendidas y regaladas" = lo que ya salió.
-    if ((uiFilters.playeraSeccion === "vendidas") !== (playeraVendidaORegalada(p) || !!p.ventaRapida)) return false;
+    // En stock = lo que tienes ahora · Inventario completo = todo lo registrado · Vendidas y regaladas = lo que ya salió.
+    const salio = playeraVendidaORegalada(p) || !!p.ventaRapida;
+    if (uiFilters.playeraSeccion === "stock" && (salio || (p.stock || 0) <= 0)) return false;
+    if (uiFilters.playeraSeccion === "vendidas" && !salio) return false;
+    if (uiFilters.playeraSeccion === "completo" && p.ventaRapida) return false;
     if (uiFilters.playeraTag !== "all" && !(p.tags || []).includes(uiFilters.playeraTag)) return false;
     if (estadoF !== "all" && p.estado !== estadoF) return false;
     if (colorF !== "all" && p.colorId !== colorF) return false;
@@ -2033,18 +2057,23 @@ function renderPlayeras() {
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
   if (!list.length) {
-    const enVendidas = uiFilters.playeraSeccion === "vendidas";
+    const seccion = uiFilters.playeraSeccion;
+    const enVendidas = seccion === "vendidas";
     const hayAlgo = enVendidas
       ? AppState.playeras.some(p => playeraVendidaORegalada(p) || p.ventaRapida)
-      : playerasDisponibles().length > 0;
+      : seccion === "stock"
+        ? AppState.playeras.some(p => !p.ventaRapida && !playeraVendidaORegalada(p) && (p.stock || 0) > 0)
+        : playerasInventario().length > 0;
     document.getElementById("playeras-empty-title").textContent = hayAlgo
       ? "Ninguna playera coincide"
-      : (enVendidas ? "Aún no hay playeras vendidas ni regaladas" : "Aún no hay playeras");
+      : (enVendidas ? "Aún no hay playeras vendidas ni regaladas" : seccion === "stock" ? "No tienes playeras en stock" : "Aún no hay playeras");
     document.getElementById("playeras-empty-text").textContent = hayAlgo
       ? "Prueba quitando algunos filtros o cambia lo que buscas."
       : (enVendidas
-        ? "Cuando vendas o regales una playera aparecerá aquí, y saldrá de tu inventario principal."
-        : "Registra tu primera playera para empezar a controlar tu inventario.");
+        ? "Cuando vendas o regales una playera aparecerá aquí, y saldrá de tu stock."
+        : seccion === "stock"
+          ? "Lo que registraste está agotado, vendido o regalado. Revisa el Inventario completo."
+          : "Registra tu primera playera para empezar a controlar tu inventario.");
     const btnVacio = document.getElementById("playeras-empty-btn");
     btnVacio.style.display = (!hayAlgo && enVendidas) ? "none" : "";
     btnVacio.textContent = hayAlgo ? "Limpiar filtros" : "+ Nueva playera";
@@ -2063,10 +2092,11 @@ function playeraCardCompacta(p) {
   const cTotal = costoTotalPlayera(p);
   const ganancia = (p.precioVenta || 0) - cTotal;
   const stockBajo = !p.ventaRapida && !playeraVendidaORegalada(p) && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
-  const bazarEstado = bazarIdsDe(p).length ? (p.bazarEstado || "Disponible") : (p.ventaRapida ? "Vendida" : "");
+  const bazarEstado = p.ventaRapida ? "Vendida" : (p.bazarEstado || "Disponible");
   const badges = [`<span class="card-badge ${estadoBadgeClass(p.estado)}">${escapeHtml(p.estado)}</span>`];
   if (p.ventaRapida) badges.push(`<span class="card-badge badge-media">⚡ Venta rápida${p.fechaVenta ? " · " + escapeHtml(p.fechaVenta) : ""}</span>`);
   if (stockBajo) badges.push(`<span class="card-badge badge-agotado">⚠️ Stock bajo</span>`);
+  if (p.consignacionId && p.consignacionEstado === "En consignación") badges.push(`<span class="card-badge badge-media">🤝 En consignación</span>`);
   if (bazarEstado === "Vendida") badges.push(`<span class="card-badge badge-agotado">Vendida ✅</span>`);
   else if (bazarEstado === "Venta nula") badges.push(`<span class="card-badge badge-agotado">🎁 Venta nula</span>`);
   return `
@@ -2125,6 +2155,7 @@ function verDetallePlayera(id) {
   const nombresTags = (p.tags || []).map(tid => (AppState.etiquetas.find(e => e.id === tid) || {}).nombre).filter(Boolean);
   const inventario = [["Stock", `${p.stock || 0} pza(s)`]];
   if ((p.stockMinimo || 0) > 0) inventario.push(["Stock mínimo", String(p.stockMinimo)]);
+  inventario.push(["Estado de venta", etiquetaEstadoVenta(p)]);
   inventario.push(["Prioridad de venta", p.prioridad || "—"]);
   if (nombresTags.length) inventario.push(["Etiquetas", nombresTags.join(", ")]);
   if (p.tieneEtiquetaTalla) inventario.push(["Etiqueta de talla", p.etiquetaTallaConsumo ? `${p.etiquetaTallaConsumo.cantidad} usada(s)` : "Lleva etiqueta"]);
@@ -2149,8 +2180,8 @@ function verDetallePlayera(id) {
       const ok = await pedirConfirmacion("Se borrará esta venta y las piezas regresarán al stock. ¿Seguro?", { titulo: "Anular venta", confirmLabel: "Anular", deshacer: false });
       if (ok && typeof window.anularVenta === "function") window.anularVenta("playera", id);
     } });
-  } else if (p.bazarEstado === "Vendida" || p.bazarEstado === "Venta nula") {
-    acciones.push({ label: "↩️ Volver a inventario", onClick: () => volverAInventario(id) });
+  } else {
+    acciones.push({ label: "🔄 Estado de venta", onClick: () => cambiarEstadoVenta(id) });
   }
   acciones.push({ label: "🗑️ Eliminar", variant: "danger", onClick: () => deletePlayera(id) });
 
@@ -2168,29 +2199,73 @@ function actualizarBarraFiltrosPlayeras() {
   if (badge) { badge.textContent = activos ? String(activos) : ""; badge.style.display = activos ? "inline-flex" : "none"; }
   const limpiar = document.getElementById("inv-filtros-limpiar");
   if (limpiar) limpiar.style.display = activos ? "inline-block" : "none";
+  const reales = AppState.playeras.filter(p => !p.ventaRapida);
+  const nStock = reales.filter(p => !playeraVendidaORegalada(p) && (p.stock || 0) > 0).length;
   const nVendidas = AppState.playeras.filter(p => playeraVendidaORegalada(p) || p.ventaRapida).length;
-  const nDisponibles = AppState.playeras.length - nVendidas;
-  const nInv = document.getElementById("inv-tab-n-inventario");
-  const nVen = document.getElementById("inv-tab-n-vendidas");
-  if (nInv) nInv.textContent = String(nDisponibles);
-  if (nVen) nVen.textContent = String(nVendidas);
+  [["stock", nStock], ["completo", reales.length], ["vendidas", nVendidas]].forEach(([k, n]) => {
+    const el = document.getElementById("inv-tab-n-" + k);
+    if (el) el.textContent = String(n);
+  });
   document.querySelectorAll("#inv-tabs button").forEach(b => b.classList.toggle("active", b.dataset.seccion === uiFilters.playeraSeccion));
   document.querySelectorAll("#inv-vista-toggle button").forEach(b => b.classList.toggle("active", b.dataset.vista === uiFilters.playeraVista));
 }
 function cambiarSeccionPlayeras(seccion) {
-  uiFilters.playeraSeccion = seccion === "vendidas" ? "vendidas" : "inventario";
+  uiFilters.playeraSeccion = ["stock", "completo", "vendidas"].includes(seccion) ? seccion : "stock";
   renderPlayeras();
 }
-// Regresa al inventario principal una playera que se marcó como vendida o regalada por error.
-function volverAInventario(id) {
+function etiquetaEstadoVenta(p) {
+  const estado = p.ventaRapida ? "Vendida" : (p.bazarEstado || "Disponible");
+  if (estado === "Vendida") return `Vendida ✅${p.metodoPago ? " · " + (p.metodoPago === "Tarjeta" ? "tarjeta" : "efectivo") : ""}`;
+  if (estado === "Venta nula") return "Regalada 🎁";
+  return "Disponible 🟢";
+}
+// Cambia el estado de venta de una pieza; se mueve sola a la pestaña que le toca.
+function aplicarEstadoVenta(id, estado, metodo) {
   const p = AppState.playeras.find(x => x.id === id);
   if (!p) return;
+  const antes = playeraVendidaORegalada(p);
   const copia = tomarCopiaEstado();
-  p.bazarEstado = "Disponible";
-  p.metodoPago = ""; p.montoTarjeta = 0; p.comisionTerminal = 0;
+  p.bazarEstado = estado;
+  if (estado === "Vendida") {
+    p.metodoPago = metodo || "Efectivo";
+    p.montoTarjeta = p.metodoPago === "Tarjeta" ? (p.precioVenta || 0) * (p.stock || 0) : 0;
+    p.comisionTerminal = comisionTerminalMonto(p.montoTarjeta, AppState.settings.comisionTerminalPct);
+    if (!p.fechaVenta) p.fechaVenta = new Date().toLocaleDateString("sv-SE");
+  } else {
+    p.metodoPago = ""; p.montoTarjeta = 0; p.comisionTerminal = 0;
+  }
   saveState();
   refrescarVistaActual();
-  ofrecerDeshacer(`${p.nombre} volvió al inventario.`, copia);
+  const despues = playeraVendidaORegalada(p);
+  ofrecerDeshacer(despues && !antes ? `${p.nombre}: pasó a Vendidas y regaladas.`
+    : (!despues && antes ? `${p.nombre}: volvió a tu inventario.` : `${p.nombre}: estado actualizado.`), copia);
+}
+function cambiarEstadoVenta(id) {
+  const p = AppState.playeras.find(x => x.id === id);
+  if (!p || typeof window.openQuickDetail !== "function") return;
+  const estado = p.bazarEstado || "Disponible";
+  const opciones = [
+    { clave: "d", label: "🟢 En inventario", activa: estado === "Disponible", run: () => aplicarEstadoVenta(id, "Disponible") },
+    { clave: "e", label: "💵 Vendida · efectivo", activa: estado === "Vendida" && p.metodoPago !== "Tarjeta", run: () => aplicarEstadoVenta(id, "Vendida", "Efectivo") },
+    { clave: "t", label: "💳 Vendida · tarjeta", activa: estado === "Vendida" && p.metodoPago === "Tarjeta", run: () => aplicarEstadoVenta(id, "Vendida", "Tarjeta") },
+    { clave: "r", label: "🎁 Regalada", activa: estado === "Venta nula", run: () => aplicarEstadoVenta(id, "Venta nula") }
+  ];
+  window.openQuickDetail({
+    icon: "🔄", title: "Estado de venta", subtitle: `${p.nombre} · ahora: ${etiquetaEstadoVenta(p)}`,
+    sections: [{ text: "Elige qué pasó con esta pieza. Se moverá sola a la pestaña que le corresponde y lo puedes cambiar cuando quieras." }],
+    actions: [
+      ...opciones.filter(o => !o.activa).map(o => ({ label: o.label, variant: o.clave === "d" ? "primary" : "secondary", onClick: o.run })),
+      { label: "Cancelar" }
+    ]
+  });
+}
+// Aviso cuando guardar una playera la hace pasar de una pestaña a otra.
+function avisarCambioVenta(p, antes, despues) {
+  if (despues && !antes) showToast(`${p.nombre}: pasó a Vendidas y regaladas.`, "success", { accion: "Ver", alAccionar: () => { cambiarSeccionPlayeras("vendidas"); switchPage("playeras"); }, duracion: 5000 });
+  else if (!despues && antes) showToast(`${p.nombre}: volvió a tu inventario.`);
+}
+function onPlayeraEstadoVentaChange() {
+  document.getElementById("p-metodo-pago-wrap").style.display = val("p-estado-venta") === "Vendida" ? "block" : "none";
 }
 function toggleFiltrosPlayeras() {
   const panel = document.getElementById("inv-filtros-panel");
@@ -3675,7 +3750,11 @@ let chartBazarDisponibles = null;
 let chartBazarEtiquetas = null;
 function renderBazarDetalle() {
   const b = AppState.bazares.find(x => x.id === activeBazarId);
-  if (!b) { switchPage("bazares"); return; }
+  if (!b) {
+    // Solo se regresa a "Mis bazares" si de verdad se está viendo el detalle de un bazar que ya no existe.
+    if (document.getElementById("page-bazar-detalle").classList.contains("active")) switchPage("bazares");
+    return;
+  }
   document.getElementById("bd-nombre").textContent = "🏪 " + b.nombre;
   document.getElementById("bd-meta").textContent = `${b.lugar || "—"} · ${rangoBazarFecha(b)}${b.notas ? " · " + b.notas : ""}`;
 
@@ -3947,9 +4026,11 @@ function saveAsignarBazar() {
   if (playeraId) {
     const p = AppState.playeras.find(x => x.id === playeraId);
     if (!p) return;
+    const antesVendida = playeraVendidaORegalada(p);
     p.bazarId = bazarId;
     p.bazarIds = selectedBazarIds;
     p.bazarEstado = val("ab-status") || "Disponible";
+    if (p.bazarEstado === "Vendida" && !p.fechaVenta) p.fechaVenta = new Date().toLocaleDateString("sv-SE");
     // Si se vendió con tarjeta, se calcula y guarda su comisión de terminal (con el %
     // vigente al momento de la venta, para que quede fijo aunque el % cambie después).
     if (p.bazarEstado === "Vendida") {
@@ -3963,7 +4044,9 @@ function saveAsignarBazar() {
     saveState();
     closeModal("modal-asignar-bazar");
     renderPlayeras(); renderBazares(); renderBazarDetalle(); renderClientes();
-    showToast(bazarId ? (p.bazarEstado === "Vendida" ? "Playera marcada como vendida en los bazares." : p.bazarEstado === "Venta nula" ? "Playera marcada como venta nula." : "Playera asignada como disponible en los bazares.") : "Playera sin bazar asignado.");
+    const despuesVendida = playeraVendidaORegalada(p);
+    if (despuesVendida !== antesVendida) avisarCambioVenta(p, antesVendida, despuesVendida);
+    else showToast(bazarId ? (p.bazarEstado === "Vendida" ? "Playera marcada como vendida en los bazares." : p.bazarEstado === "Venta nula" ? "Playera marcada como venta nula." : "Playera asignada como disponible en los bazares.") : "Playera sin bazar asignado.");
     return;
   }
   const c = AppState.cotizaciones.find(x => x.id === cotId);
@@ -4264,7 +4347,7 @@ Object.assign(window, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, cambiarSeccionPlayeras, volverAInventario, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
+  verDetallePlayera, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
