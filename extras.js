@@ -1142,4 +1142,4 @@ function iniciar() {
 }
 iniciar();
 
-Object.assign(window, { openVentaRapida, openModoBazar, abrirBuscador, renderVentasRapidas });
+Object.assign(window, { openVentaRapida, openModoBazar, abrirBuscador, renderVentasRapidas, anularVenta });

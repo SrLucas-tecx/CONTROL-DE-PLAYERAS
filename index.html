@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -531,10 +532,13 @@
       <!-- ======================= INVENTARIO PLAYERAS ======================= -->
       <section id="page-playeras" class="page-section">
         <div id="playeras-sorpresa-alerta"></div>
+        <div class="inv-tabs" id="inv-tabs" role="tablist">
+          <button type="button" class="active" data-seccion="inventario" onclick="cambiarSeccionPlayeras('inventario')">📦 En inventario <span class="inv-tab-n" id="inv-tab-n-inventario">0</span></button>
+          <button type="button" data-seccion="vendidas" onclick="cambiarSeccionPlayeras('vendidas')">✅ Vendidas y regaladas <span class="inv-tab-n" id="inv-tab-n-vendidas">0</span></button>
+        </div>
         <div class="inv-toolbar">
           <button type="button" class="btn-secondary" id="inv-filtros-btn" onclick="toggleFiltrosPlayeras()" aria-expanded="false">🔎 Filtros <span class="inv-count" id="inv-filtros-count" style="display:none;"></span></button>
           <button type="button" class="btn-secondary" id="inv-filtros-limpiar" onclick="limpiarFiltrosPlayeras()" style="display:none;">Limpiar filtros</button>
-          <button type="button" class="btn-secondary" id="inv-ventas-btn" onclick="toggleVentasRapidasPlayeras()" style="display:none;">🧾 Mostrar ventas rápidas</button>
           <div class="view-toggle" id="inv-vista-toggle">
             <button type="button" data-vista="cuadricula" onclick="cambiarVistaPlayeras('cuadricula')" title="Ver en cuadrícula">▦</button>
             <button type="button" data-vista="lista" onclick="cambiarVistaPlayeras('lista')" title="Ver en lista">☰</button>
@@ -788,8 +792,11 @@
             <h2 class="section-title">Caja</h2>
             <p class="section-sub">Cuánto llevas vendido y cuánto debería haber en tu caja — de un bazar en particular, o de tus ventas del día a día sin bazar.</p>
           </div>
-          <div class="form-group" style="margin:0;min-width:240px;">
-            <select id="caja-selector" class="form-select" onchange="renderCaja()"></select>
+          <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
+            <div class="form-group" style="margin:0;min-width:240px;">
+              <select id="caja-selector" class="form-select" onchange="renderCaja()"></select>
+            </div>
+            <button type="button" class="btn-secondary" id="caja-descargar">⬇️ Descargar esta caja</button>
           </div>
         </div>
 
@@ -1246,6 +1253,42 @@
         </div>
         <div class="settings-card">
           <div id="accent-swatches" class="accent-swatches"></div>
+        </div>
+
+        <div class="section-header" style="margin-top:32px;">
+          <div>
+            <h2 class="section-title">Respaldo y dispositivos</h2>
+            <p class="section-sub">Para pasar tus datos de la computadora al celular (y de regreso) y tener copias seguras.</p>
+          </div>
+        </div>
+        <div class="settings-card" id="respaldo-card">
+          <div class="respaldo-estado" id="respaldo-estado"></div>
+          <div class="form-row">
+            <div class="form-group" style="max-width:300px;">
+              <label class="form-label">Nombre de este dispositivo</label>
+              <input type="text" id="respaldo-dispositivo" class="form-input" maxlength="24" placeholder="Ej. Celular de Lucas">
+            </div>
+          </div>
+          <div class="respaldo-acciones">
+            <button type="button" class="btn-primary" id="rs-descargar">⬇️ Descargar respaldo</button>
+            <button type="button" class="btn-secondary" id="rs-compartir">📤 Enviar a otro dispositivo</button>
+            <label class="btn-secondary rs-importar">📥 Importar respaldo<input type="file" id="rs-importar" accept=".json,application/json" style="display:none"></label>
+            <button type="button" class="btn-secondary" id="rs-restaurar" style="display:none;">🛟 Restaurar copia anterior</button>
+          </div>
+          <div class="respaldo-acciones">
+            <button type="button" class="btn-secondary" id="rs-caja">📊 Descargar todas las cajas (Excel)</button>
+          </div>
+          <details class="respaldo-guia">
+            <summary>¿Cómo lo uso el día de un bazar?</summary>
+            <ol>
+              <li><b>Antes del evento (computadora):</b> toca "Descargar respaldo" y pásalo al celular (WhatsApp, correo o Drive).</li>
+              <li><b>En el celular:</b> abre la app → Ajustes → "Importar respaldo" → elige <b>Reemplazar todo</b>.</li>
+              <li><b>Durante el bazar:</b> vende desde el celular (⚡ Venta rápida o 🛍️ Modo bazar).</li>
+              <li><b>Al terminar (celular):</b> toca "Enviar a otro dispositivo" y mándalo a tu computadora.</li>
+              <li><b>En la computadora:</b> "Importar respaldo" → <b>Combinar</b> si también usaste la computadora ese día, o <b>Reemplazar todo</b> si no la tocaste. Al combinar se agregan las ventas nuevas, se ajusta el stock y puedes abrir el bazar con un botón.</li>
+            </ol>
+            <p class="form-hint">Combinar agrega lo que falte, pero no copia ediciones ni eliminaciones de registros que ya existen en el dispositivo. Siempre se guarda una copia anterior por si algo sale mal.</p>
+          </details>
         </div>
 
         <div class="section-header" style="margin-top:32px;">

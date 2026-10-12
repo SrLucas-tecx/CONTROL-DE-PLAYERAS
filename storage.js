@@ -65,6 +65,7 @@ export function setToastHandler(fn) { toastHandler = fn; }
 
 export function saveState() {
   try {
+    AppState.ultimaModificacion = new Date().toISOString();   // sirve para comparar respaldos entre dispositivos
     localStorage.setItem(STORAGE_KEY, JSON.stringify(AppState));
     Object.keys(SECTION_LABELS).forEach(section => {
       localStorage.setItem(`${STORAGE_KEY}_section_${section}`, JSON.stringify(getSectionData(section)));
@@ -92,6 +93,8 @@ export function getSectionData(section) {
    IMPORTAR / REINICIAR
 --------------------------------------------------------------- */
 export function importData(parsed) {
+  // Respaldo completo con datos de contexto (dispositivo, fecha...): se usa solo su contenido.
+  if (parsed && parsed.tipo === "respaldo-completo" && parsed.datos) parsed = parsed.datos;
   if (parsed.tipo === "respaldo-seccion" && parsed.datos) {
     Object.assign(AppState, parsed.datos);
     if (parsed.seccion === "ajustes") {

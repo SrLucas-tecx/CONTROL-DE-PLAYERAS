@@ -14,14 +14,14 @@ import {
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
-  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, playerasInventario, totalVentasSinBazar
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
    ESTADO DE UI (filtros, selección activa, etc.)
 --------------------------------------------------------------- */
 let uiFilters = {
-  playeraTag: "all", stickerSize: "all", playeraVerVentas: false,
+  playeraTag: "all", stickerSize: "all", playeraSeccion: "inventario",
   playeraVista: (function () { try { return localStorage.getItem("LUCXSTUDIO_VISTA_PLAYERAS") || "cuadricula"; } catch (e) { return "cuadricula"; } })()
 };
 let activeBazarId = "";
@@ -228,6 +228,7 @@ export function applySavedTheme() {
    RESPALDO JSON
 --------------------------------------------------------------- */
 function exportarJSON() {
+  if (typeof window.descargarRespaldoCompleto === "function") return window.descargarRespaldoCompleto();
   const blob = new Blob([JSON.stringify(AppState, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -260,6 +261,7 @@ document.querySelectorAll("[data-export-section]").forEach(button => {
 document.getElementById("import-json-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  if (typeof window.importarRespaldoArchivo === "function") { window.importarRespaldoArchivo(file); e.target.value = ""; return; }
   const reader = new FileReader();
   reader.onload = (evt) => {
     try {
@@ -2005,7 +2007,8 @@ function renderPlayeras() {
   const colorF = document.getElementById("filter-playera-color").value;
   const tallaF = document.getElementById("filter-playera-talla").value;
   let list = AppState.playeras.filter(p => {
-    if (p.ventaRapida && !uiFilters.playeraVerVentas) return false;
+    // Inventario principal = lo que aún tienes; "Vendidas y regaladas" = lo que ya salió.
+    if ((uiFilters.playeraSeccion === "vendidas") !== (playeraVendidaORegalada(p) || !!p.ventaRapida)) return false;
     if (uiFilters.playeraTag !== "all" && !(p.tags || []).includes(uiFilters.playeraTag)) return false;
     if (estadoF !== "all" && p.estado !== estadoF) return false;
     if (colorF !== "all" && p.colorId !== colorF) return false;
@@ -2030,14 +2033,22 @@ function renderPlayeras() {
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
   if (!list.length) {
-    const hayInventario = playerasInventario().length > 0;
-    document.getElementById("playeras-empty-title").textContent = hayInventario ? "Ninguna playera coincide" : "Aún no hay playeras";
-    document.getElementById("playeras-empty-text").textContent = hayInventario
+    const enVendidas = uiFilters.playeraSeccion === "vendidas";
+    const hayAlgo = enVendidas
+      ? AppState.playeras.some(p => playeraVendidaORegalada(p) || p.ventaRapida)
+      : playerasDisponibles().length > 0;
+    document.getElementById("playeras-empty-title").textContent = hayAlgo
+      ? "Ninguna playera coincide"
+      : (enVendidas ? "Aún no hay playeras vendidas ni regaladas" : "Aún no hay playeras");
+    document.getElementById("playeras-empty-text").textContent = hayAlgo
       ? "Prueba quitando algunos filtros o cambia lo que buscas."
-      : "Registra tu primera playera para empezar a controlar tu inventario.";
+      : (enVendidas
+        ? "Cuando vendas o regales una playera aparecerá aquí, y saldrá de tu inventario principal."
+        : "Registra tu primera playera para empezar a controlar tu inventario.");
     const btnVacio = document.getElementById("playeras-empty-btn");
-    btnVacio.textContent = hayInventario ? "Limpiar filtros" : "+ Nueva playera";
-    btnVacio.onclick = hayInventario ? () => limpiarFiltrosPlayeras() : () => openModalPlayera();
+    btnVacio.style.display = (!hayAlgo && enVendidas) ? "none" : "";
+    btnVacio.textContent = hayAlgo ? "Limpiar filtros" : "+ Nueva playera";
+    btnVacio.onclick = hayAlgo ? () => limpiarFiltrosPlayeras() : () => openModalPlayera();
   }
   grid.classList.toggle("vista-lista", uiFilters.playeraVista === "lista");
   grid.innerHTML = list.map(playeraCardCompacta).join("");
@@ -2051,7 +2062,7 @@ function renderPlayeras() {
 function playeraCardCompacta(p) {
   const cTotal = costoTotalPlayera(p);
   const ganancia = (p.precioVenta || 0) - cTotal;
-  const stockBajo = !p.ventaRapida && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
+  const stockBajo = !p.ventaRapida && !playeraVendidaORegalada(p) && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
   const bazarEstado = bazarIdsDe(p).length ? (p.bazarEstado || "Disponible") : (p.ventaRapida ? "Vendida" : "");
   const badges = [`<span class="card-badge ${estadoBadgeClass(p.estado)}">${escapeHtml(p.estado)}</span>`];
   if (p.ventaRapida) badges.push(`<span class="card-badge badge-media">⚡ Venta rápida${p.fechaVenta ? " · " + escapeHtml(p.fechaVenta) : ""}</span>`);
@@ -2133,6 +2144,14 @@ function verDetallePlayera(id) {
     { label: "📉 Merma", onClick: () => openModalMermaDesdePlayera(id) }
   ];
   if (gastoLigado) acciones.push({ label: "🔓 Desvincular costo real", onClick: () => desvincularCostoRealDePiezaBoton("playera", id) });
+  if (p.ventaRapida) {
+    acciones.push({ label: "↩️ Anular venta", onClick: async () => {
+      const ok = await pedirConfirmacion("Se borrará esta venta y las piezas regresarán al stock. ¿Seguro?", { titulo: "Anular venta", confirmLabel: "Anular", deshacer: false });
+      if (ok && typeof window.anularVenta === "function") window.anularVenta("playera", id);
+    } });
+  } else if (p.bazarEstado === "Vendida" || p.bazarEstado === "Venta nula") {
+    acciones.push({ label: "↩️ Volver a inventario", onClick: () => volverAInventario(id) });
+  }
   acciones.push({ label: "🗑️ Eliminar", variant: "danger", onClick: () => deletePlayera(id) });
 
   window.openQuickDetail({
@@ -2149,18 +2168,29 @@ function actualizarBarraFiltrosPlayeras() {
   if (badge) { badge.textContent = activos ? String(activos) : ""; badge.style.display = activos ? "inline-flex" : "none"; }
   const limpiar = document.getElementById("inv-filtros-limpiar");
   if (limpiar) limpiar.style.display = activos ? "inline-block" : "none";
-  const nVentas = AppState.playeras.filter(p => p.ventaRapida).length;
-  const btnVentas = document.getElementById("inv-ventas-btn");
-  if (btnVentas) {
-    btnVentas.style.display = nVentas ? "inline-block" : "none";
-    btnVentas.classList.toggle("is-on", !!uiFilters.playeraVerVentas);
-    btnVentas.textContent = (uiFilters.playeraVerVentas ? "🙈 Ocultar" : "🧾 Mostrar") + ` ventas rápidas (${nVentas})`;
-  }
+  const nVendidas = AppState.playeras.filter(p => playeraVendidaORegalada(p) || p.ventaRapida).length;
+  const nDisponibles = AppState.playeras.length - nVendidas;
+  const nInv = document.getElementById("inv-tab-n-inventario");
+  const nVen = document.getElementById("inv-tab-n-vendidas");
+  if (nInv) nInv.textContent = String(nDisponibles);
+  if (nVen) nVen.textContent = String(nVendidas);
+  document.querySelectorAll("#inv-tabs button").forEach(b => b.classList.toggle("active", b.dataset.seccion === uiFilters.playeraSeccion));
   document.querySelectorAll("#inv-vista-toggle button").forEach(b => b.classList.toggle("active", b.dataset.vista === uiFilters.playeraVista));
 }
-function toggleVentasRapidasPlayeras() {
-  uiFilters.playeraVerVentas = !uiFilters.playeraVerVentas;
+function cambiarSeccionPlayeras(seccion) {
+  uiFilters.playeraSeccion = seccion === "vendidas" ? "vendidas" : "inventario";
   renderPlayeras();
+}
+// Regresa al inventario principal una playera que se marcó como vendida o regalada por error.
+function volverAInventario(id) {
+  const p = AppState.playeras.find(x => x.id === id);
+  if (!p) return;
+  const copia = tomarCopiaEstado();
+  p.bazarEstado = "Disponible";
+  p.metodoPago = ""; p.montoTarjeta = 0; p.comisionTerminal = 0;
+  saveState();
+  refrescarVistaActual();
+  ofrecerDeshacer(`${p.nombre} volvió al inventario.`, copia);
 }
 function toggleFiltrosPlayeras() {
   const panel = document.getElementById("inv-filtros-panel");
@@ -2357,7 +2387,7 @@ function openModalQuotePrenda(rowId) {
   const item = quoteItems.find(i => i.rowId === rowId);
   if (!item) return;
   editingQuotePrendaRowId = rowId;
-  const playerasOrdenadas = [...playerasInventario()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+  const playerasOrdenadas = [...playerasDisponibles()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
   document.getElementById("qp-producto").innerHTML = `<option value="">— Manual / personalizado —</option>` +
     playerasOrdenadas.map(p => `<option value="${p.id}">${escapeHtml(p.nombre)} · ${escapeHtml(p.talla) || "—"} · ${escapeHtml(colorNombre(p.colorId))}</option>`).join("");
   document.getElementById("qp-tipo").innerHTML = TIPOS_PRENDA.map(t => `<option value="${t}">${t}</option>`).join("");
@@ -4234,7 +4264,7 @@ Object.assign(window, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, toggleVentasRapidasPlayeras, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
+  verDetallePlayera, cambiarSeccionPlayeras, volverAInventario, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,

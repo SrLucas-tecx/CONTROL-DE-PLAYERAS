@@ -244,7 +244,7 @@ export function desgloseCierreCajaGeneral() {
 // configurado — se usan para la alerta dedicada en Inventario, ya que suelen ser
 // piezas de venta por impulso que se agotan sin avisar.
 export function playerasSorpresaBajoStock() {
-  return AppState.playeras.filter(p => !p.ventaRapida).filter(p => {
+  return playerasDisponibles().filter(p => {
     const esSorpresa = p.tipo === "Bolsa Sorpresa" || (p.tags || []).includes("e3");
     return esSorpresa && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
   });
@@ -289,6 +289,15 @@ export function resumenVentasStickers(bazarId) {
 // Playeras que son inventario real (sin las copias "Vendida" que crean la venta rápida y el modo bazar).
 export function playerasInventario() {
   return AppState.playeras.filter(p => !p.ventaRapida);
+}
+// ¿Ya salió de tu inventario? Vendida, regalada (venta nula) o vendida por un consignatario.
+export function playeraVendidaORegalada(p) {
+  const estado = p.bazarEstado || "Disponible";
+  return estado === "Vendida" || estado === "Venta nula" || (!!p.consignacionId && p.consignacionEstado === "Vendida");
+}
+// Inventario principal: lo que todavía tienes para vender (sin vendidas, regaladas ni copias de ventas).
+export function playerasDisponibles() {
+  return AppState.playeras.filter(p => !p.ventaRapida && !playeraVendidaORegalada(p));
 }
 // Total vendido que NO está ligado a ningún bazar: cotizaciones, playeras vendidas y stickers sueltos.
 export function totalVentasSinBazar() {
@@ -379,7 +388,7 @@ export function datosInventarioGrafica(dimension, metrica) {
     const ganancia = (playera.precioVenta - costoTotalPlayera(playera)) * cantidad;
     grupos[grupo] = (grupos[grupo] || 0) + ({ stock: cantidad, costo, ventas, ganancia }[metrica] || 0);
   };
-  playerasInventario().forEach(playera => {
+  playerasDisponibles().forEach(playera => {
     if (dimension === "etiqueta") {
       const etiquetas = (playera.tags || []).map(tagId => {
         const etiqueta = AppState.etiquetas.find(item => item.id === tagId);
