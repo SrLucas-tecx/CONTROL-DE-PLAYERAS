@@ -65,7 +65,7 @@ function calcular() {
     .map(c => ({ c, sem: semaforoCotizacion(c) }));
   const atrasados = pendientes.filter(x => x.sem.color === "red");
 
-  const playerasBajas = AppState.playeras.filter(p => (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo);
+  const playerasBajas = AppState.playeras.filter(p => !p.ventaRapida && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo);
   const stickersBajos = AppState.stickers.filter(s => (s.stockMinimo || 0) > 0 && (s.stock || 0) <= s.stockMinimo);
 
   return {

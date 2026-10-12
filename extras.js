@@ -69,6 +69,7 @@ function registrarVentas(lineas, metodo, bazarId, aviso) {
     const cantidad = Math.floor(l.cantidad);
     if (!pr || cantidad < 1 || cantidad > pr.stock) return;
     const precio = Math.max(0, Number(l.precio) || 0);
+    const lista = Math.max(precio, Number(l.precioLista) || precio);   // precio sin descuento
     const total = precio * cantidad;
     const montoTarjeta = metodo === "Tarjeta" ? total : 0;
     const comision = comisionTerminalMonto(montoTarjeta, AppState.settings.comisionTerminalPct);
@@ -76,7 +77,7 @@ function registrarVentas(lineas, metodo, bazarId, aviso) {
       const p = pr.obj;
       const venta = JSON.parse(JSON.stringify(p));
       Object.assign(venta, {
-        id: uid(), origenId: p.id, stock: cantidad, precioVenta: precio,
+        id: uid(), origenId: p.id, stock: cantidad, precioVenta: precio, precioLista: lista, stockMinimo: 0,
         bazarId: bazarId || "", bazarIds: bazarId ? [bazarId] : [], bazarEstado: "Vendida",
         metodoPago: metodo, montoTarjeta, comisionTerminal: comision,
         consignacionId: "", consignacionEstado: "", clienteId: "",
@@ -91,7 +92,7 @@ function registrarVentas(lineas, metodo, bazarId, aviso) {
       const s = pr.obj;
       AppState.ventasStickers.push({
         id: uid(), stickerId: s.id, nombre: s.nombre, tamano: s.tamano, cantidad,
-        precioVenta: precio, costoUnitario: s.costo || 0,
+        precioVenta: precio, precioLista: lista, costoUnitario: s.costo || 0,
         metodoPago: metodo, montoTarjeta, comisionTerminal: comision,
         bazarId: bazarId || "", bazarIds: bazarId ? [bazarId] : [], fecha: hoyLocal()
       });
@@ -276,7 +277,7 @@ function confirmarVR() {
   if (!pr) return;
   const cant = parseInt($("vr-cant").value) || 0;
   const precio = parseFloat($("vr-precio").value) || 0;
-  const exito = registrarVentas([{ key: pr.key, cantidad: cant, precio }], vr.metodo, $("vr-bazar").value,
+  const exito = registrarVentas([{ key: pr.key, cantidad: cant, precio, precioLista: pr.precio }], vr.metodo, $("vr-bazar").value,
     `Venta registrada: ${cant} × ${pr.nombre} — ${fmt(cant * precio)}`);
   if (exito) $("modal-venta-rapida").classList.remove("open");
 }
@@ -296,7 +297,7 @@ function openVentaRapida() {
    Pestañas Playeras / Stickers, venta mezclada, "apartadas" y
    resumen de lo vendido hoy (ventas rápidas + cotizaciones).
 =============================================================== */
-const mb = { ticket: {}, metodo: "Efectivo", tab: "playeras", apartadas: false };
+const mb = { ticket: {}, desc: {}, metodo: "Efectivo", tab: "playeras", apartadas: false };
 function crearModoBazar() {
   if ($("modo-bazar")) return;
   const o = el("div", "mb-overlay");
@@ -347,6 +348,8 @@ function crearModoBazar() {
     if (t) agregarMB(t.dataset.key, 1);
   });
   $("mb-ticket-items").addEventListener("click", e => {
+    const d = e.target.closest("[data-desc]");
+    if (d) { abrirDescuentoMB(d.dataset.desc); return; }
     const b = e.target.closest("[data-key]");
     if (b) agregarMB(b.dataset.key, Number(b.dataset.delta));
   });
@@ -356,7 +359,7 @@ function crearModoBazar() {
     mb.metodo = b.dataset.metodo;
     $("mb-pago").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
   });
-  $("mb-limpiar").addEventListener("click", () => { mb.ticket = {}; renderMB(); });
+  $("mb-limpiar").addEventListener("click", () => { mb.ticket = {}; mb.desc = {}; renderMB(); });
   $("mb-cobrar").addEventListener("click", cobrarMB);
 }
 const modoBazarAbierto = () => { const o = $("modo-bazar"); return !!o && o.classList.contains("open"); };
@@ -479,6 +482,110 @@ function lineasMB() {
     return pr ? { pr, cantidad: mb.ticket[key] } : null;
   }).filter(Boolean);
 }
+/* ---- Descuento por línea ---- */
+// Precio final por pieza de un producto del ticket, ya con su descuento (% o $ por pieza).
+function calcularFinal(precio, tipo, valor) {
+  const menos = tipo === "pct" ? precio * Math.min(100, Math.max(0, valor)) / 100 : Math.max(0, valor);
+  return Math.max(0, Math.round((precio - menos) * 100) / 100);
+}
+function precioFinalMB(pr) {
+  const d = mb.desc[pr.key];
+  return d && d.valor > 0 ? calcularFinal(pr.precio, d.tipo, d.valor) : pr.precio;
+}
+const mbd = { key: "", tipo: "pct" };
+function crearModalDescMB() {
+  if ($("modal-mb-desc")) return;
+  const o = el("div", "modal-overlay");
+  o.id = "modal-mb-desc";
+  o.innerHTML = `
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">🏷️ Descuento</h2>
+        <button class="modal-close" data-modal="modal-mb-desc" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="vr-elegida" id="mbd-prod"></div>
+        <div class="pay-toggle" id="mbd-tipo">
+          <button type="button" data-tipo="pct" class="active">% Porcentaje</button>
+          <button type="button" data-tipo="monto">$ Pesos por pieza</button>
+        </div>
+        <div class="form-group" style="margin-top:var(--space-4);">
+          <label class="form-label" id="mbd-label">Descuento (%)</label>
+          <input type="number" id="mbd-valor" class="form-input" min="0" step="any" inputmode="decimal">
+        </div>
+        <div class="mbd-rapidos" id="mbd-rapidos">
+          <button type="button" data-pct="5">5%</button><button type="button" data-pct="10">10%</button>
+          <button type="button" data-pct="15">15%</button><button type="button" data-pct="20">20%</button>
+          <button type="button" data-pct="50">50%</button>
+        </div>
+        <p class="cost-preview" id="mbd-preview">—</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" id="mbd-quitar">Quitar descuento</button>
+        <button type="button" class="btn-primary" id="mbd-ok">Aplicar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+  $("mbd-tipo").addEventListener("click", ev => {
+    const b = ev.target.closest("[data-tipo]");
+    if (!b) return;
+    mbd.tipo = b.dataset.tipo;
+    pintarTipoDescMB();
+    previewDescMB();
+  });
+  $("mbd-rapidos").addEventListener("click", ev => {
+    const b = ev.target.closest("[data-pct]");
+    if (!b) return;
+    $("mbd-valor").value = b.dataset.pct;
+    previewDescMB();
+  });
+  $("mbd-valor").addEventListener("input", previewDescMB);
+  $("mbd-ok").addEventListener("click", aplicarDescMB);
+  $("mbd-quitar").addEventListener("click", () => {
+    delete mb.desc[mbd.key];
+    $("modal-mb-desc").classList.remove("open");
+    renderMB();
+  });
+}
+function pintarTipoDescMB() {
+  $("mbd-tipo").querySelectorAll("button").forEach(x => x.classList.toggle("active", x.dataset.tipo === mbd.tipo));
+  $("mbd-label").textContent = mbd.tipo === "pct" ? "Descuento (%)" : "Descuento por pieza ($)";
+  $("mbd-rapidos").style.display = mbd.tipo === "pct" ? "flex" : "none";
+}
+function previewDescMB() {
+  const pr = producto(mbd.key);
+  const ok = $("mbd-ok");
+  if (!pr) { ok.disabled = true; return; }
+  const valor = parseFloat($("mbd-valor").value) || 0;
+  const invalido = valor < 0 || (mbd.tipo === "pct" && valor > 100) || (mbd.tipo === "monto" && valor > pr.precio);
+  const final = calcularFinal(pr.precio, mbd.tipo, valor);
+  const cant = mb.ticket[pr.key] || 1;
+  $("mbd-preview").textContent = invalido
+    ? (mbd.tipo === "pct" ? "El porcentaje debe estar entre 0 y 100." : `El descuento no puede ser mayor al precio (${fmt(pr.precio)}).`)
+    : `${fmt(pr.precio)} → ${fmt(final)} c/u (−${fmt(pr.precio - final)}) · ${cant} pza(s): ${fmt(final * cant)}`;
+  ok.disabled = invalido;
+}
+function abrirDescuentoMB(key) {
+  const pr = producto(key);
+  if (!pr) return;
+  crearModalDescMB();
+  const actual = mb.desc[key];
+  mbd.key = key;
+  mbd.tipo = actual ? actual.tipo : "pct";
+  $("mbd-prod").textContent = `${pr.nombre} · ${pr.meta} · precio normal ${fmt(pr.precio)}`;
+  $("mbd-valor").value = actual ? actual.valor : "";
+  pintarTipoDescMB();
+  previewDescMB();
+  $("modal-mb-desc").classList.add("open");
+}
+function aplicarDescMB() {
+  const valor = parseFloat($("mbd-valor").value) || 0;
+  if (valor > 0) mb.desc[mbd.key] = { tipo: mbd.tipo, valor };
+  else delete mb.desc[mbd.key];
+  $("modal-mb-desc").classList.remove("open");
+  renderMB();
+}
+
 function renderTicketMB() {
   const cont = $("mb-ticket-items");
   const lineas = lineasMB();
@@ -486,13 +593,17 @@ function renderTicketMB() {
   if (!lineas.length) cont.appendChild(el("span", "mb-ticket-vacio", "Toca un producto para agregarlo a la venta"));
   let total = 0;
   lineas.forEach(({ pr, cantidad }) => {
-    total += pr.precio * cantidad;
+    const final = precioFinalMB(pr);
+    const conDesc = final < pr.precio;
+    total += final * cantidad;
     const chip = el("span", "mb-chip");
     const menos = el("button", "", "−"); menos.type = "button"; menos.dataset.key = pr.key; menos.dataset.delta = "-1"; menos.setAttribute("aria-label", "Quitar una");
     const mas = el("button", "", "+"); mas.type = "button"; mas.dataset.key = pr.key; mas.dataset.delta = "1"; mas.setAttribute("aria-label", "Agregar una");
+    const desc = el("button", "mb-chip-desc" + (conDesc ? " on" : ""), "🏷️"); desc.type = "button"; desc.dataset.desc = pr.key; desc.setAttribute("aria-label", "Descuento"); desc.title = "Descuento";
     chip.appendChild(menos);
-    chip.appendChild(el("span", "mb-chip-text", `${cantidad} × ${pr.tipo === "sticker" ? "✂️ " : ""}${pr.nombre}`));
+    chip.appendChild(el("span", "mb-chip-text", `${cantidad} × ${pr.tipo === "sticker" ? "✂️ " : ""}${pr.nombre}${conDesc ? ` · ${fmt(final)} c/u` : ""}`));
     chip.appendChild(mas);
+    chip.appendChild(desc);
     cont.appendChild(chip);
   });
   $("mb-total").textContent = fmt(total);
@@ -543,7 +654,7 @@ function detalleHoyMB() {
   } else {
     secciones.push({ text: "Aún no hay ventas rápidas hoy en este lugar." });
   }
-  window.openQuickDetail({ icon: "🧾", title: "Vendido hoy", subtitle: nombreBazar, sections: secciones, actions: [{ label: "Cerrar", variant: "primary" }] });
+  window.openQuickDetail({ icon: "🧾", title: "Vendido hoy", subtitle: nombreBazar, sections: secciones, actions: [{ label: "Ver historial completo", variant: "primary", onClick: () => { cerrarModoBazar(); window.switchPage("ventas-rapidas"); } }, { label: "Cerrar" }] });
 }
 
 function renderMB() {
@@ -554,23 +665,24 @@ function renderMB() {
     if (!pr || pr.stock < 1) delete mb.ticket[key];
     else if (mb.ticket[key] > pr.stock) mb.ticket[key] = pr.stock;
   });
+  Object.keys(mb.desc).forEach(k => { if (!mb.ticket[k]) delete mb.desc[k]; });
   renderGridMB(); renderTicketMB(); renderHoyMB();
 }
 function cobrarMB() {
   const lineas = lineasMB();
   if (!lineas.length) return;
-  const total = lineas.reduce((s, { pr, cantidad }) => s + pr.precio * cantidad, 0);
+  const total = lineas.reduce((s, { pr, cantidad }) => s + precioFinalMB(pr) * cantidad, 0);
   const piezas = lineas.reduce((s, { cantidad }) => s + cantidad, 0);
   const exito = registrarVentas(
-    lineas.map(({ pr, cantidad }) => ({ key: pr.key, cantidad, precio: pr.precio })),
+    lineas.map(({ pr, cantidad }) => ({ key: pr.key, cantidad, precio: precioFinalMB(pr), precioLista: pr.precio })),
     mb.metodo, $("mb-bazar").value,
     `Cobrado: ${piezas} pieza(s) — ${fmt(total)} (${mb.metodo === "Tarjeta" ? "tarjeta" : "efectivo"})`
   );
-  if (exito) { mb.ticket = {}; renderMB(); }
+  if (exito) { mb.ticket = {}; mb.desc = {}; renderMB(); }
 }
 function openModoBazar() {
   crearModoBazar();
-  mb.ticket = {}; mb.metodo = "Efectivo"; mb.tab = "playeras"; mb.apartadas = false;
+  mb.ticket = {}; mb.desc = {}; mb.metodo = "Efectivo"; mb.tab = "playeras"; mb.apartadas = false;
   $("mb-pago").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.metodo === "Efectivo"));
   llenarSelectBazar($("mb-bazar"), bazarActivoHeader());
   $("mb-buscar").value = "";
@@ -582,7 +694,126 @@ function cerrarModoBazar() {
   const o = $("modo-bazar");
   if (o) o.classList.remove("open");
   document.body.classList.remove("modo-bazar-activo");
-  mb.ticket = {};
+  mb.ticket = {}; mb.desc = {};
+}
+
+/* ===============================================================
+   HISTORIAL DE VENTAS RÁPIDAS (pantalla completa, cualquier fecha)
+=============================================================== */
+function ventasSueltas() {
+  const playeras = AppState.playeras.filter(p => p.ventaRapida && p.bazarEstado === "Vendida").map(p => ({
+    tipo: "playera", id: p.id, fecha: p.fechaVenta || "", nombre: p.nombre,
+    meta: `Talla ${p.talla || "—"} · ${colorNombre(p.colorId)}`, cantidad: p.stock || 0,
+    precio: p.precioVenta || 0, lista: p.precioLista != null ? p.precioLista : (p.precioVenta || 0),
+    metodo: p.metodoPago || "Efectivo", comision: p.comisionTerminal || 0, bazarIds: bazarIdsDe(p)
+  }));
+  const stickers = (AppState.ventasStickers || []).map(v => ({
+    tipo: "sticker", id: v.id, fecha: v.fecha || "", nombre: v.nombre, meta: v.tamano || "Sticker",
+    cantidad: v.cantidad || 0, precio: v.precioVenta || 0, lista: v.precioLista != null ? v.precioLista : (v.precioVenta || 0),
+    metodo: v.metodoPago || "Efectivo", comision: v.comisionTerminal || 0, bazarIds: bazarIdsDe(v)
+  }));
+  return [...playeras, ...stickers];
+}
+function etiquetaDia(fecha) {
+  if (!fecha) return "Sin fecha";
+  const d = new Date(fecha + "T00:00:00");
+  if (isNaN(d.getTime())) return fecha;
+  const t = d.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+  return (fecha === hoyLocal() ? "Hoy · " : "") + t.charAt(0).toUpperCase() + t.slice(1);
+}
+function renderVentasRapidas() {
+  const lista = $("vs-lista");
+  if (!lista) return;
+  const sel = $("vs-bazar");
+  const previo = sel.value || "all";
+  sel.innerHTML = "";
+  sel.appendChild(opt("all", "Todos los lugares"));
+  sel.appendChild(opt("none", "Sin bazar (caja general)"));
+  AppState.bazares.forEach(b => sel.appendChild(opt(b.id, "🏪 " + b.nombre)));
+  sel.value = ["all", "none", ...AppState.bazares.map(b => b.id)].includes(previo) ? previo : "all";
+
+  const hoy = hoyLocal();
+  const periodo = $("vs-periodo").value;
+  let desde = "";
+  if (periodo === "hoy") desde = hoy;
+  else if (periodo === "semana") { const d = new Date(); d.setDate(d.getDate() - 6); desde = d.toLocaleDateString("sv-SE"); }
+  else if (periodo === "mes") desde = hoy.slice(0, 7) + "-01";
+  const metodo = $("vs-metodo").value;
+  const t = norm($("vs-buscar").value).trim();
+  const bz = sel.value;
+
+  const ventas = ventasSueltas().filter(v =>
+    (!desde || v.fecha >= desde) &&
+    (metodo === "all" || v.metodo === metodo) &&
+    (bz === "all" || (bz === "none" ? v.bazarIds.length === 0 : v.bazarIds.includes(bz))) &&
+    (!t || norm(`${v.nombre} ${v.meta}`).includes(t))
+  );
+
+  const monto = v => v.precio * v.cantidad;
+  const total = ventas.reduce((s, v) => s + monto(v), 0);
+  const tarjeta = ventas.filter(v => v.metodo === "Tarjeta").reduce((s, v) => s + monto(v), 0);
+  const comision = ventas.reduce((s, v) => s + v.comision, 0);
+  $("vs-total").textContent = fmt(total);
+  $("vs-total-sub").textContent = `${ventas.length} venta(s)`;
+  $("vs-efectivo").textContent = fmt(total - tarjeta);
+  $("vs-tarjeta").textContent = fmt(tarjeta);
+  $("vs-tarjeta-sub").textContent = `comisión: ${fmt(comision)}`;
+  $("vs-piezas").textContent = String(ventas.reduce((s, v) => s + v.cantidad, 0));
+
+  lista.innerHTML = "";
+  if (!ventas.length) {
+    const hayAlgo = ventasSueltas().length > 0;
+    lista.innerHTML = `<div class="empty-state"><div class="empty-ico">🧾</div><strong>${hayAlgo ? "Ninguna venta coincide" : "Aún no hay ventas rápidas"}</strong><span>${hayAlgo ? "Prueba con otro periodo, lugar o búsqueda." : "Las ventas que hagas con ⚡ Venta rápida o 🛍️ Modo bazar aparecerán aquí."}</span>${hayAlgo ? "" : '<button type="button" class="btn-primary" onclick="openVentaRapida()">⚡ Venta rápida</button>'}</div>`;
+    return;
+  }
+  const LIMITE = 400;
+  const visibles = [...ventas].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || b.id.localeCompare(a.id)).slice(0, LIMITE);
+  const porDia = new Map();
+  visibles.forEach(v => { if (!porDia.has(v.fecha)) porDia.set(v.fecha, []); porDia.get(v.fecha).push(v); });
+  porDia.forEach((items, fecha) => {
+    const cab = el("div", "vs-dia");
+    cab.appendChild(el("span", "vs-dia-nombre", etiquetaDia(fecha)));
+    cab.appendChild(el("b", "vs-dia-total", fmt(items.reduce((s, v) => s + monto(v), 0))));
+    lista.appendChild(cab);
+    items.forEach(v => {
+      const fila = el("div", "vs-row");
+      const main = el("div", "vs-main");
+      main.appendChild(el("span", "vs-name", `${v.tipo === "sticker" ? "✂️" : "👕"} ${v.nombre}`));
+      const b = v.bazarIds.length ? AppState.bazares.find(x => x.id === v.bazarIds[0]) : null;
+      main.appendChild(el("span", "vs-meta", `${v.meta} · ${b ? "🏪 " + b.nombre : "Caja general"}`));
+      fila.appendChild(main);
+      const mid = el("div", "vs-mid");
+      mid.appendChild(el("span", "vs-qty", `${v.cantidad} × ${fmt(v.precio)}`));
+      if (v.lista > v.precio + 0.001) mid.appendChild(el("span", "vs-desc", `🏷️ −${fmt(v.lista - v.precio)} c/u`));
+      fila.appendChild(mid);
+      const der = el("div", "vs-der");
+      der.appendChild(el("b", "", fmt(monto(v))));
+      der.appendChild(el("span", "vs-metodo", v.metodo === "Tarjeta" ? "💳 Tarjeta" : "💵 Efectivo"));
+      fila.appendChild(der);
+      const btn = el("button", "qd-row-btn vs-anular", "Anular");
+      btn.type = "button"; btn.dataset.anular = v.id; btn.dataset.tipo = v.tipo;
+      fila.appendChild(btn);
+      lista.appendChild(fila);
+    });
+  });
+  if (ventas.length > LIMITE) lista.appendChild(el("p", "empty-hint", `Se muestran las ${LIMITE} ventas más recientes de ${ventas.length}. Usa los filtros para acotar.`));
+}
+async function pedirAnular(tipo, id) {
+  const mensaje = "Se borrará esta venta y las piezas regresarán al stock. ¿Seguro?";
+  const ok = typeof window.confirmPopup === "function"
+    ? await window.confirmPopup({ title: "Anular venta", message: mensaje, confirmLabel: "Anular", danger: true })
+    : confirm(mensaje);
+  if (ok) anularVenta(tipo, id);
+}
+function iniciarHistorial() {
+  ["vs-periodo", "vs-bazar", "vs-metodo"].forEach(id => { const x = $(id); if (x) x.addEventListener("change", renderVentasRapidas); });
+  const b = $("vs-buscar");
+  if (b) b.addEventListener("input", renderVentasRapidas);
+  const lista = $("vs-lista");
+  if (lista) lista.addEventListener("click", ev => {
+    const a = ev.target.closest("[data-anular]");
+    if (a) pedirAnular(a.dataset.tipo, a.dataset.anular);
+  });
 }
 
 /* ===============================================================
@@ -590,7 +821,7 @@ function cerrarModoBazar() {
 =============================================================== */
 const PAGINAS = [
   ["inicio", "🏠", "Inicio"], ["cotizador", "🧮", "Cotizador"], ["cotizaciones", "📁", "Cotizaciones guardadas"],
-  ["clientes", "👥", "Clientes"], ["produccion", "🚦", "Producción (Kanban)"], ["artes", "🎨", "Historial de artes"],
+  ["ventas-rapidas", "🧾", "Ventas rápidas"], ["clientes", "👥", "Clientes"], ["produccion", "🚦", "Producción (Kanban)"], ["artes", "🎨", "Historial de artes"],
   ["playeras", "👕", "Playeras"], ["stickers", "✂️", "Stickers"], ["etiquetas", "🏷️", "Etiquetas y colores"], ["mermas", "📉", "Mermas"],
   ["bazares", "🏪", "Mis bazares"], ["consignaciones", "🤝", "Consignaciones"], ["caja", "💰", "Caja"], ["gastos", "💸", "Gastos generales"],
   ["compras", "🎯", "Próximas compras"], ["artistas", "🎨", "Artistas y comisiones"], ["proveedores", "🚚", "Proveedores"],
@@ -640,7 +871,7 @@ function construirResultados(q) {
 
   grupo("Acciones", tope(ACCIONES.filter(a => coincide(a[1])).map(a => ({ ico: a[0], texto: a[1], sub: "", run: a[2] }))));
   if (!t) return r;
-  grupo("Playeras", tope(AppState.playeras.filter(p => coincide(p.nombre, p.talla, p.tipo, colorNombre(p.colorId))).map(p => ({
+  grupo("Playeras", tope(AppState.playeras.filter(p => !p.ventaRapida && coincide(p.nombre, p.talla, p.tipo, colorNombre(p.colorId))).map(p => ({
     ico: "👕", texto: p.nombre, sub: `Talla ${p.talla || "—"} · ${colorNombre(p.colorId)} · ${p.stock || 0} pza · ${fmt(p.precioVenta)}`, run: () => window.verDetallePlayera(p.id)
   }))));
   grupo("Stickers", tope(AppState.stickers.filter(s => coincide(s.nombre, s.tamano)).map(s => ({
@@ -883,6 +1114,7 @@ function insertarBotonesMenu() {
 
 function iniciar() {
   iniciarSelectorBazar();
+  iniciarHistorial();
   aplicarAcento(acentoGuardado());
   renderAcentos();
   insertarBotonesMenu();
@@ -910,4 +1142,4 @@ function iniciar() {
 }
 iniciar();
 
-Object.assign(window, { openVentaRapida, openModoBazar, abrirBuscador });
+Object.assign(window, { openVentaRapida, openModoBazar, abrirBuscador, renderVentasRapidas });

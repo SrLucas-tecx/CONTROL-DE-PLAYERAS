@@ -244,7 +244,7 @@ export function desgloseCierreCajaGeneral() {
 // configurado — se usan para la alerta dedicada en Inventario, ya que suelen ser
 // piezas de venta por impulso que se agotan sin avisar.
 export function playerasSorpresaBajoStock() {
-  return AppState.playeras.filter(p => {
+  return AppState.playeras.filter(p => !p.ventaRapida).filter(p => {
     const esSorpresa = p.tipo === "Bolsa Sorpresa" || (p.tags || []).includes("e3");
     return esSorpresa && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
   });
@@ -285,6 +285,20 @@ export function resumenVentasStickers(bazarId) {
   const total = ventas.reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0);
   const ganancia = ventas.reduce((s, v) => s + ((v.precioVenta || 0) - (v.costoUnitario || 0)) * (v.cantidad || 0), 0);
   return { total, ganancia, count: ventas.length };
+}
+// Playeras que son inventario real (sin las copias "Vendida" que crean la venta rápida y el modo bazar).
+export function playerasInventario() {
+  return AppState.playeras.filter(p => !p.ventaRapida);
+}
+// Total vendido que NO está ligado a ningún bazar: cotizaciones, playeras vendidas y stickers sueltos.
+export function totalVentasSinBazar() {
+  const cots = AppState.cotizaciones.filter(c => !c.ventaNula && bazarIdsDe(c).length === 0)
+    .reduce((s, c) => s + (c.totalVenta || 0), 0);
+  const playeras = AppState.playeras.filter(p => (p.bazarEstado || "Disponible") === "Vendida" && (p.stock || 0) > 0 && bazarIdsDe(p).length === 0)
+    .reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0);
+  const stickers = (AppState.ventasStickers || []).filter(v => bazarIdsDe(v).length === 0)
+    .reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0);
+  return cots + playeras + stickers;
 }
 export function getBazarVentasYGanancia(bazarId) {
   const cotsAsignadas = AppState.cotizaciones.filter(c => bazarTiene(c, bazarId));
@@ -365,7 +379,7 @@ export function datosInventarioGrafica(dimension, metrica) {
     const ganancia = (playera.precioVenta - costoTotalPlayera(playera)) * cantidad;
     grupos[grupo] = (grupos[grupo] || 0) + ({ stock: cantidad, costo, ventas, ganancia }[metrica] || 0);
   };
-  AppState.playeras.forEach(playera => {
+  playerasInventario().forEach(playera => {
     if (dimension === "etiqueta") {
       const etiquetas = (playera.tags || []).map(tagId => {
         const etiqueta = AppState.etiquetas.find(item => item.id === tagId);

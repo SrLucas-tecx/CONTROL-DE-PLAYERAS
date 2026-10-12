@@ -400,6 +400,56 @@
 
 
       <!-- ======================= COTIZACIONES GUARDADAS ======================= -->
+      <!-- ======================= VENTAS RÁPIDAS (HISTORIAL) ======================= -->
+      <section id="page-ventas-rapidas" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Ventas rápidas</h2>
+            <p class="section-sub">Ventas sueltas hechas con ⚡ Venta rápida o 🛍️ Modo bazar. Aquí puedes revisarlas y anularlas, sin importar de qué día sean.</p>
+          </div>
+          <button class="btn-primary" onclick="openVentaRapida()">⚡ Nueva venta</button>
+        </div>
+        <div class="filter-bar">
+          <select class="filter-select" id="vs-periodo">
+            <option value="hoy">Hoy</option>
+            <option value="semana">Últimos 7 días</option>
+            <option value="mes" selected>Este mes</option>
+            <option value="todo">Todo el historial</option>
+          </select>
+          <select class="filter-select" id="vs-bazar"></select>
+          <select class="filter-select" id="vs-metodo">
+            <option value="all">Efectivo y tarjeta</option>
+            <option value="Efectivo">💵 Efectivo</option>
+            <option value="Tarjeta">💳 Tarjeta</option>
+          </select>
+          <input type="search" id="vs-buscar" class="form-input" placeholder="Buscar producto..." style="max-width:240px;" autocomplete="off">
+        </div>
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Total vendido</span>
+            <span class="sticker-count-value" id="vs-total">$0</span>
+            <span class="sticker-count-sub" id="vs-total-sub">—</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">💵 Efectivo</span>
+            <span class="sticker-count-value" id="vs-efectivo">$0</span>
+            <span class="sticker-count-sub">cobrado en billetes</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">💳 Tarjeta</span>
+            <span class="sticker-count-value" id="vs-tarjeta">$0</span>
+            <span class="sticker-count-sub" id="vs-tarjeta-sub">comisión: $0</span>
+          </div>
+          <div class="sticker-count-card size-chico">
+            <span class="sticker-count-label">Piezas</span>
+            <span class="sticker-count-value" id="vs-piezas">0</span>
+            <span class="sticker-count-sub">vendidas en el periodo</span>
+          </div>
+        </div>
+        <div id="vs-lista" class="vs-lista"></div>
+      </section>
+      <!-- ======================= /VENTAS RÁPIDAS ======================= -->
+
       <section id="page-cotizaciones" class="page-section">
         <div class="filter-bar">
           <select class="filter-select" id="filter-cot-estado" onchange="renderCotizacionesGuardadas()">
@@ -484,6 +534,7 @@
         <div class="inv-toolbar">
           <button type="button" class="btn-secondary" id="inv-filtros-btn" onclick="toggleFiltrosPlayeras()" aria-expanded="false">🔎 Filtros <span class="inv-count" id="inv-filtros-count" style="display:none;"></span></button>
           <button type="button" class="btn-secondary" id="inv-filtros-limpiar" onclick="limpiarFiltrosPlayeras()" style="display:none;">Limpiar filtros</button>
+          <button type="button" class="btn-secondary" id="inv-ventas-btn" onclick="toggleVentasRapidasPlayeras()" style="display:none;">🧾 Mostrar ventas rápidas</button>
           <div class="view-toggle" id="inv-vista-toggle">
             <button type="button" data-vista="cuadricula" onclick="cambiarVistaPlayeras('cuadricula')" title="Ver en cuadrícula">▦</button>
             <button type="button" data-vista="lista" onclick="cambiarVistaPlayeras('lista')" title="Ver en lista">☰</button>

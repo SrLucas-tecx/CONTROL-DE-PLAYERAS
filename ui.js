@@ -14,14 +14,14 @@ import {
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
-  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, playerasInventario, totalVentasSinBazar
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
    ESTADO DE UI (filtros, selección activa, etc.)
 --------------------------------------------------------------- */
 let uiFilters = {
-  playeraTag: "all", stickerSize: "all",
+  playeraTag: "all", stickerSize: "all", playeraVerVentas: false,
   playeraVista: (function () { try { return localStorage.getItem("LUCXSTUDIO_VISTA_PLAYERAS") || "cuadricula"; } catch (e) { return "cuadricula"; } })()
 };
 let activeBazarId = "";
@@ -141,6 +141,7 @@ document.addEventListener("click", (e) => {
 --------------------------------------------------------------- */
 const PAGE_TITLES = {
   inicio: "Inicio",
+  "ventas-rapidas": "Ventas rápidas",
   cotizador: "Cotizador rápido",
   cotizaciones: "Cotizaciones guardadas",
   produccion: "Producción (semáforo)",
@@ -170,6 +171,7 @@ export function switchPage(page) {
   document.getElementById("page-title").textContent = PAGE_TITLES[page] || "LUCXSTUDIO";
   document.getElementById("header-cta").style.display = page === "cotizador" ? "none" : "inline-block";
   if (page === "inicio" && typeof window.renderInicio === "function") window.renderInicio();
+  if (page === "ventas-rapidas" && typeof window.renderVentasRapidas === "function") window.renderVentasRapidas();
   if (page === "bazares") renderBazares();
   if (page === "caja") renderCaja();
   if (page === "interes") renderInteres();
@@ -613,7 +615,7 @@ function fillGastoCategoriaSelect() {
 // Une playeras y stickers (de diversos tamaños) en un solo checklist ligable a un gasto,
 // usando ids compuestos "p:<id>" / "s:<id>" para no chocar entre las dos colecciones.
 function piezasLigablesDisponibles() {
-  const playeras = AppState.playeras.map(p => ({ tipo: "playera", id: p.id, key: `p:${p.id}`, nombre: p.nombre, detalle: `${p.talla || "—"} · ${colorNombre(p.colorId)}`, gastoVinculadoId: p.gastoVinculadoId, obj: p }));
+  const playeras = playerasInventario().map(p => ({ tipo: "playera", id: p.id, key: `p:${p.id}`, nombre: p.nombre, detalle: `${p.talla || "—"} · ${colorNombre(p.colorId)}`, gastoVinculadoId: p.gastoVinculadoId, obj: p }));
   const stickers = AppState.stickers.map(s => ({ tipo: "sticker", id: s.id, key: `s:${s.id}`, nombre: s.nombre, detalle: `🏷️ Sticker ${s.tamano}`, gastoVinculadoId: s.gastoVinculadoId, obj: s }));
   return [...playeras, ...stickers].sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
@@ -899,7 +901,7 @@ function fillMermaSelects() {
   const pSel = document.getElementById("merma-playera");
   if (pSel) {
     pSel.innerHTML = `<option value="">— Sin playera / pieza libre —</option>` +
-      [...AppState.playeras].sort((a, b) => a.nombre.localeCompare(b.nombre))
+      [...playerasInventario()].sort((a, b) => a.nombre.localeCompare(b.nombre))
         .map(p => `<option value="${p.id}">${escapeHtml(p.nombre)} · ${escapeHtml(p.talla) || "—"} · ${colorNombre(p.colorId)} (stock ${p.stock || 0})</option>`).join("");
   }
   const bSel = document.getElementById("merma-bazar");
@@ -1515,7 +1517,7 @@ function renderInteres() {
 }
 function openModalConsulta() {
   const prod = document.getElementById("consulta-producto");
-  const opciones = [...AppState.playeras.map(p => ({ key: `p:${p.id}`, nombre: p.nombre, etiqueta: `👕 ${p.nombre}` })),
+  const opciones = [...playerasInventario().map(p => ({ key: `p:${p.id}`, nombre: p.nombre, etiqueta: `👕 ${p.nombre}` })),
                     ...AppState.stickers.map(s => ({ key: `s:${s.id}`, nombre: s.nombre, etiqueta: `🏷️ ${s.nombre}` }))]
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
   prod.innerHTML = `<option value="">✍️ Otro (escribir nombre)</option>` +
@@ -1660,7 +1662,7 @@ function refreshAllSelects() {
   filterColor.innerHTML = `<option value="all">Todos los colores</option>` +
     AppState.colores.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
   // Filtro de talla (dinámico según playeras existentes)
-  const tallas = [...new Set(AppState.playeras.map(p => p.talla).filter(Boolean))];
+  const tallas = [...new Set(playerasInventario().map(p => p.talla).filter(Boolean))];
   const filterTalla = document.getElementById("filter-playera-talla");
   const currentTalla = filterTalla.value;
   filterTalla.innerHTML = `<option value="all">Todas las tallas</option>` +
@@ -2003,6 +2005,7 @@ function renderPlayeras() {
   const colorF = document.getElementById("filter-playera-color").value;
   const tallaF = document.getElementById("filter-playera-talla").value;
   let list = AppState.playeras.filter(p => {
+    if (p.ventaRapida && !uiFilters.playeraVerVentas) return false;
     if (uiFilters.playeraTag !== "all" && !(p.tags || []).includes(uiFilters.playeraTag)) return false;
     if (estadoF !== "all" && p.estado !== estadoF) return false;
     if (colorF !== "all" && p.colorId !== colorF) return false;
@@ -2027,7 +2030,7 @@ function renderPlayeras() {
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
   if (!list.length) {
-    const hayInventario = AppState.playeras.length > 0;
+    const hayInventario = playerasInventario().length > 0;
     document.getElementById("playeras-empty-title").textContent = hayInventario ? "Ninguna playera coincide" : "Aún no hay playeras";
     document.getElementById("playeras-empty-text").textContent = hayInventario
       ? "Prueba quitando algunos filtros o cambia lo que buscas."
@@ -2048,9 +2051,10 @@ function renderPlayeras() {
 function playeraCardCompacta(p) {
   const cTotal = costoTotalPlayera(p);
   const ganancia = (p.precioVenta || 0) - cTotal;
-  const stockBajo = (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
-  const bazarEstado = bazarIdsDe(p).length ? (p.bazarEstado || "Disponible") : "";
+  const stockBajo = !p.ventaRapida && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
+  const bazarEstado = bazarIdsDe(p).length ? (p.bazarEstado || "Disponible") : (p.ventaRapida ? "Vendida" : "");
   const badges = [`<span class="card-badge ${estadoBadgeClass(p.estado)}">${escapeHtml(p.estado)}</span>`];
+  if (p.ventaRapida) badges.push(`<span class="card-badge badge-media">⚡ Venta rápida${p.fechaVenta ? " · " + escapeHtml(p.fechaVenta) : ""}</span>`);
   if (stockBajo) badges.push(`<span class="card-badge badge-agotado">⚠️ Stock bajo</span>`);
   if (bazarEstado === "Vendida") badges.push(`<span class="card-badge badge-agotado">Vendida ✅</span>`);
   else if (bazarEstado === "Venta nula") badges.push(`<span class="card-badge badge-agotado">🎁 Venta nula</span>`);
@@ -2145,7 +2149,18 @@ function actualizarBarraFiltrosPlayeras() {
   if (badge) { badge.textContent = activos ? String(activos) : ""; badge.style.display = activos ? "inline-flex" : "none"; }
   const limpiar = document.getElementById("inv-filtros-limpiar");
   if (limpiar) limpiar.style.display = activos ? "inline-block" : "none";
+  const nVentas = AppState.playeras.filter(p => p.ventaRapida).length;
+  const btnVentas = document.getElementById("inv-ventas-btn");
+  if (btnVentas) {
+    btnVentas.style.display = nVentas ? "inline-block" : "none";
+    btnVentas.classList.toggle("is-on", !!uiFilters.playeraVerVentas);
+    btnVentas.textContent = (uiFilters.playeraVerVentas ? "🙈 Ocultar" : "🧾 Mostrar") + ` ventas rápidas (${nVentas})`;
+  }
   document.querySelectorAll("#inv-vista-toggle button").forEach(b => b.classList.toggle("active", b.dataset.vista === uiFilters.playeraVista));
+}
+function toggleVentasRapidasPlayeras() {
+  uiFilters.playeraVerVentas = !uiFilters.playeraVerVentas;
+  renderPlayeras();
 }
 function toggleFiltrosPlayeras() {
   const panel = document.getElementById("inv-filtros-panel");
@@ -2342,7 +2357,7 @@ function openModalQuotePrenda(rowId) {
   const item = quoteItems.find(i => i.rowId === rowId);
   if (!item) return;
   editingQuotePrendaRowId = rowId;
-  const playerasOrdenadas = [...AppState.playeras].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+  const playerasOrdenadas = [...playerasInventario()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
   document.getElementById("qp-producto").innerHTML = `<option value="">— Manual / personalizado —</option>` +
     playerasOrdenadas.map(p => `<option value="${p.id}">${escapeHtml(p.nombre)} · ${escapeHtml(p.talla) || "—"} · ${escapeHtml(colorNombre(p.colorId))}</option>`).join("");
   document.getElementById("qp-tipo").innerHTML = TIPOS_PRENDA.map(t => `<option value="${t}">${t}</option>`).join("");
@@ -3987,7 +4002,7 @@ function getRecommendedStyle(id) {
 function renderEstadisticas() {
   const validCots = AppState.cotizaciones.filter(c => !c.ventaNula);
   const nullCots = AppState.cotizaciones.filter(c => c.ventaNula);
-  const playerasAsignadas = AppState.playeras.filter(p => bazarIdsDe(p).length && (p.stock || 0) > 0);
+  const playerasAsignadas = AppState.playeras.filter(p => (bazarIdsDe(p).length || p.ventaRapida) && (p.stock || 0) > 0);
   const totalVendidoPlayeras = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
     return s + ((p.precioVenta || 0) * (p.stock || 0));
@@ -4014,11 +4029,14 @@ function renderEstadisticas() {
   document.getElementById("stat-total-regalado").textContent = fmt(totalRegalado);
 
   // Ventas por bazar
+  // Por bazar: cotizaciones + playeras vendidas + stickers sueltos (igual que la tabla de Mis Bazares).
   const porBazar = {};
-  validCots.forEach(c => {
-    const nombre = bazarIdsDe(c).length ? nombresBazares(c) : "Sin bazar / venta directa";
-    porBazar[nombre] = (porBazar[nombre] || 0) + c.totalVenta;
+  AppState.bazares.forEach(b => {
+    const vendidoBazar = getBazarVentasYGanancia(b.id).totalVendido;
+    if (vendidoBazar > 0) porBazar[b.nombre] = (porBazar[b.nombre] || 0) + vendidoBazar;
   });
+  const vendidoSinBazar = totalVentasSinBazar();
+  if (vendidoSinBazar > 0) porBazar["Sin bazar / venta directa"] = vendidoSinBazar;
   const bazarLabels = Object.keys(porBazar);
   const bazarValues = Object.values(porBazar);
   const chartBazarCanvas = document.getElementById("chart-bazares");
@@ -4212,10 +4230,11 @@ export function renderAll(opciones) {
    funciones ya no son globales por defecto.
 ================================================================= */
 Object.assign(window, {
+  onBazarFechaInicioChange,
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
+  verDetallePlayera, toggleVentasRapidasPlayeras, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,

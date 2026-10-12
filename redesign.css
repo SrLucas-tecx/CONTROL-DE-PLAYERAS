@@ -612,3 +612,48 @@ button.mb-hoy:hover{background:var(--color-accent-soft);}
 .bazar-card-monto{flex-shrink:0;font-size:var(--fs-xs);font-weight:700;color:var(--color-text-muted);}
 .bazar-card-nuevo{border-style:dashed;color:var(--color-text-muted);font-weight:700;}
 .bazar-card-nuevo:hover{color:var(--color-text);border-color:var(--color-accent);}
+
+/* ============================================================
+   SPRINT 8 — HISTORIAL DE VENTAS RÁPIDAS · DESCUENTO POR LÍNEA
+   ============================================================ */
+
+/* ---- Interruptor de ventas rápidas en Inventario ---- */
+#inv-ventas-btn.is-on{border-color:var(--color-accent);color:var(--color-accent);}
+
+/* ---- Historial ---- */
+.vs-lista{display:flex;flex-direction:column;gap:var(--space-2);}
+.vs-dia{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
+  margin-top:var(--space-4);padding:0 var(--space-1);
+  font-family:var(--font-display);font-size:var(--fs-md);
+}
+.vs-dia:first-child{margin-top:0;}
+.vs-dia-nombre{font-weight:700;}
+.vs-row{
+  display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.2fr) auto auto;gap:var(--space-4);align-items:center;
+  padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);
+  background:var(--color-surface);border:1px solid var(--color-border);
+}
+.vs-main,.vs-mid,.vs-der{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.vs-name{font-weight:700;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vs-meta,.vs-metodo{font-size:var(--fs-xs);color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vs-qty{font-size:var(--fs-sm);font-weight:700;}
+.vs-desc{font-size:var(--fs-xs);font-weight:700;color:var(--color-warning);}
+.vs-der{text-align:right;align-items:flex-end;}
+.vs-der b{font-family:var(--font-display);}
+@media (max-width:760px){
+  .vs-row{grid-template-columns:minmax(0,1fr) auto;}
+  .vs-mid{grid-column:1 / 2;}
+  .vs-der{grid-row:1;grid-column:2;}
+  .vs-anular{grid-column:2;justify-self:end;}
+}
+
+/* ---- Descuento por línea en el modo bazar ---- */
+.mb-chip-desc{width:36px;height:36px;font-size:1rem;opacity:.55;}
+.mb-chip-desc.on{opacity:1;background:var(--color-warning-soft);}
+.mbd-rapidos{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-bottom:var(--space-3);}
+.mbd-rapidos button{
+  min-height:40px;padding:0 var(--space-4);border-radius:var(--radius-full);font-weight:800;font-size:var(--fs-sm);
+  background:var(--color-surface-alt);border:2px solid var(--color-border);
+}
+.mbd-rapidos button:hover{border-color:var(--color-accent);}
