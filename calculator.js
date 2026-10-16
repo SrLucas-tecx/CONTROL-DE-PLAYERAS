@@ -672,3 +672,22 @@ export function consultasPorEtiqueta(filtroBazar) {
 export function totalConsultas(filtroBazar) {
   return AppState.consultas.filter(c => consultaPasaFiltro(c, filtroBazar)).reduce((s, c) => s + (c.cantidad || 1), 0);
 }
+
+/* ---------------------------------------------------------------
+   PAGO DE UNA COTIZACIÓN (para el PDF y el mensaje de WhatsApp)
+   Métodos: En espera, Transferencia, Efectivo, Tarjeta, Mixto.
+--------------------------------------------------------------- */
+const METODO_PAGO_EMOJI = { "En espera": "⏳", Transferencia: "🏦", Efectivo: "💵", Tarjeta: "💳", Mixto: "💵💳" };
+export function etiquetaMetodoPago(metodo, conEmoji = true) {
+  const nombre = metodo || "Efectivo";
+  const texto = nombre === "En espera" ? "En espera de pago" : nombre;
+  return conEmoji && METODO_PAGO_EMOJI[nombre] ? `${METODO_PAGO_EMOJI[nombre]} ${texto}` : texto;
+}
+// Cuánto dejó de anticipo, cuánto resta por liquidar y si ya quedó pagada por completo.
+export function resumenPagoCotizacion(q) {
+  const total = Math.max(0, Number(q.totalVenta) || 0);
+  const anticipo = Math.max(0, Math.min(total, Number(q.anticipo) || 0));
+  const resta = Math.max(0, total - anticipo);
+  const completo = !q.ventaNula && total > 0 && (q.estado === "Pagado" || resta < 0.005);
+  return { total, anticipo, resta, completo, liquidado: completo ? resta : 0, fechaPago: q.fechaPago || "" };
+}

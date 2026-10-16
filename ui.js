@@ -14,7 +14,7 @@ import {
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
-  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
@@ -3431,7 +3431,7 @@ function resetQuoteForm() {
   setVal("q-fecha", new Date().toISOString().slice(0,10));
   setVal("q-artista", ""); setVal("q-comision-pct", 0); setVal("q-notas", "");
   setVal("q-tipo-venta", "Menudeo");
-  setVal("q-metodo-pago", "Efectivo"); setVal("q-monto-tarjeta", 0); setVal("q-anticipo", 0);
+  setVal("q-metodo-pago", "Efectivo"); setVal("q-monto-tarjeta", 0); setVal("q-anticipo", 0); setVal("q-fecha-pago", "");
   document.getElementById("q-monto-tarjeta-wrap").style.display = "none";
   setVal("q-descuento-pct", 0); setChecked("q-urgente", false);
   setChecked("q-venta-nula", false); setVal("q-venta-nula-motivo", "");
@@ -3474,7 +3474,7 @@ function saveQuote() {
     parteArtista: t.parteArtista, parteEstudio: t.parteEstudio,
     comisionNombre: t.comision.nombre, pctArtista: t.comision.pctArtista, pctEstudio: t.comision.pctEstudio,
     metodoPago: t.metodoPago, montoTarjeta: t.montoTarjeta, montoEfectivo: t.montoEfectivo, comisionTerminal: t.comisionTerminal,
-    anticipo: t.anticipo, saldoPendiente: t.saldoPendiente,
+    anticipo: t.anticipo, saldoPendiente: t.saldoPendiente, fechaPago: val("q-fecha-pago"),
     tagsOperativos: JSON.parse(JSON.stringify(quoteTagsOperativos)),
     estadoProduccion: editingId ? ((AppState.cotizaciones.find(c => c.id === editingId) || {}).estadoProduccion || "Por hacer") : "Por hacer",
     estado: editingId ? (AppState.cotizaciones.find(c=>c.id===editingId)||{}).estado || "Pendiente" : "Pendiente"
@@ -3496,16 +3496,7 @@ function saveQuote() {
 }
 function exportQuotePDF() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker antes de exportar.", "error");
-  const t = computeQuoteTotals();
-  const html = buildQuoteHTML({
-    folio: val("quote-editing-id") ? "Edición" : "Nueva",
-    cliente: val("q-cliente") || "Cliente sin nombre", fecha: val("q-fecha"), vendedor: val("q-vendedor"),
-    items: quoteItems, stickers: quoteStickerItems, serviciosExtra: quoteServiciosExtra, notas: val("q-notas"), ventaNula: checked("q-venta-nula"),
-    tipoVenta: val("q-tipo-venta"), ...t
-  });
-  const container = document.getElementById("pdf-template");
-  container.innerHTML = html;
-  html2pdf().set({ margin: 10, filename: "cotizacion_lucxstudio.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" } }).from(container).save();
+  window.generarPdfCotizacion(buildQuoteContextDesdeForm());
 }
 // Arma el resumen de la cotización en texto plano (sin HTML — WhatsApp no lo soporta),
 // usado tanto para el mensaje de WhatsApp como para la vista previa antes de compartir.
@@ -3534,16 +3525,22 @@ function buildQuoteWhatsAppText(q) {
   if (q.montoDescuento) lineas.push(`Descuento (${q.descuentoPct}%): − ${fmt(q.montoDescuento)}`);
   if (q.montoUrgente) lineas.push(`Recargo por urgencia (${q.recargoUrgentePct}%): + ${fmt(q.montoUrgente)}`);
   lineas.push(`💵 *Total: ${fmt(q.totalVenta)}*`);
-  if (q.metodoPago && q.metodoPago !== "Efectivo") lineas.push(`Método de pago: ${q.metodoPago === "Tarjeta" ? "💳 Tarjeta" : "💵💳 Mixto"}`);
-  if (q.anticipo) {
-    lineas.push(`Anticipo recibido: ${fmt(q.anticipo)}`);
-    lineas.push(`*Saldo pendiente: ${fmt(q.saldoPendiente)}*`);
+  if (!q.ventaNula) {
+    const pago = resumenPagoCotizacion(q);
+    lineas.push(`Método de pago: ${etiquetaMetodoPago(q.metodoPago)}`);
+    lineas.push(pago.anticipo > 0 ? `Anticipo recibido: ${fmt(pago.anticipo)}` : "Anticipo: $0.00 (sin anticipo)");
+    if (pago.completo) {
+      if (pago.anticipo > 0) lineas.push(`Liquidación: ${fmt(pago.liquidado)}`);
+      lineas.push(`✅ *PAGO COMPLETO*${pago.fechaPago ? ` (${pago.fechaPago.split("-").reverse().join("/")})` : ""}`);
+    } else {
+      lineas.push(`*Resta por liquidar: ${fmt(pago.resta)}*`);
+    }
   }
   lineas.push("");
   lineas.push("¡Gracias por tu compra! 🖤");
   return lineas.join("\n");
 }
-// Arma el contexto "q" (mismo shape que usan buildQuoteHTML/buildQuoteWhatsAppText) a
+// Arma el contexto "q" (mismo shape que usan pdf.js y buildQuoteWhatsAppText) a
 // partir del formulario del cotizador que está abierto ahorita.
 function buildQuoteContextDesdeForm() {
   const t = computeQuoteTotals();
@@ -3552,7 +3549,9 @@ function buildQuoteContextDesdeForm() {
     cliente: val("q-cliente") || "Cliente sin nombre", clienteTelefono: val("q-cliente-tel"),
     fecha: val("q-fecha"), vendedor: val("q-vendedor"),
     items: quoteItems, stickers: quoteStickerItems, serviciosExtra: quoteServiciosExtra,
-    notas: val("q-notas"), ventaNula: checked("q-venta-nula"), tipoVenta: val("q-tipo-venta"), ...t
+    notas: val("q-notas"), ventaNula: checked("q-venta-nula"), tipoVenta: val("q-tipo-venta"),
+    estado: ((AppState.cotizaciones.find(c => c.id === val("quote-editing-id")) || {}).estado) || "Pendiente",
+    fechaPago: val("q-fecha-pago"), ...t
   };
 }
 // Arma el mismo contexto pero a partir de una cotización ya guardada.
@@ -3562,6 +3561,7 @@ function buildQuoteContextDesdeGuardada(c) {
     fecha: c.fecha, vendedor: c.vendedor,
     items: c.items, stickers: c.stickers, serviciosExtra: c.serviciosExtra, notas: c.notas,
     ventaNula: c.ventaNula, tipoVenta: c.tipoVenta, totalVenta: c.totalVenta, totalCosto: c.totalCosto,
+    ventaBruta: c.ventaBruta, estado: c.estado, fechaPago: c.fechaPago || "",
     montoDescuento: c.montoDescuento, descuentoPct: c.descuentoPct, montoUrgente: c.montoUrgente,
     recargoUrgentePct: c.recargoUrgentePct, esUrgente: c.urgente,
     metodoPago: c.metodoPago, montoTarjeta: c.montoTarjeta, comisionTerminal: c.comisionTerminal,
@@ -3612,10 +3612,7 @@ function openPreviewCotizacionGuardada() {
 }
 function confirmarExportarPDF() {
   if (!previewQuoteContext) return;
-  const html = buildQuoteHTML(previewQuoteContext);
-  const container = document.getElementById("pdf-template");
-  container.innerHTML = html;
-  html2pdf().set({ margin: 10, filename: "cotizacion_lucxstudio.pdf", image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "pt", format: "a4", orientation: "portrait" } }).from(container).save();
+  window.generarPdfCotizacion(previewQuoteContext);
   closeModal("modal-preview-cotizacion");
 }
 function confirmarExportarWhatsApp() {
@@ -3623,64 +3620,6 @@ function confirmarExportarWhatsApp() {
   abrirWhatsAppConTexto(buildQuoteWhatsAppText(previewQuoteContext), previewQuoteContext.clienteTelefono);
   closeModal("modal-preview-cotizacion");
 }
-function buildQuoteHTML(q) {
-  const rows = q.items.map(item => {
-    return `<tr>
-      <td>${escapeHtml(item.nombre || "—")}${item.tipo ? ` <span style="color:#888;">(${escapeHtml(item.tipo)})</span>` : ""}</td><td>${escapeHtml(item.talla)}</td><td>${colorNombre(item.colorId)}</td>
-      <td>${item.cantidad}</td><td>${fmt(item.precioVenta)}</td><td>${fmt(item.precioVenta*item.cantidad)}</td>
-    </tr>`;
-  }).join("");
-  const stickerRows = (q.stickers || []).map(sticker => `<tr>
-      <td>${escapeHtml(sticker.nombre || "Sticker")} <span style="color:#888;">(${escapeHtml(sticker.tamano || "—")})</span></td><td>—</td><td>—</td>
-      <td>${sticker.cantidad}</td><td>${fmt(sticker.precioVenta)}</td><td>${fmt(sticker.precioVenta * sticker.cantidad)}</td>
-    </tr>`).join("");
-  const metodoPagoLabel = { Efectivo: "💵 Efectivo", Tarjeta: "💳 Tarjeta", Mixto: "💵💳 Mixto" }[q.metodoPago] || "";
-  return `
-  <div style="font-family:Arial,sans-serif;color:#222;padding:26px;width:748px;box-sizing:border-box;background:#fff;">
-    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #c0242c;padding-bottom:14px;margin-bottom:18px;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <img src="LOGO-crop.png" style="height:52px;width:auto;" onerror="this.style.display='none'">
-        <div>
-          <h1 style="margin:0;color:#c0242c;font-size:26px;letter-spacing:.5px;">LUCXSTUDIO</h1>
-          <p style="margin:2px 0 0;font-size:12px;color:#555;">Cotización de playeras y stickers ${q.tipoVenta === "Mayoreo" ? "— Mayoreo" : ""}${q.urgente || q.esUrgente ? " — 🚀 Pedido urgente" : ""}</p>
-        </div>
-      </div>
-      <div style="text-align:right;font-size:12px;color:#333;background:#f7f7f7;padding:8px 12px;border-radius:8px;">
-        <div><b>Folio:</b> ${escapeHtml(q.folio || "—")}</div>
-        <div><b>Fecha:</b> ${escapeHtml(q.fecha || "—")}</div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-      <p style="margin:0;"><b>Cliente:</b> ${escapeHtml(q.cliente)}${q.clienteTelefono ? ` &nbsp;·&nbsp; <b>Tel:</b> ${escapeHtml(q.clienteTelefono)}` : ""}</p>
-      <p style="margin:0;"><b>Vendedor:</b> ${escapeHtml(q.vendedor || "—")}</p>
-    </div>
-    ${q.ventaNula ? `<p style="font-size:12px;background:#fdeeee;border:1px dashed #c0242c;border-radius:6px;padding:8px;">🎁 Cotización marcada como venta nula (regalo / cortesía).</p>` : ""}
-    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
-      <thead><tr style="background:#c0242c;color:#fff;"><th style="padding:8px 6px;text-align:left;border-radius:6px 0 0 0;">Producto</th><th style="padding:8px 6px;">Talla</th><th style="padding:8px 6px;">Color</th><th style="padding:8px 6px;">Cant.</th><th style="padding:8px 6px;">Precio c/u</th><th style="padding:8px 6px;border-radius:0 6px 0 0;">Subtotal</th></tr></thead>
-      <tbody>${rows}${stickerRows}</tbody>
-    </table>
-    ${q.serviciosExtra && q.serviciosExtra.length ? `
-    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
-      <thead><tr style="background:#f2f2f2;"><th style="padding:6px;text-align:left;">Servicio extra</th><th style="padding:6px;">Monto</th></tr></thead>
-      <tbody>${q.serviciosExtra.map(s => `<tr><td style="padding:5px 6px;">${escapeHtml(s.concepto)}</td><td style="padding:5px 6px;">${fmt(s.monto)}</td></tr>`).join("")}</tbody>
-    </table>` : ""}
-    <div style="margin-top:18px;display:flex;justify-content:flex-end;">
-      <table style="font-size:13px;border-collapse:collapse;min-width:280px;">
-        <tr><td style="padding:3px 10px 3px 0;color:#555;">Total costo producción</td><td style="padding:3px 0;text-align:right;">${fmt(q.totalCosto)}</td></tr>
-        ${q.montoDescuento ? `<tr><td style="padding:3px 10px 3px 0;color:#555;">Subtotal</td><td style="padding:3px 0;text-align:right;">${fmt(q.ventaBruta)}</td></tr>
-        <tr><td style="padding:3px 10px 3px 0;color:#c0242c;">Descuento (${q.descuentoPct}%)</td><td style="padding:3px 0;text-align:right;color:#c0242c;">− ${fmt(q.montoDescuento)}</td></tr>` : ""}
-        ${q.montoUrgente ? `<tr><td style="padding:3px 10px 3px 0;color:#c0242c;">Recargo por urgencia (${q.recargoUrgentePct}%)</td><td style="padding:3px 0;text-align:right;color:#c0242c;">+ ${fmt(q.montoUrgente)}</td></tr>` : ""}
-        <tr><td style="padding:8px 10px 4px 0;font-size:17px;font-weight:bold;color:#c0242c;">Total</td><td style="padding:8px 0 4px;text-align:right;font-size:17px;font-weight:bold;color:#c0242c;">${fmt(q.totalVenta)}</td></tr>
-        ${metodoPagoLabel ? `<tr><td style="padding:3px 10px 3px 0;color:#555;">Método de pago</td><td style="padding:3px 0;text-align:right;">${metodoPagoLabel}</td></tr>` : ""}
-        ${q.anticipo ? `<tr><td style="padding:3px 10px 3px 0;color:#555;">Anticipo recibido</td><td style="padding:3px 0;text-align:right;">${fmt(q.anticipo)}</td></tr>
-        <tr><td style="padding:3px 10px 3px 0;font-weight:bold;">Saldo pendiente</td><td style="padding:3px 0;text-align:right;font-weight:bold;">${fmt(q.saldoPendiente)}</td></tr>` : ""}
-      </table>
-    </div>
-    ${q.notas ? `<p style="margin-top:16px;font-size:12px;background:#f7f7f7;padding:8px;border-radius:6px;"><b>Notas:</b> ${escapeHtml(q.notas)}</p>` : ""}
-    <p style="margin-top:22px;text-align:center;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:10px;">¡Gracias por tu compra! · LUCXSTUDIO — impresión DTF y playeras personalizadas</p>
-  </div>`;
-}
-
 /* =================================================================
    COTIZACIONES GUARDADAS
 ================================================================= */
@@ -3782,6 +3721,8 @@ function viewCotizacion(id) {
 function updateCotizacionEstado() {
   const c = AppState.cotizaciones.find(x => x.id === viewingCotizacionId);
   c.estado = val("ver-cot-estado-select");
+  // Al marcarla como pagada se anota el día (se puede corregir editando la cotización).
+  if (c.estado === "Pagado" && !c.fechaPago) c.fechaPago = new Date().toLocaleDateString("sv-SE");
   saveState(); renderCotizacionesGuardadas();
   showToast("Estado actualizado.");
 }
@@ -3819,7 +3760,7 @@ function editCotizacion() {
   setVal("q-vendedor", c.vendedor); setVal("q-artista", c.artistaId || "");
   setVal("q-comision-pct", c.comisionPctPersonalizado || 0); setVal("q-notas", c.notas || "");
   setVal("q-tipo-venta", c.tipoVenta || "Menudeo");
-  setVal("q-metodo-pago", c.metodoPago || "Efectivo"); setVal("q-monto-tarjeta", c.montoTarjeta || 0); setVal("q-anticipo", c.anticipo || 0);
+  setVal("q-metodo-pago", c.metodoPago || "Efectivo"); setVal("q-monto-tarjeta", c.montoTarjeta || 0); setVal("q-anticipo", c.anticipo || 0); setVal("q-fecha-pago", c.fechaPago || "");
   document.getElementById("q-monto-tarjeta-wrap").style.display = (c.metodoPago === "Mixto") ? "flex" : "none";
   setVal("q-descuento-pct", c.descuentoPct || 0); setChecked("q-urgente", !!c.urgente);
   setChecked("q-venta-nula", !!c.ventaNula); setVal("q-venta-nula-motivo", c.ventaNulaMotivo || "");

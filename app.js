@@ -8,6 +8,7 @@ import "./nav.js";   // Rediseño Sprint 1: menú por secciones, pestañas y pop
 import "./steps.js"; // Rediseño Sprint 3: cotizador por pasos
 import "./inicio.js"; // Rediseño Sprint 4: panel de inicio
 import "./respaldo.js"; // Respaldo entre dispositivos y descarga de caja
+import "./pdf.js";    // Generador del PDF de la cotización
 import "./extras.js"; // Rediseño Sprint 6: venta rápida, modo bazar, buscador Ctrl+K y color de acento
 
 applySavedTheme();
