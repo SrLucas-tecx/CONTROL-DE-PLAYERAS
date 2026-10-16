@@ -246,6 +246,8 @@ function aplicarCombinar(datos) {
   const copia = window.tomarCopiaEstado();
   guardarCopiaAnterior("antes de combinar un respaldo");
   const r = fusionar(datos, true);
+  // Los gastos/cotizaciones recién combinados pueden traer ligas nuevas: se recalculan los costos.
+  if (typeof window.recalcularCostosCotizacionesPorGastos === "function") window.recalcularCostosCotizacionesPorGastos();
   saveState();
   window.refrescarVistaActual();
   window.ofrecerDeshacer(`Combinado: ${r.nuevos} registro(s) nuevo(s).`, copia);

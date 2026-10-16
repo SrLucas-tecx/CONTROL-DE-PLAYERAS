@@ -10,7 +10,7 @@ import { AppState } from "./storage.js";
 --------------------------------------------------------------- */
 export function fmt(n) {
   const val = Number(n) || 0;
-  return "$" + val.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (val < 0 ? "-" : "") + "$" + Math.abs(val).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 export function escapeHtml(str) {
   if (str === null || str === undefined) return "";

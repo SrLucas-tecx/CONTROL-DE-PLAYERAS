@@ -699,7 +699,9 @@ function renderGastoLigarPlayerasList(gastoIdActual, seleccionadas) {
 }
 function cotizacionesLigadasDeGasto(gasto) {
   return (gasto.cotizacionesLigadas || []).map(link =>
-    typeof link === "string" ? { id: link, destino: "", montoAsignado: 0 } : link);
+    typeof link === "string"
+      ? { id: link, destino: "", modo: "suma", montoAsignado: 0 }
+      : { ...link, modo: link.modo || "suma" });
 }
 function renderGastoLigarCotizaciones(seleccionadas) {
   const list = document.getElementById("gasto-cotizaciones-list");
@@ -717,6 +719,10 @@ function renderGastoLigarCotizaciones(seleccionadas) {
         <option value="" ${!link?.destino ? "selected" : ""}>Elegir parte…</option>
         <option value="estampado" ${link?.destino === "estampado" ? "selected" : ""}>Estampado</option>
         <option value="prenda" ${link?.destino === "prenda" ? "selected" : ""}>Prenda</option>
+      </select>
+      <select class="form-select gasto-cotizacion-modo" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Cómo aplicar el gasto en ${escapeHtml(cotizacion.folio || "cotización")}">
+        <option value="reemplaza" ${(link ? link.modo : "reemplaza") === "reemplaza" ? "selected" : ""}>Reemplaza el estimado</option>
+        <option value="suma" ${link && link.modo === "suma" ? "selected" : ""}>Suma como extra</option>
       </select>
     </div>`;
   }).join("") || `<p class="empty-hint">Aún no hay cotizaciones guardadas para ligar a este gasto.</p>`;
@@ -768,13 +774,23 @@ function recalcularCostosCotizacionesPorGastos() {
     const costoBase = tieneCostoBaseGuardado && Number.isFinite(Number(cotizacion.costoBaseSinGastos))
       ? Number(cotizacion.costoBaseSinGastos)
       : Math.max(0, (Number(cotizacion.totalCosto) || 0) - costoPrevioExtra);
-    const costoExtra = AppState.gastos.reduce((total, gasto) => {
-      const link = cotizacionesLigadasDeGasto(gasto).find(item => item.id === cotizacion.id);
-      return total + (Number(link?.montoAsignado) || 0);
-    }, 0);
+    const links = AppState.gastos.flatMap(gasto =>
+      cotizacionesLigadasDeGasto(gasto).filter(l => l.id === cotizacion.id));
+    // Gastos "suma": se agregan completos como costo extra.
+    let costoExtra = links
+      .filter(l => l.modo !== "reemplaza")
+      .reduce((t, l) => t + (Number(l.montoAsignado) || 0), 0);
+    // Gastos "reemplaza": el costo real sustituye al estimado de esa parte. Si varios gastos
+    // reemplazan la misma parte, el estimado se quita una sola vez.
+    ["estampado", "prenda"].forEach(destino => {
+      const reemplazos = links.filter(l => l.modo === "reemplaza" && l.destino === destino);
+      if (!reemplazos.length) return;
+      const real = reemplazos.reduce((t, l) => t + (Number(l.montoAsignado) || 0), 0);
+      costoExtra += real - costoParteCotizacion(cotizacion, destino);
+    });
     cotizacion.costoBaseSinGastos = costoBase;
-    cotizacion.gastosCotizacionCosto = Math.round(costoExtra * 100) / 100;
-    cotizacion.totalCosto = Math.round((costoBase + cotizacion.gastosCotizacionCosto) * 100) / 100;
+    cotizacion.gastosCotizacionCosto = Math.round(costoExtra * 100) / 100;   // puede ser negativo
+    cotizacion.totalCosto = Math.max(0, Math.round((costoBase + cotizacion.gastosCotizacionCosto) * 100) / 100);
     cotizacion.ganancia = (Number(cotizacion.totalVenta) || 0) - cotizacion.totalCosto - (Number(cotizacion.comisionTerminal) || 0);
     const porcentajeArtista = Number(cotizacion.pctArtista) || 0;
     cotizacion.parteArtista = cotizacion.ganancia * porcentajeArtista / 100;
@@ -925,8 +941,10 @@ function saveGasto() {
   const cotizacionesLigadas = [...document.querySelectorAll(".gasto-cotizacion-cb:checked")].map(cb => {
     const selector = [...document.querySelectorAll(".gasto-cotizacion-destino")]
       .find(item => item.dataset.cotizacionId === cb.value);
+    const modoSel = [...document.querySelectorAll(".gasto-cotizacion-modo")]
+      .find(item => item.dataset.cotizacionId === cb.value);
     const destino = selector?.value || "";
-    return { id: cb.value, destino, montoAsignado: 0 };
+    return { id: cb.value, destino, modo: modoSel?.value || "reemplaza", montoAsignado: 0 };
   });
   if (cotizacionesLigadas.some(link => !link.destino)) {
     return showToast("Elige si el gasto corresponde al estampado o a la prenda de cada cotización seleccionada.", "error");
@@ -1050,7 +1068,7 @@ function renderGastos() {
         <summary>Ver cotizaciones ligadas</summary>
         <div class="gasto-desglose-rows">${cotizacionesInfo.map(link => `
           <div class="card-row">
-            <span>${escapeHtml(link.cotizacion.folio || "Cotización")} · ${escapeHtml(link.cotizacion.cliente || "Cliente sin nombre")} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"}</span>
+            <span>${escapeHtml(link.cotizacion.folio || "Cotización")} · ${escapeHtml(link.cotizacion.cliente || "Cliente sin nombre")} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"}${link.modo === "reemplaza" ? " · reemplaza estimado" : ""}</span>
             <button type="button" class="btn-secondary" onclick="viewCotizacion('${link.cotizacion.id}')">Ver · ${fmt(link.montoAsignado || 0)}</button>
           </div>`).join("")}</div>
       </details>` : ""}
@@ -3399,6 +3417,11 @@ function renderServiciosExtra() {
       <td><button class="remove-row" onclick="deleteServicioExtra('${s.id}')" title="Quitar">✕</button></td>
     </tr>`).join("");
 }
+// Siguiente folio = mayor folio existente + 1 (no se repite aunque borres cotizaciones).
+function siguienteFolio() {
+  const mayor = AppState.cotizaciones.reduce((m, c) => Math.max(m, parseInt(String(c.folio || "").replace(/\D/g, "")) || 0), 1000);
+  return "LX-" + (mayor + 1);
+}
 function resetQuoteForm() {
   quoteItems = [];
   quoteStickerItems = [];
@@ -3461,7 +3484,7 @@ function saveQuote() {
     showToast("Cotización actualizada.");
   } else {
     data.id = uid();
-    data.folio = "LX-" + (1000 + AppState.cotizaciones.length + 1);
+    data.folio = siguienteFolio();
     AppState.cotizaciones.unshift(data);
     showToast("Cotización guardada.");
   }
@@ -3729,7 +3752,7 @@ function viewCotizacion(id) {
     <div class="card-meta" style="margin-bottom:10px;">Fecha: ${c.fecha} · Vendedor: ${escapeHtml(c.vendedor||"—")} · Artista: ${escapeHtml(c.comisionNombre||"Sin artista")}</div>
     <div class="card-tags" style="margin-bottom:10px;">
       <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
-      <span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>
+      ${bazarIdsDe(c).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>` : ""}
       ${c.urgente ? `<span class="card-badge badge-agotado">🚀 Pedido urgente</span>` : ""}
       ${c.ventaNula ? `<span class="card-badge badge-agotado">🎁 Venta nula${c.ventaNulaMotivo ? ": " + escapeHtml(c.ventaNulaMotivo) : ""}</span>` : ""}
       ${tagsOpHtml}
@@ -3737,10 +3760,12 @@ function viewCotizacion(id) {
     ${rows}
     ${stickerRows}
     ${serviciosExtraRows}
-    <div class="card-row"><span>Total costo</span><span>${fmt(c.totalCosto)}</span></div>
     ${gastosRelacionados.length ? `
-    <div class="card-meta" style="margin-top:10px;">💸 Gastos ligados y aplicados al costo de producción</div>
-    ${gastosRelacionados.map(link => `<div class="card-row"><span>${escapeHtml(link.gasto.concepto)} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"}</span><span>${fmt(link.montoAsignado || 0)}</span></div>`).join("")}` : ""}
+    <div class="card-row"><span>Costo base (estimado)</span><span>${fmt(c.costoBaseSinGastos ?? ((c.totalCosto || 0) - (c.gastosCotizacionCosto || 0)))}</span></div>
+    <div class="card-meta" style="margin-top:10px;">💸 Gastos ligados</div>
+    ${gastosRelacionados.map(link => `<div class="card-row"><span>${escapeHtml(link.gasto.concepto)} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"} · ${link.modo === "reemplaza" ? "reemplaza el estimado" : "suma extra"}</span><span>${fmt(link.montoAsignado || 0)}</span></div>`).join("")}
+    <div class="card-row"><span>Efecto neto de los gastos en el costo</span><span>${fmt(c.gastosCotizacionCosto || 0)}</span></div>` : ""}
+    <div class="card-row"><span><b>Total costo</b></span><span><b>${fmt(c.totalCosto)}</b></span></div>
     ${c.montoDescuento ? `<div class="card-row"><span>Descuento (${c.descuentoPct}%)</span><span>− ${fmt(c.montoDescuento)}</span></div>` : ""}
     ${c.montoUrgente ? `<div class="card-row"><span>Recargo urgencia (${c.recargoUrgentePct}%)</span><span>+ ${fmt(c.montoUrgente)}</span></div>` : ""}
     <div class="card-row"><span><b>Total venta</b></span><span><b>${fmt(c.totalVenta)}</b></span></div>
@@ -3810,7 +3835,7 @@ function editCotizacion() {
 function duplicateCotizacion(id) {
   const c = AppState.cotizaciones.find(x => x.id === id);
   const copy = JSON.parse(JSON.stringify(c));
-  copy.id = uid(); copy.folio = "LX-" + (1000 + AppState.cotizaciones.length + 1);
+  copy.id = uid(); copy.folio = siguienteFolio();
   copy.estado = "Pendiente"; copy.fecha = new Date().toISOString().slice(0,10);
   copy.totalCosto = Number(c.costoBaseSinGastos ?? (c.totalCosto - (c.gastosCotizacionCosto || 0))) || 0;
   copy.costoBaseSinGastos = copy.totalCosto;
@@ -4814,5 +4839,5 @@ Object.assign(window, {
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
-  viewCotizacion
+  viewCotizacion, recalcularCostosCotizacionesPorGastos
 });
