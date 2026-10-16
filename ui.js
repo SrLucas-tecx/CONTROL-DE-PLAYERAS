@@ -5,7 +5,7 @@
 import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
-  fmt, escapeHtml, costoTotalPlayera, costoEstampado, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
+  fmt, escapeHtml, costoTotalPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
@@ -35,6 +35,51 @@ function val(id) { const el = document.getElementById(id); return el ? el.value 
 function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
 function checked(id) { const el = document.getElementById(id); return el ? el.checked : false; }
 function setChecked(id, v) { const el = document.getElementById(id); if (el) el.checked = !!v; }
+
+const GANG_SHEET_REGULAR = "regular";
+const GANG_SHEET_WHITE = "white";
+function gangSheetTipos() {
+  return AppState.settings.gangSheetTipos || [];
+}
+function gangSheetTipoValue(tipoId, blancoSolido) {
+  if (tipoId && gangSheetTipos().some(tipo => tipo.id === tipoId)) return `custom:${tipoId}`;
+  return blancoSolido ? GANG_SHEET_WHITE : GANG_SHEET_REGULAR;
+}
+function gangSheetTipoFromValue(value) {
+  if (value.startsWith("custom:")) return gangSheetTipos().find(tipo => tipo.id === value.slice(7)) || null;
+  return null;
+}
+function gangSheetSelection(value) {
+  const tipo = gangSheetTipoFromValue(value);
+  return {
+    tipoId: tipo ? tipo.id : "",
+    blancoSolido: tipo ? tipo.categoria === "gang_sheet_blanco" : value === GANG_SHEET_WHITE
+  };
+}
+function gangSheetDisplayName(obj) {
+  const tipo = gangSheetTipos().find(item => item.id === obj.gangSheetTipoId);
+  return tipo ? tipo.nombre : (obj.gangSheetBlancoSolido ? "DTF blanco sólido" : "DTF estándar");
+}
+function dtfTipoOptions() {
+  return `<option value="">— Selecciona un tipo especial —</option>` + gangSheetTipos().map(tipo => {
+    const proveedor = (AppState.proveedores || []).find(item => item.id === tipo.proveedorId);
+    const categoria = tipo.categoria === "gang_sheet_blanco" ? "Blanco sólido" : "Especial";
+    return `<option value="${escapeHtml(tipo.id)}">${escapeHtml(tipo.nombre)} · ${categoria} · ${fmt(tipo.precioMetro)}/m${proveedor ? ` · ${escapeHtml(proveedor.nombre)}` : ""}</option>`;
+  }).join("");
+}
+function metrosEstimadosPorArea(area) {
+  const anchoRollo = Number(AppState.settings.dtfAnchoRolloCm) || 58;
+  return Math.max(0, Number(area) || 0) / (100 * anchoRollo);
+}
+function costoImpresionSticker(sticker) {
+  if (sticker.dtfEspecial) {
+    return costoDtfPorArea((sticker.anchoCm || 0) * (sticker.largoCm || 0), sticker.dtfTipoId);
+  }
+  if (sticker.dtfMetrosUsados !== undefined && sticker.dtfMetrosUsados !== null) {
+    return costoDtfPorMetros(sticker.dtfMetrosUsados, !!sticker.dtfEspecial, sticker.dtfTipoId || "");
+  }
+  return sticker.costo || 0;
+}
 
 function rangoBazarFecha(bazar) {
   const inicio = bazar.fecha || bazar.fechaInicio || "—";
@@ -580,13 +625,16 @@ function saveProveedor() {
   } else {
     AppState.proveedores.push(Object.assign({ id: uid() }, data));
   }
-  saveState(); closeModal("modal-proveedor"); renderProveedores();
+  saveState(); closeModal("modal-proveedor"); renderProveedores(); renderGangSheetSupplierSelect(); renderGangSheetTipos(); refreshAllSelects();
   showToast("Proveedor guardado.");
 }
 async function deleteProveedor(id) {
   if (!(await pedirConfirmacion("¿Eliminar este proveedor?", { aviso: "Proveedor eliminado." }))) return;
   AppState.proveedores = AppState.proveedores.filter(x => x.id !== id);
-  saveState(); renderProveedores();
+  gangSheetTipos().forEach(tipo => {
+    if (tipo.proveedorId === id) tipo.proveedorId = "";
+  });
+  saveState(); renderProveedores(); renderGangSheetSupplierSelect(); renderGangSheetTipos(); refreshAllSelects();
 }
 function renderProveedores() {
   const grid = document.getElementById("proveedores-grid");
@@ -597,6 +645,7 @@ function renderProveedores() {
         <span class="card-title">${escapeHtml(pr.nombre)}</span>
       </div>
       ${pr.producto ? `<div class="card-meta">📦 ${escapeHtml(pr.producto)}</div>` : ""}
+      ${gangSheetTipos().filter(tipo => tipo.proveedorId === pr.id).map(tipo => `<div class="card-meta">🧻 ${escapeHtml(tipo.nombre)} · ${fmt(tipo.precioMetro)}/m</div>`).join("")}
       ${pr.contacto ? `<div class="card-meta">📞 ${escapeHtml(pr.contacto)}</div>` : ""}
       ${pr.notas ? `<div class="card-meta">${escapeHtml(pr.notas)}</div>` : ""}
       <div class="card-actions">
@@ -636,18 +685,106 @@ function piezaNoCabeEnRollo(pieza) {
 function renderGastoLigarPlayerasList(gastoIdActual, seleccionadas) {
   const list = document.getElementById("gasto-ligar-list");
   if (!list) return;
-  const piezas = piezasLigablesDisponibles();
+  const piezas = piezasLigablesDisponibles().filter(pieza =>
+    !pieza.gastoVinculadoId || pieza.gastoVinculadoId === gastoIdActual);
   list.innerHTML = piezas.map(pieza => {
-    const ligadaAOtro = pieza.gastoVinculadoId && pieza.gastoVinculadoId !== gastoIdActual;
     const noCabe = piezaNoCabeEnRollo(pieza);
     return `
     <label class="gasto-ligar-item">
       <input type="checkbox" class="gasto-ligar-cb" value="${pieza.key}" ${seleccionadas.includes(pieza.key) ? "checked" : ""} onchange="updateGastoLigarPreview()">
-      <span>${escapeHtml(pieza.nombre)} · ${pieza.detalle}</span>
+      <span>${pieza.tipo === "sticker" ? "✂️ Sticker" : "👕 Playera"}: ${escapeHtml(pieza.nombre)} · ${pieza.detalle}</span>
       ${noCabe ? `<span class="card-meta" style="color:var(--color-danger);">⚠️ no cabe en el ancho del rollo (${AppState.settings.dtfAnchoRolloCm} cm)</span>` : ""}
-      ${ligadaAOtro ? `<span class="card-meta">🔗 se reasignará (ligada a otro gasto)</span>` : ""}
     </label>`;
-  }).join("") || `<p class="empty-hint">Aún no tienes playeras ni stickers en el inventario.</p>`;
+  }).join("") || `<p class="empty-hint">No hay playeras o stickers disponibles para ligar a este gasto. Las piezas vinculadas a otros gastos no aparecen aquí.</p>`;
+}
+function cotizacionesLigadasDeGasto(gasto) {
+  return (gasto.cotizacionesLigadas || []).map(link =>
+    typeof link === "string" ? { id: link, destino: "", montoAsignado: 0 } : link);
+}
+function renderGastoLigarCotizaciones(seleccionadas) {
+  const list = document.getElementById("gasto-cotizaciones-list");
+  if (!list) return;
+  const cotizaciones = [...AppState.cotizaciones].sort((a, b) =>
+    (b.fecha || "").localeCompare(a.fecha || "") || (b.folio || "").localeCompare(a.folio || ""));
+  const linksGuardados = new Map(seleccionadas.map(link => [link.id, link]));
+  list.innerHTML = cotizaciones.map(cotizacion => {
+    const link = linksGuardados.get(cotizacion.id);
+    return `
+    <div class="gasto-ligar-item gasto-cotizacion-item">
+      <input type="checkbox" id="gasto-cot-${escapeHtml(cotizacion.id)}" class="gasto-cotizacion-cb" value="${escapeHtml(cotizacion.id)}" ${link ? "checked" : ""}>
+      <label class="gasto-cotizacion-label" for="gasto-cot-${escapeHtml(cotizacion.id)}">🧾 ${escapeHtml(cotizacion.folio || "Cotización")} · ${escapeHtml(cotizacion.cliente || "Cliente sin nombre")} · ${fmt(cotizacion.totalVenta || 0)}</label>
+      <select class="form-select gasto-cotizacion-destino" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Asignar gasto para ${escapeHtml(cotizacion.folio || "cotización")}">
+        <option value="" ${!link?.destino ? "selected" : ""}>Elegir parte…</option>
+        <option value="estampado" ${link?.destino === "estampado" ? "selected" : ""}>Estampado</option>
+        <option value="prenda" ${link?.destino === "prenda" ? "selected" : ""}>Prenda</option>
+      </select>
+    </div>`;
+  }).join("") || `<p class="empty-hint">Aún no hay cotizaciones guardadas para ligar a este gasto.</p>`;
+}
+function costoParteCotizacion(cotizacion, destino) {
+  const prendas = cotizacion.items || [];
+  if (destino === "prenda") {
+    return prendas.reduce((total, item) => {
+      const costoPrenda = item.prendaCliente ? 0 : Number(item.costoPlayera) || 0;
+      return total + (costoPrenda + sobrecargoTalla(item.talla)) * (Number(item.cantidad) || 0);
+    }, 0);
+  }
+  const costoEstampados = prendas.reduce((total, item) =>
+    total + getCostoEstampadoEfectivo(item) * (Number(item.cantidad) || 0), 0);
+  const costoStickers = (cotizacion.stickers || []).reduce((total, sticker) =>
+    total + (Number(sticker.costo) || 0) * (Number(sticker.cantidad) || 0), 0);
+  return costoEstampados + costoStickers;
+}
+function repartirGastoEntreCotizaciones(links, monto) {
+  const elegibles = links.filter(link => link.destino && AppState.cotizaciones.some(c => c.id === link.id));
+  const pesos = elegibles.map(link => Math.max(0, costoParteCotizacion(
+    AppState.cotizaciones.find(c => c.id === link.id), link.destino
+  )));
+  const sumaPesos = pesos.reduce((total, peso) => total + peso, 0);
+  const centavos = Math.max(0, Math.round((Number(monto) || 0) * 100));
+  let centavosRestantes = centavos;
+  return links.map(link => {
+    const index = elegibles.indexOf(link);
+    if (index < 0) return { ...link, montoAsignado: 0 };
+    const parteCentavos = index === elegibles.length - 1
+      ? centavosRestantes
+      : Math.floor(centavos * (sumaPesos > 0 ? pesos[index] / sumaPesos : 1 / elegibles.length));
+    centavosRestantes -= parteCentavos;
+    return { ...link, montoAsignado: parteCentavos / 100 };
+  });
+}
+function recalcularCostosCotizacionesPorGastos() {
+  AppState.gastos.forEach(gasto => {
+    gasto.cotizacionesLigadas = repartirGastoEntreCotizaciones(
+      cotizacionesLigadasDeGasto(gasto),
+      gasto.monto
+    );
+  });
+  AppState.cotizaciones.forEach(cotizacion => {
+    const costoPrevioExtra = Number(cotizacion.gastosCotizacionCosto) || 0;
+    const tieneCostoBaseGuardado = cotizacion.costoBaseSinGastos !== null
+      && cotizacion.costoBaseSinGastos !== undefined
+      && cotizacion.costoBaseSinGastos !== "";
+    const costoBase = tieneCostoBaseGuardado && Number.isFinite(Number(cotizacion.costoBaseSinGastos))
+      ? Number(cotizacion.costoBaseSinGastos)
+      : Math.max(0, (Number(cotizacion.totalCosto) || 0) - costoPrevioExtra);
+    const costoExtra = AppState.gastos.reduce((total, gasto) => {
+      const link = cotizacionesLigadasDeGasto(gasto).find(item => item.id === cotizacion.id);
+      return total + (Number(link?.montoAsignado) || 0);
+    }, 0);
+    cotizacion.costoBaseSinGastos = costoBase;
+    cotizacion.gastosCotizacionCosto = Math.round(costoExtra * 100) / 100;
+    cotizacion.totalCosto = Math.round((costoBase + cotizacion.gastosCotizacionCosto) * 100) / 100;
+    cotizacion.ganancia = (Number(cotizacion.totalVenta) || 0) - cotizacion.totalCosto - (Number(cotizacion.comisionTerminal) || 0);
+    const porcentajeArtista = Number(cotizacion.pctArtista) || 0;
+    cotizacion.parteArtista = cotizacion.ganancia * porcentajeArtista / 100;
+    cotizacion.parteEstudio = cotizacion.ganancia - cotizacion.parteArtista;
+  });
+}
+function gastosLigadosACotizacion(cotizacionId) {
+  return AppState.gastos.flatMap(gasto => cotizacionesLigadasDeGasto(gasto)
+    .filter(link => link.id === cotizacionId)
+    .map(link => ({ ...link, gasto })));
 }
 function toggleGastoLigarPlayeras(isChecked) {
   document.getElementById("gasto-ligar-wrap").style.display = isChecked ? "block" : "none";
@@ -719,7 +856,7 @@ function updateGastoLigarPreview() {
     preview.innerHTML = `${fmt(monto)} ÷ ${piezas.length} pieza(s) = <b>${fmt(costos[piezas[0].key])}</b> de costo real por pieza (partes iguales). Llenado del rollo: ${pctLlenado}%.`;
     return;
   }
-  const filas = piezas.map(p => `<div class="card-row"><span>${escapeHtml(p.obj.nombre)}${p.area ? ` (${p.area.toFixed(0)} cm²)` : " (Gang Sheet)"}</span><span>${fmt(costos[p.key])}</span></div>`).join("");
+  const filas = piezas.map(p => `<div class="card-row"><span>${escapeHtml(p.obj.nombre)}${p.area ? ` (${p.area.toFixed(0)} cm²)` : " (DTF por metros)"}</span><span>${fmt(costos[p.key])}</span></div>`).join("");
   preview.innerHTML = `<div style="margin-bottom:6px;">Reparto por área — ${fmt(monto)} en total · Llenado del rollo: <b>${pctLlenado}%</b></div>${filas}`;
 }
 function openModalGasto(id) {
@@ -727,6 +864,7 @@ function openModalGasto(id) {
   setVal("gasto-id", id || "");
   document.getElementById("modal-gasto-title").textContent = id ? "Editar gasto" : "Nuevo gasto";
   let ligadas = [];
+  let cotizacionesLigadas = [];
   if (id) {
     const g = AppState.gastos.find(x => x.id === id);
     setVal("gasto-concepto", g.concepto); setVal("gasto-categoria", g.categoria || "Otro");
@@ -735,6 +873,7 @@ function openModalGasto(id) {
     setVal("gasto-reparto-modo", g.repartoModo || "area");
     setVal("gasto-metros", g.metros || 1);
     ligadas = g.piezasLigadas || [];
+    cotizacionesLigadas = cotizacionesLigadasDeGasto(g);
   } else {
     setVal("gasto-reparto-modo", "area");
     setVal("gasto-metros", 1);
@@ -744,6 +883,7 @@ function openModalGasto(id) {
   setChecked("gasto-ligar-toggle", ligadas.length > 0);
   document.getElementById("gasto-ligar-wrap").style.display = ligadas.length > 0 ? "block" : "none";
   renderGastoLigarPlayerasList(id || "", ligadas);
+  renderGastoLigarCotizaciones(cotizacionesLigadas);
   updateGastoLigarPreview();
   openModal("modal-gasto");
 }
@@ -755,7 +895,9 @@ function desvincularCostoRealDePieza(tipo, id) {
   } else {
     const s = AppState.stickers.find(x => x.id === id);
     if (s) {
-      s.costo = s.anchoCm > 0 && s.largoCm > 0 ? Math.round(costoEstampado([{ anchoCm: s.anchoCm, largoCm: s.largoCm }], false) * 100) / 100 : 0;
+      s.costo = s.dtfMetrosUsados !== undefined
+        ? Math.round(costoImpresionSticker(s) * 100) / 100
+        : s.anchoCm > 0 && s.largoCm > 0 ? Math.round(costoEstampado([{ anchoCm: s.anchoCm, largoCm: s.largoCm }], false) * 100) / 100 : 0;
       s.gastoVinculadoId = "";
     }
   }
@@ -780,10 +922,23 @@ function saveGasto() {
   const ligar = checked("gasto-ligar-toggle");
   const seleccionadas = ligar ? [...document.querySelectorAll(".gasto-ligar-cb:checked")].map(cb => cb.value) : [];
   const repartoModo = val("gasto-reparto-modo") || "area";
+  const cotizacionesLigadas = [...document.querySelectorAll(".gasto-cotizacion-cb:checked")].map(cb => {
+    const selector = [...document.querySelectorAll(".gasto-cotizacion-destino")]
+      .find(item => item.dataset.cotizacionId === cb.value);
+    const destino = selector?.value || "";
+    return { id: cb.value, destino, montoAsignado: 0 };
+  });
+  if (cotizacionesLigadas.some(link => !link.destino)) {
+    return showToast("Elige si el gasto corresponde al estampado o a la prenda de cada cotización seleccionada.", "error");
+  }
+  if (seleccionadas.length && cotizacionesLigadas.length) {
+    return showToast("Para no duplicar el monto, liga este gasto a playeras/stickers o a cotizaciones, no a ambos.", "error");
+  }
   const data = {
     concepto, categoria: val("gasto-categoria"), monto,
     fecha: val("gasto-fecha"), link: val("gasto-link").trim(), notas: val("gasto-notas"),
     piezasLigadas: seleccionadas, repartoModo: ligar ? repartoModo : (existing?.repartoModo || "area"),
+    cotizacionesLigadas: repartirGastoEntreCotizaciones(cotizacionesLigadas, monto),
     metros: Math.max(0.1, num("gasto-metros") || 1)
   };
   if (existing) {
@@ -817,8 +972,12 @@ function saveGasto() {
     gastoGuardado.areaTotalLote = 0;
     gastoGuardado.pctLlenado = null;
   }
-  saveState(); closeModal("modal-gasto"); renderGastos(); renderPlayeras(); renderStickers();
-  showToast(seleccionadas.length ? `Gasto guardado — costo real aplicado a ${seleccionadas.length} pieza(s) (${repartoModo === "area" ? "por área" : "partes iguales"}).` : "Gasto guardado.");
+  recalcularCostosCotizacionesPorGastos();
+  saveState(); closeModal("modal-gasto"); renderGastos(); renderPlayeras(); renderStickers(); renderCotizacionesGuardadas();
+  const totalCotizacionesLigadas = data.cotizacionesLigadas.length;
+  showToast(seleccionadas.length
+    ? `Gasto guardado — costo real aplicado a ${seleccionadas.length} pieza(s) (${repartoModo === "area" ? "por área" : "partes iguales"})${totalCotizacionesLigadas ? ` y aplicado a ${totalCotizacionesLigadas} cotización(es)` : ""}.`
+    : `Gasto guardado${totalCotizacionesLigadas ? ` — aplicado a ${totalCotizacionesLigadas} cotización(es)` : ""}.`);
 }
 // Vuelve a aplicar el reparto de un gasto ya guardado (mismas piezas, mismo monto, mismo
 // modo) directo desde su tarjeta, sin reabrir el modal — útil si cambiaste el ancho de
@@ -848,7 +1007,8 @@ async function deleteGasto(id) {
     if (pieza && pieza.gastoVinculadoId === id) desvincularCostoRealDePieza(tipo, pid);
   });
   AppState.gastos = AppState.gastos.filter(x => x.id !== id);
-  saveState(); renderGastos(); renderPlayeras(); renderStickers();
+  recalcularCostosCotizacionesPorGastos();
+  saveState(); renderGastos(); renderPlayeras(); renderStickers(); renderCotizacionesGuardadas();
 }
 function renderGastos() {
   const grid = document.getElementById("gastos-grid");
@@ -861,6 +1021,9 @@ function renderGastos() {
   grid.innerHTML = ordenados.map(g => {
     const ligadas = g.piezasLigadas || [];
     const piezasInfo = ligadas.map(piezaLigadaDeKey).filter(Boolean);
+    const cotizacionesInfo = cotizacionesLigadasDeGasto(g)
+      .map(link => ({ ...link, cotizacion: AppState.cotizaciones.find(c => c.id === link.id) }))
+      .filter(link => link.cotizacion);
     const costoDe = p => p.tipo === "playera" ? (p.obj.costoImpresionManual || 0) : (p.obj.costo || 0);
     const desglose = piezasInfo.map(p => `<div class="card-row"><span>${escapeHtml(p.obj.nombre)}</span><span>${fmt(costoDe(p))}</span></div>`).join("");
     const llenadoTxt = (g.pctLlenado !== null && g.pctLlenado !== undefined)
@@ -880,6 +1043,16 @@ function renderGastos() {
       <details class="gasto-desglose">
         <summary>Ver desglose por pieza</summary>
         <div class="gasto-desglose-rows">${desglose}</div>
+      </details>` : ""}
+      ${cotizacionesInfo.length ? `
+      <div class="card-meta">🧾 ${cotizacionesInfo.length} cotización(es) relacionadas · ${fmt(cotizacionesInfo.reduce((total, link) => total + (Number(link.montoAsignado) || 0), 0))} aplicado a costos</div>
+      <details class="gasto-desglose">
+        <summary>Ver cotizaciones ligadas</summary>
+        <div class="gasto-desglose-rows">${cotizacionesInfo.map(link => `
+          <div class="card-row">
+            <span>${escapeHtml(link.cotizacion.folio || "Cotización")} · ${escapeHtml(link.cotizacion.cliente || "Cliente sin nombre")} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"}</span>
+            <button type="button" class="btn-secondary" onclick="viewCotizacion('${link.cotizacion.id}')">Ver · ${fmt(link.montoAsignado || 0)}</button>
+          </div>`).join("")}</div>
       </details>` : ""}
       ${g.notas ? `<div class="card-meta">${escapeHtml(g.notas)}</div>` : ""}
       <div class="card-actions">
@@ -1125,44 +1298,109 @@ function renderComprasPendientes() {
 ================================================================= */
 function renderAjustes() {
   setVal("set-dtf-precio", AppState.settings.dtfPrecioMetro);
-  setVal("set-dtf-precio-especial", AppState.settings.dtfPrecioMetroEspecial);
   setVal("set-dtf-ancho", AppState.settings.dtfAnchoRolloCm);
   setVal("set-sobrecargo-2xl", AppState.settings.sobrecargo2XLMonto);
   setVal("set-stock-minimo-default", AppState.settings.stockMinimoDefault);
-  setVal("set-gangsheet-precio", AppState.settings.gangSheetPrecioMetro);
-  setVal("set-gangsheet-blanco-precio", AppState.settings.gangSheetBlancoSolidoPrecioMetro);
   setVal("set-recargo-urgente", AppState.settings.recargoUrgentePct);
   setVal("set-comision-terminal", AppState.settings.comisionTerminalPct);
   setVal("set-umbral-llenado", AppState.settings.umbralLlenadoPct ?? 30);
   setVal("set-moneda", AppState.settings.moneda);
+  renderGangSheetSupplierSelect();
+  renderGangSheetTipos();
   updateCostPreview();
+}
+function renderGangSheetSupplierSelect() {
+  const proveedorSelect = document.getElementById("set-gangsheet-tipo-proveedor");
+  if (!proveedorSelect) return;
+  const proveedorActual = proveedorSelect.value;
+  proveedorSelect.innerHTML = `<option value="">Sin proveedor asociado</option>` +
+    AppState.proveedores.map(proveedor => `<option value="${escapeHtml(proveedor.id)}">${escapeHtml(proveedor.nombre)}</option>`).join("");
+  proveedorSelect.value = proveedorActual;
+}
+function renderGangSheetTipos() {
+  const list = document.getElementById("gangsheet-tipos-list");
+  if (!list) return;
+  list.innerHTML = gangSheetTipos().map(tipo => {
+    const proveedor = AppState.proveedores.find(item => item.id === tipo.proveedorId);
+    const categoria = tipo.categoria === "gang_sheet_blanco" ? "DTF especial blanco sólido" : "DTF especial";
+    return `<tr>
+      <td data-label="Nombre">${escapeHtml(tipo.nombre)}</td>
+      <td data-label="Categoría">${categoria}</td>
+      <td data-label="Precio por metro">${fmt(tipo.precioMetro)}</td>
+      <td data-label="Proveedor">${proveedor ? escapeHtml(proveedor.nombre) : "Sin proveedor"}</td>
+      <td data-label="Acciones"><button type="button" class="danger" title="Eliminar tipo de DTF" aria-label="Eliminar tipo ${escapeHtml(tipo.nombre)}" onclick="deleteGangSheetTipo('${escapeHtml(tipo.id)}')">🗑️</button></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" class="settings-type-empty">Aún no agregas tipos personalizados.</td></tr>`;
+}
+function addGangSheetTipo() {
+  const nombre = val("set-gangsheet-tipo-nombre").trim();
+  const precioValue = val("set-gangsheet-tipo-precio");
+  const precioMetro = Number.parseFloat(precioValue);
+  if (!nombre) return showToast("Escribe el nombre del tipo de DTF.", "error");
+  if (precioValue === "" || !Number.isFinite(precioMetro) || precioMetro < 0) {
+    return showToast("Escribe un precio por metro válido.", "error");
+  }
+  const tipos = gangSheetTipos();
+  AppState.settings.gangSheetTipos = tipos;
+  tipos.push({
+    id: uid(),
+    nombre,
+    categoria: val("set-gangsheet-tipo-categoria"),
+    precioMetro,
+    proveedorId: val("set-gangsheet-tipo-proveedor")
+  });
+  setVal("set-gangsheet-tipo-nombre", "");
+  setVal("set-gangsheet-tipo-precio", "");
+  document.getElementById("gangsheet-tipo-form").open = false;
+  refreshAllSelects();
+  renderGangSheetTipos();
+  renderProveedores();
+  showToast("Tipo agregado. Guarda todos los ajustes para conservarlo.");
+}
+async function deleteGangSheetTipo(id) {
+  const usadoEnInventario = AppState.playeras.some(playera => playera.dtfTipoId === id || playera.gangSheetTipoId === id)
+    || AppState.stickers.some(sticker => sticker.dtfTipoId === id);
+  const usadoEnCotizacion = AppState.cotizaciones.some(cotizacion =>
+    (cotizacion.items || []).some(item => item.dtfTipoId === id || item.gangSheetTipoId === id)
+    || (cotizacion.stickers || []).some(item => item.dtfTipoId === id));
+  const usadoEnCotizador = quoteItems.some(item => item.dtfTipoId === id || item.gangSheetTipoId === id)
+    || quoteStickerItems.some(item => item.dtfTipoId === id);
+  if (usadoEnInventario || usadoEnCotizacion || usadoEnCotizador) {
+    return showToast("No se puede eliminar: este tipo está usado en inventario o en una cotización.", "error");
+  }
+  const tipo = gangSheetTipos().find(item => item.id === id);
+  if (!tipo || !(await pedirConfirmacion(`¿Eliminar el tipo "${tipo.nombre}"?`, { aviso: "Tipo de DTF eliminado." }))) return;
+  AppState.settings.gangSheetTipos = gangSheetTipos().filter(item => item.id !== id);
+  refreshAllSelects();
+  renderGangSheetTipos();
+  renderProveedores();
+  showToast("Tipo eliminado. Guarda todos los ajustes para confirmar.");
 }
 function updateCostPreview() {
   const precio = parseFloat(document.getElementById("set-dtf-precio").value) || 0;
-  const precioEspecial = parseFloat(document.getElementById("set-dtf-precio-especial").value) || 0;
   const ancho = parseFloat(document.getElementById("set-dtf-ancho").value) || 1;
   const cm2 = precio / (100 * ancho);
-  const cm2Especial = precioEspecial / (100 * ancho);
   document.getElementById("preview-costo-cm2").textContent = "$" + cm2.toFixed(4);
   document.getElementById("preview-costo-ejemplo").textContent = fmt(cm2 * 30 * 40);
-  const previewEspecialEl = document.getElementById("preview-costo-especial-ejemplo");
-  if (previewEspecialEl) previewEspecialEl.textContent = fmt(cm2Especial * 30 * 40);
+  const precioMetroPreview = document.getElementById("preview-costo-metro");
+  if (precioMetroPreview) precioMetroPreview.textContent = fmt(precio);
 }
 document.getElementById("set-dtf-precio").addEventListener("input", updateCostPreview);
-document.getElementById("set-dtf-precio-especial").addEventListener("input", updateCostPreview);
 document.getElementById("set-dtf-ancho").addEventListener("input", updateCostPreview);
 function saveSettings() {
   AppState.settings.dtfPrecioMetro = parseFloat(num("set-dtf-precio")) || 0;
-  AppState.settings.dtfPrecioMetroEspecial = parseFloat(num("set-dtf-precio-especial")) || 0;
   AppState.settings.dtfAnchoRolloCm = parseFloat(num("set-dtf-ancho")) || 1;
   AppState.settings.sobrecargo2XLMonto = parseFloat(num("set-sobrecargo-2xl")) || 0;
   AppState.settings.stockMinimoDefault = parseInt(num("set-stock-minimo-default")) || 0;
-  AppState.settings.gangSheetPrecioMetro = parseFloat(num("set-gangsheet-precio")) || 0;
-  AppState.settings.gangSheetBlancoSolidoPrecioMetro = parseFloat(num("set-gangsheet-blanco-precio")) || 0;
   AppState.settings.recargoUrgentePct = Math.max(0, parseFloat(num("set-recargo-urgente")) || 0);
   AppState.settings.comisionTerminalPct = Math.max(0, parseFloat(num("set-comision-terminal")) || 0);
   AppState.settings.umbralLlenadoPct = Math.max(0, Math.min(100, parseFloat(num("set-umbral-llenado")) || 0));
   AppState.settings.moneda = val("set-moneda") || "MXN";
+  AppState.stickers.forEach(sticker => {
+    if (sticker.dtfMetrosUsados !== undefined && !sticker.gastoVinculadoId) {
+      sticker.costo = Math.round(costoImpresionSticker(sticker) * 100) / 100;
+    }
+  });
   saveState();
   showToast("Ajustes guardados. Los costos se recalculan automáticamente.");
   renderPlayeras(); renderStickers(); renderQuoteItems();
@@ -1656,6 +1894,13 @@ function renderBazares() {
    INVENTARIO DE PLAYERAS
 ================================================================= */
 function refreshAllSelects() {
+  [document.getElementById("p-dtf-tipo"), document.getElementById("s-dtf-tipo"),
+    document.getElementById("qe-dtf-tipo"), document.getElementById("qs-dtf-tipo")].forEach(select => {
+    if (!select) return;
+    const selected = select.value;
+    select.innerHTML = dtfTipoOptions();
+    if (Array.from(select.options).some(option => option.value === selected)) select.value = selected;
+  });
   // Color select en modal playera
   const colorSel = document.getElementById("p-color");
   colorSel.innerHTML = AppState.colores.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
@@ -1736,10 +1981,33 @@ function setPlayeraTagFilter(tag, btn) {
 }
 
 let playeraEstampadosDraft = [];
+let playeraMetrosManuales = false;
 function onPlayeraModoCosteoChange() {
-  const esGangSheet = val("p-modo-costeo") === "gangsheet";
-  document.getElementById("p-area-wrap").style.display = esGangSheet ? "none" : "block";
-  document.getElementById("p-gangsheet-wrap").style.display = esGangSheet ? "flex" : "none";
+  const wrap = document.getElementById("p-dtf-especial-wrap");
+  if (wrap) wrap.style.display = checked("p-dtf-especial") ? "block" : "none";
+  const metrosWrap = document.getElementById("p-dtf-metros-wrap");
+  if (metrosWrap) metrosWrap.style.display = checked("p-dtf-especial") ? "none" : "block";
+  updatePlayeraPreview();
+}
+function onPlayeraDtfEspecialChange() {
+  if (checked("p-dtf-especial") && !gangSheetTipos().length) {
+    setChecked("p-dtf-especial", false);
+    showToast("Primero agrega un tipo especial en Ajustes de costos.", "error");
+  }
+  onPlayeraModoCosteoChange();
+  onPlayeraDtfTipoChange();
+}
+function onPlayeraDtfTipoChange() {
+  const tipo = gangSheetTipos().find(item => item.id === val("p-dtf-tipo"));
+  const hint = document.getElementById("p-dtf-precio-hint");
+  const precioCm2 = precioDtfMetro(true, tipo ? tipo.id : "") / (100 * (Number(AppState.settings.dtfAnchoRolloCm) || 58));
+  if (hint) hint.textContent = checked("p-dtf-especial")
+    ? `${tipo ? tipo.nombre : "DTF especial base"}: ${fmt(precioDtfMetro(true, tipo ? tipo.id : ""))}/m = ${fmt(precioCm2)} por cm².`
+    : `DTF estándar: ${fmt(AppState.settings.dtfPrecioMetro)} por metro.`;
+  updatePlayeraPreview();
+}
+function onPlayeraDtfMetrosChange() {
+  playeraMetrosManuales = true;
   updatePlayeraPreview();
 }
 function onPlayeraNumEstampadosChange() {
@@ -1752,6 +2020,7 @@ function onPlayeraNumEstampadosChange() {
 function updatePlayeraEstampadoField(estId, field, value) {
   const e = playeraEstampadosDraft.find(x => x.id === estId);
   if (e) e[field] = parseFloat(value) || 0;
+  if (!playeraMetrosManuales) setVal("p-dtf-metros", metrosEstimadosPorArea(areaTotalCm2(playeraEstampadosDraft)).toFixed(5));
   updatePlayeraPreview();
 }
 function renderPlayeraEstampadosList() {
@@ -1769,6 +2038,7 @@ function openModalPlayera(id) {
   setVal("p-id", id || "");
   document.getElementById("modal-playera-title").textContent = id ? "Editar playera" : "Nueva playera";
   refreshAllSelects();
+  playeraMetrosManuales = false;
   if (id) {
     const p = AppState.playeras.find(x => x.id === id);
     setVal("p-nombre", p.nombre); setVal("p-tipo", p.tipo); setVal("p-talla", p.talla);
@@ -1776,7 +2046,7 @@ function openModalPlayera(id) {
     setVal("p-costo-playera", p.costoPlayera);
     setChecked("p-tiene-etiqueta", p.tieneEtiquetaTalla);
     setChecked("p-prenda-cliente", !!p.prendaCliente);
-    setChecked("p-dtf-especial", !!p.dtfEspecial);
+    setChecked("p-dtf-especial", !!p.dtfEspecial || (p.modoCosteo === "gangsheet" && !!p.gangSheetTipoId));
     setVal("p-stock-minimo", p.stockMinimo ?? AppState.settings.stockMinimoDefault ?? 0);
     setVal("p-precio-venta", p.precioVenta); setVal("p-precio-mayoreo", p.precioMayoreo || ""); setVal("p-prioridad", p.prioridad); setVal("p-estado", p.estado);
     setVal("p-estado-venta", p.bazarEstado || "Disponible"); setVal("p-metodo-pago", p.metodoPago || "Efectivo");
@@ -1784,9 +2054,9 @@ function openModalPlayera(id) {
     document.querySelectorAll(".p-tag-cb").forEach(cb => cb.checked = (p.tags || []).includes(cb.value));
     playeraEstampadosDraft = JSON.parse(JSON.stringify(p.estampados && p.estampados.length ? p.estampados : [{ id: uid(), anchoCm: 0, largoCm: 0 }]));
     setVal("p-num-estampados", playeraEstampadosDraft.length);
-    setVal("p-modo-costeo", p.modoCosteo || "area");
-    setVal("p-gangsheet-metros", p.gangSheetMetros || 0);
-    setChecked("p-gangsheet-blanco-solido", !!p.gangSheetBlancoSolido);
+    const oldAreaMetros = metrosEstimadosPorArea(areaTotalCm2(p.estampados));
+    setVal("p-dtf-metros", p.dtfMetrosUsados ?? (p.modoCosteo === "gangsheet" ? p.gangSheetMetros || 0 : oldAreaMetros).toFixed(5));
+    setVal("p-dtf-tipo", p.dtfTipoId || (p.modoCosteo === "gangsheet" ? p.gangSheetTipoId || "" : ""));
     setVal("p-artista", p.artistaId !== undefined ? p.artistaId : "a1");
     setVal("p-pct-artista", p.pctArtista ?? 0);
     setVal("p-cliente", p.clienteId || "");
@@ -1801,9 +2071,8 @@ function openModalPlayera(id) {
     setVal("p-estado-venta", "Disponible"); setVal("p-metodo-pago", "Efectivo");
     playeraEstampadosDraft = [{ id: uid(), anchoCm: 0, largoCm: 0 }];
     setVal("p-num-estampados", 1);
-    setVal("p-modo-costeo", "area");
-    setVal("p-gangsheet-metros", 0);
-    setChecked("p-gangsheet-blanco-solido", false);
+    setVal("p-dtf-metros", "0");
+    setVal("p-dtf-tipo", "");
     setVal("p-artista", "a1");
     setVal("p-pct-artista", (AppState.artistas.find(a => a.id === "a1") || {}).pctArtista || 0);
     setVal("p-cliente", "");
@@ -1819,6 +2088,7 @@ function openModalPlayera(id) {
   }
   renderPlayeraEstampadosList();
   onPlayeraModoCosteoChange();
+  onPlayeraDtfTipoChange();
   onPlayeraTieneEtiquetaChange();
   openModal("modal-playera");
 }
@@ -1840,11 +2110,11 @@ function onPlayeraArtistChange() {
 }
 function updatePlayeraPreview() {
   const draft = {
-    modoCosteo: val("p-modo-costeo"),
+    modoCosteo: "metros",
+    dtfMetrosUsados: num("p-dtf-metros"),
     dtfEspecial: checked("p-dtf-especial"),
+    dtfTipoId: val("p-dtf-tipo"),
     estampados: playeraEstampadosDraft,
-    gangSheetMetros: num("p-gangsheet-metros"),
-    gangSheetBlancoSolido: checked("p-gangsheet-blanco-solido")
   };
   const cEst = costoImpresion(draft);
   const costoBase = checked("p-prenda-cliente") ? 0 : num("p-costo-playera");
@@ -1858,10 +2128,12 @@ function updatePlayeraPreview() {
   const cImpresionEfectivo = costoRealVinculado !== null ? costoRealVinculado : cEst;
   const cTotal = costoBase + cImpresionEfectivo + sobrecargo;
   const ganancia = num("p-precio-venta") - cTotal;
-  const etiquetaCosto = draft.modoCosteo === "gangsheet" ? "Costo Gang Sheet" : "Costo del estampado";
-  const textoCosto = costoRealVinculado !== null
-    ? `${etiquetaCosto} estimado: <b>${fmt(cEst)}</b> — Costo real vinculado: <b>${fmt(costoRealVinculado)}</b>`
-    : `${etiquetaCosto}: <b>${fmt(cEst)}</b>`;
+  const etiquetaCosto = "Costo de impresión DTF";
+  const metrajeOArea = draft.dtfEspecial
+    ? `Área de estampados: <b>${areaTotalCm2(draft.estampados).toFixed(1)} cm²</b> × tarifa por cm²`
+    : `${num("p-dtf-metros").toFixed(5)} m × tarifa estándar`;
+  const textoCosto = `${etiquetaCosto}${costoRealVinculado !== null ? " estimado" : ""}: <b>${fmt(cEst)}</b> — ${metrajeOArea}`
+    + (costoRealVinculado !== null ? ` — Costo real vinculado: <b>${fmt(costoRealVinculado)}</b>` : "");
   const tipoGanancia = costoRealVinculado !== null ? "real" : "estimada";
   document.getElementById("p-cost-preview").innerHTML = textoCosto
     + (sobrecargo ? ` — Sobrecargo talla: <b>${fmt(sobrecargo)}</b>` : "")
@@ -1942,6 +2214,10 @@ function savePlayera() {
   if (!nombre) return showToast("Ponle un nombre al diseño.", "error");
   const id = val("p-id");
   const existing = id ? AppState.playeras.find(x => x.id === id) : null;
+  const dtfTipoId = val("p-dtf-tipo");
+  if (checked("p-dtf-especial") && !dtfTipoId && (!existing || existing.dtfMetrosUsados !== undefined)) {
+    return showToast("Selecciona un tipo de DTF especial antes de guardar.", "error");
+  }
   const tags = Array.from(document.querySelectorAll(".p-tag-cb:checked")).map(cb => cb.value);
   const prendaCliente = checked("p-prenda-cliente");
   const antesVendida = existing ? playeraVendidaORegalada(existing) : false;
@@ -1953,9 +2229,9 @@ function savePlayera() {
     stock: parseInt(num("p-stock")) || 0,
     costoPlayera: prendaCliente ? 0 : (parseFloat(num("p-costo-playera")) || 0),
     estampados: JSON.parse(JSON.stringify(playeraEstampadosDraft)),
-    modoCosteo: val("p-modo-costeo") || "area",
-    gangSheetMetros: parseFloat(num("p-gangsheet-metros")) || 0,
-    gangSheetBlancoSolido: checked("p-gangsheet-blanco-solido"),
+    modoCosteo: "metros",
+    dtfMetrosUsados: parseFloat(num("p-dtf-metros")) || 0,
+    dtfTipoId,
     tieneEtiquetaTalla: checked("p-tiene-etiqueta"),
     prendaCliente, dtfEspecial: checked("p-dtf-especial"),
     stockMinimo: parseInt(num("p-stock-minimo")) || 0,
@@ -2126,10 +2402,11 @@ function verDetallePlayera(id) {
   const ganancia = (p.precioVenta || 0) - cTotal;
   const comision = comisionPlayera(p);
   const gastoLigado = p.gastoVinculadoId ? AppState.gastos.find(g => g.id === p.gastoVinculadoId) : null;
-  const esGangSheet = p.modoCosteo === "gangsheet";
-  const etiquetaImpresion = esGangSheet
-    ? `Gang Sheet (${p.gangSheetMetros || 0} m${p.gangSheetBlancoSolido ? ", blanco sólido" : ""})`
-    : `Estampado (${(p.estampados || []).length} · ${areaTotalCm2(p.estampados).toFixed(0)} cm²)${p.dtfEspecial ? " ✨" : ""}`;
+  const etiquetaImpresion = p.dtfMetrosUsados !== undefined
+    ? `${p.dtfEspecial ? "DTF especial" : "DTF estándar"} (${Number(p.dtfMetrosUsados || 0).toFixed(3)} m)`
+    : p.modoCosteo === "gangsheet"
+      ? `${gangSheetDisplayName(p)} (${p.gangSheetMetros || 0} m)`
+      : `Estampado (${(p.estampados || []).length} · ${areaTotalCm2(p.estampados).toFixed(0)} cm²)${p.dtfEspecial ? " ✨" : ""}`;
   const sobrecargo = sobrecargoTalla(p.talla);
 
   const costos = [
@@ -2300,32 +2577,74 @@ function openModalSticker(id) {
     setVal("s-prioridad", s.prioridad); setVal("s-estado", s.estado);
     setVal("s-cliente", s.clienteId || "");
     setVal("s-notas", s.notas || "");
+    setChecked("s-dtf-especial", !!s.dtfEspecial);
+    setVal("s-dtf-tipo", s.dtfTipoId || "");
+    setVal("s-dtf-metros", s.dtfMetrosUsados ?? metrosEstimadosPorArea((s.anchoCm || 0) * (s.largoCm || 0)).toFixed(5));
   } else {
     setVal("s-nombre", ""); setVal("s-tamano", "Chico"); setVal("s-ancho", 5); setVal("s-largo", 5); setVal("s-costo", 0); setVal("s-precio-venta", 0);
     setVal("s-stock", 1); setVal("s-stock-minimo", AppState.settings.stockMinimoDefault || 0);
     setVal("s-prioridad", "Media"); setVal("s-estado", "En stock"); setVal("s-cliente", ""); setVal("s-notas", "");
+    setChecked("s-dtf-especial", false); setVal("s-dtf-tipo", "");
+    setVal("s-dtf-metros", metrosEstimadosPorArea(25).toFixed(5));
   }
+  onStickerDtfEspecialChange(false, true);
   updateStickerCostPreview();
   openModal("modal-sticker");
 }
+function onStickerDtfEspecialChange(notify = true, initializing = false) {
+  if (checked("s-dtf-especial") && !gangSheetTipos().length && !initializing) {
+    setChecked("s-dtf-especial", false);
+    if (notify) showToast("Primero agrega un tipo especial en Ajustes de costos.", "error");
+  }
+  const wrap = document.getElementById("s-dtf-especial-wrap");
+  if (wrap) wrap.style.display = checked("s-dtf-especial") ? "block" : "none";
+  onStickerDtfTipoChange();
+}
+function onStickerDtfTipoChange() {
+  const tipo = gangSheetTipos().find(item => item.id === val("s-dtf-tipo"));
+  const hint = document.getElementById("s-dtf-precio-hint");
+  const precioCm2 = precioDtfMetro(true, tipo ? tipo.id : "") / (100 * (Number(AppState.settings.dtfAnchoRolloCm) || 58));
+  if (hint) hint.textContent = checked("s-dtf-especial")
+    ? `${tipo ? tipo.nombre : "DTF especial base"}: ${fmt(precioDtfMetro(true, tipo ? tipo.id : ""))}/m = ${fmt(precioCm2)} por cm².`
+    : `DTF estándar: ${fmt(AppState.settings.dtfPrecioMetro)} por metro.`;
+  updateStickerCostPreview();
+}
+function onStickerDimensionChange() {
+  setVal("s-dtf-metros", metrosEstimadosPorArea(num("s-ancho") * num("s-largo")).toFixed(5));
+  updateStickerCostPreview();
+}
 function updateStickerCostPreview() {
-  const ancho = num("s-ancho");
-  const largo = num("s-largo");
-  const costo = ancho > 0 && largo > 0 ? costoEstampado([{ anchoCm: ancho, largoCm: largo }], false) : 0;
+  const especial = checked("s-dtf-especial");
+  const metrosWrap = document.getElementById("s-dtf-metros-wrap");
+  if (metrosWrap) metrosWrap.style.display = especial ? "none" : "block";
+  const sticker = { anchoCm: num("s-ancho"), largoCm: num("s-largo"), dtfEspecial: especial, dtfTipoId: val("s-dtf-tipo"), dtfMetrosUsados: num("s-dtf-metros") };
+  const costo = especial ? costoImpresionSticker(sticker) : costoDtfPorMetros(sticker.dtfMetrosUsados, false);
   const costoInput = document.getElementById("s-costo");
-  if (costoInput && ancho > 0 && largo > 0) costoInput.value = costo.toFixed(2);
+  if (costoInput) costoInput.value = costo.toFixed(2);
   const preview = document.getElementById("s-costo-preview");
-  if (preview) preview.textContent = ancho > 0 && largo > 0 ? `Costo de producción calculado: ${fmt(costo)}` : "Captura ancho y largo para calcular el costo de producción.";
+  if (preview) preview.textContent = especial
+    ? `Costo de producción: ${(sticker.anchoCm * sticker.largoCm).toFixed(1)} cm² × ${fmt(precioDtfMetro(true, sticker.dtfTipoId) / (100 * (Number(AppState.settings.dtfAnchoRolloCm) || 58)))} por cm² = ${fmt(costo)}.`
+    : `Costo de producción: ${sticker.dtfMetrosUsados.toFixed(5)} m × ${fmt(precioDtfMetro(false))} por metro = ${fmt(costo)}.`;
 }
 function saveSticker() {
   const nombre = val("s-nombre").trim();
   if (!nombre) return showToast("Ponle un nombre al estampado.", "error");
   const id = val("s-id");
+  const existing = id ? AppState.stickers.find(x => x.id === id) : null;
+  if (checked("s-dtf-especial") && !val("s-dtf-tipo") && (!existing || existing.dtfMetrosUsados !== undefined)) {
+    return showToast("Selecciona un tipo de DTF especial antes de guardar.", "error");
+  }
   const anchoCm = Math.round(num("s-ancho") * 100) / 100;
   const largoCm = Math.round(num("s-largo") * 100) / 100;
-  const costoCalculado = Math.round((anchoCm > 0 && largoCm > 0 ? costoEstampado([{ anchoCm, largoCm }], false) : num("s-costo")) * 100) / 100;
+  const dtfMetrosUsados = Math.max(0, num("s-dtf-metros"));
+  const dtfEspecial = checked("s-dtf-especial");
+  const dtfTipoId = val("s-dtf-tipo");
+  const costoCalculado = Math.round((dtfEspecial
+    ? costoImpresionSticker({ anchoCm, largoCm, dtfEspecial, dtfTipoId })
+    : costoDtfPorMetros(dtfMetrosUsados, false)) * 100) / 100;
   const data = {
     nombre, tamano: val("s-tamano"), anchoCm, largoCm, costo: costoCalculado,
+    dtfEspecial, dtfTipoId, dtfMetrosUsados,
     precioVenta: Math.round(num("s-precio-venta") * 100) / 100,
     stock: parseInt(num("s-stock")) || 0, stockMinimo: parseInt(num("s-stock-minimo")) || 0,
     prioridad: val("s-prioridad"), estado: val("s-estado"),
@@ -2350,7 +2669,10 @@ function quoteStickerFromInventory(id) {
   if (!sticker) return;
   quoteStickerItems.push({
     rowId: uid(), stickerId: sticker.id, nombre: sticker.nombre, tamano: sticker.tamano,
-    costo: sticker.costo || 0, cantidad: 1, precioVenta: sticker.precioVenta || sticker.costo || 0
+    anchoCm: sticker.anchoCm || 0, largoCm: sticker.largoCm || 0,
+    costo: sticker.costo || 0, cantidad: 1, precioVenta: sticker.precioVenta || sticker.costo || 0,
+    dtfEspecial: !!sticker.dtfEspecial, dtfTipoId: sticker.dtfTipoId || "",
+    dtfMetrosUsados: sticker.dtfMetrosUsados ?? metrosEstimadosPorArea((sticker.anchoCm || 0) * (sticker.largoCm || 0))
   });
   switchPage("cotizador");
   renderQuoteItems();
@@ -2440,7 +2762,7 @@ function blankQuoteItem() {
     estampados: [{ id: uid(), anchoCm: 0, largoCm: 0 }],
     modoCosteo: "area", gangSheetMetros: 0, gangSheetBlancoSolido: false,
     costoPlayera: 0, precioVenta: 0, costoEstampadoManual: null,
-    prendaCliente: false, dtfEspecial: false };
+    prendaCliente: false, dtfEspecial: false, dtfTipoId: "", dtfMetrosUsados: 0 };
 }
 function addQuoteItem() {
   const nuevo = blankQuoteItem();
@@ -2491,9 +2813,9 @@ function refrescarPreviewPrenda(item) {
   const cEst = getCostoEstampadoEfectivo(item);
   const costoUnit = costoUnitarioItem(item);
   const gananciaUnit = (item.precioVenta || 0) - costoUnit;
-  const impresionLabel = item.modoCosteo === "gangsheet"
-    ? `🧻 Gang Sheet · ${item.gangSheetMetros || 0} m${item.gangSheetBlancoSolido ? " (blanco)" : ""}`
-    : `📐 ${(item.estampados || []).length} estampado(s) · ${areaTotalCm2(item.estampados).toFixed(0)} cm²${item.dtfEspecial ? " ✨" : ""}`;
+  const impresionLabel = item.dtfEspecial
+    ? `🖨️ DTF especial · ${areaTotalCm2(item.estampados).toFixed(1)} cm²`
+    : `🖨️ DTF estándar · ${Number(item.dtfMetrosUsados || 0).toFixed(5)} m`;
   document.getElementById("qp-title").textContent = item.nombre ? `Prenda — ${item.nombre}` : "Nueva prenda";
   document.getElementById("qp-impresion-btn").textContent = `${impresionLabel} · ${fmt(cEst)}`;
   const color = gananciaUnit >= 0 ? "var(--color-success)" : "var(--color-danger)";
@@ -2537,7 +2859,9 @@ function addQuoteSticker() {
     rowId: uid(), stickerId: sticker ? sticker.id : "", nombre: sticker ? sticker.nombre : "",
     tamano: sticker ? sticker.tamano : "Chico", anchoCm: sticker ? (sticker.anchoCm || 0) : 0,
     largoCm: sticker ? (sticker.largoCm || 0) : 0, costo: sticker ? sticker.costo : 0,
-    cantidad: 1, precioVenta: sticker ? (sticker.precioVenta || sticker.costo) : 0
+    cantidad: 1, precioVenta: sticker ? (sticker.precioVenta || sticker.costo) : 0,
+    dtfEspecial: !!(sticker && sticker.dtfEspecial), dtfTipoId: sticker ? sticker.dtfTipoId || "" : "",
+    dtfMetrosUsados: sticker ? sticker.dtfMetrosUsados ?? metrosEstimadosPorArea((sticker.anchoCm || 0) * (sticker.largoCm || 0)) : 0
   });
   renderQuoteItems();
   openModalQuoteSticker(quoteStickerItems[quoteStickerItems.length - 1].rowId);
@@ -2555,6 +2879,9 @@ function openModalQuoteSticker(rowId) {
   const item = quoteStickerItems.find(i => i.rowId === rowId);
   if (!item) return;
   editingQuoteStickerRowId = rowId;
+  if (item.dtfMetrosUsados === undefined || item.dtfMetrosUsados === null) {
+    item.dtfMetrosUsados = metrosEstimadosPorArea((item.anchoCm || 0) * (item.largoCm || 0));
+  }
   const ordenados = [...AppState.stickers].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
   document.getElementById("qs-producto").innerHTML = `<option value="">— Manual / personalizado —</option>` +
     ordenados.map(s => `<option value="${s.id}">${escapeHtml(s.nombre)} · ${escapeHtml(s.tamano)}</option>`).join("");
@@ -2570,6 +2897,16 @@ function llenarModalSticker(item) {
   setVal("qs-largo", item.largoCm || 0);
   setVal("qs-cantidad", item.cantidad || 1);
   setVal("qs-precio", item.precioVenta || 0);
+  setChecked("qs-dtf-especial", !!item.dtfEspecial);
+  setVal("qs-dtf-tipo", item.dtfTipoId || "");
+  setVal("qs-dtf-metros", Number(item.dtfMetrosUsados || 0).toFixed(5));
+  const tipoWrap = document.getElementById("qs-dtf-especial-wrap");
+  if (tipoWrap) tipoWrap.style.display = item.dtfEspecial ? "block" : "none";
+  const metrosWrap = document.getElementById("qs-dtf-metros-wrap");
+  if (metrosWrap) metrosWrap.style.display = item.dtfEspecial ? "none" : "block";
+  item.costo = item.dtfEspecial
+    ? costoImpresionSticker(item)
+    : costoDtfPorMetros(item.dtfMetrosUsados || 0, false);
   refrescarPreviewSticker(item);
 }
 function refrescarPreviewSticker(item) {
@@ -2613,19 +2950,41 @@ function updateQuoteStickerField(rowId, field, value) {
     const sticker = AppState.stickers.find(s => s.id === value);
     item.stickerId = value; item.nombre = sticker ? sticker.nombre : "";
     item.tamano = sticker ? sticker.tamano : "Chico"; item.anchoCm = sticker ? (sticker.anchoCm || 0) : 0;
-    item.largoCm = sticker ? (sticker.largoCm || 0) : 0; item.costo = sticker ? sticker.costo : 0;
+    item.largoCm = sticker ? (sticker.largoCm || 0) : 0;
     item.precioVenta = sticker ? (sticker.precioVenta || sticker.costo) : 0;
-  } else if (["cantidad", "anchoCm", "largoCm", "precioVenta"].includes(field)) {
-    item[field] = Math.max(0, Math.round((Number.parseFloat(value) || 0) * 100) / 100);
+    item.dtfEspecial = !!(sticker && sticker.dtfEspecial);
+    item.dtfTipoId = sticker ? sticker.dtfTipoId || "" : "";
+    item.dtfMetrosUsados = sticker ? sticker.dtfMetrosUsados ?? metrosEstimadosPorArea(item.anchoCm * item.largoCm) : 0;
+  } else if (["cantidad", "anchoCm", "largoCm", "precioVenta", "dtfMetrosUsados"].includes(field)) {
+    item[field] = Math.max(0, Math.round((Number.parseFloat(value) || 0) * (field === "dtfMetrosUsados" ? 100000 : 100)) / (field === "dtfMetrosUsados" ? 100000 : 100));
     if (field === "anchoCm" || field === "largoCm") {
-      item.costo = item.anchoCm > 0 && item.largoCm > 0
-        ? Math.round(costoEstampado([{ anchoCm: item.anchoCm, largoCm: item.largoCm }], false) * 100) / 100
-        : 0;
+      item.dtfMetrosUsados = metrosEstimadosPorArea(item.anchoCm * item.largoCm);
     }
+  } else if (field === "dtfEspecial") {
+    item.dtfEspecial = !!value;
+  } else if (field === "dtfTipoId") {
+    item.dtfTipoId = value;
   } else {
     item[field] = value;
   }
+  item.costo = Math.round((item.dtfEspecial
+    ? costoImpresionSticker(item)
+    : costoDtfPorMetros(item.dtfMetrosUsados || 0, false)) * 100) / 100;
   renderQuoteItems();
+}
+function onQuoteStickerDtfEspecialChange(isChecked) {
+  const item = itemStickerEnEdicion();
+  if (!item) return;
+  if (isChecked && !gangSheetTipos().length) {
+    setChecked("qs-dtf-especial", false);
+    showToast("Primero agrega un tipo especial en Ajustes de costos.", "error");
+    return;
+  }
+  updateQuoteStickerField(editingQuoteStickerRowId, "dtfEspecial", isChecked);
+  const wrap = document.getElementById("qs-dtf-especial-wrap");
+  if (wrap) wrap.style.display = isChecked ? "block" : "none";
+  const metrosWrap = document.getElementById("qs-dtf-metros-wrap");
+  if (metrosWrap) metrosWrap.style.display = isChecked ? "none" : "block";
 }
 function removeQuoteItem(rowId) {
   quoteItems = quoteItems.filter(i => i.rowId !== rowId);
@@ -2643,11 +3002,14 @@ function onQuoteItemProductChange(rowId, playeraId) {
       item.modoCosteo = p.modoCosteo || "area";
       item.gangSheetMetros = p.gangSheetMetros || 0;
       item.gangSheetBlancoSolido = !!p.gangSheetBlancoSolido;
+      item.gangSheetTipoId = p.gangSheetTipoId || "";
+      item.dtfMetrosUsados = p.dtfMetrosUsados ?? (p.modoCosteo === "gangsheet" ? p.gangSheetMetros || 0 : metrosEstimadosPorArea(areaTotalCm2(p.estampados)));
+      item.dtfTipoId = p.dtfTipoId || (p.modoCosteo === "gangsheet" ? p.gangSheetTipoId || "" : "");
       item.costoPlayera = p.costoPlayera;
       item.precioVenta = esMayoreo ? (p.precioMayoreo || p.precioVenta || item.precioVenta) : (p.precioVenta || item.precioVenta);
       item.costoEstampadoManual = null;
       item.prendaCliente = !!p.prendaCliente;
-      item.dtfEspecial = !!p.dtfEspecial;
+      item.dtfEspecial = !!p.dtfEspecial || (p.modoCosteo === "gangsheet" && !!p.gangSheetTipoId);
     }
   }
   renderQuoteItems();
@@ -2697,35 +3059,74 @@ function openModalQuoteEstampados(rowId) {
   const item = quoteItems.find(i => i.rowId === rowId);
   if (!item) return;
   document.getElementById("modal-quote-estampados-title").textContent = `Impresión — ${item.nombre || "prenda personalizada"}`;
-  setVal("qe-modo-costeo", item.modoCosteo || "area");
+  if (item.dtfMetrosUsados === undefined || item.dtfMetrosUsados === null) {
+    item.dtfMetrosUsados = item.modoCosteo === "gangsheet"
+      ? item.gangSheetMetros || 0
+      : metrosEstimadosPorArea(areaTotalCm2(item.estampados));
+  }
   setChecked("qe-dtf-especial", !!item.dtfEspecial);
+  setVal("qe-dtf-tipo", item.dtfTipoId || (item.modoCosteo === "gangsheet" ? item.gangSheetTipoId || "" : ""));
+  item.dtfTipoId = val("qe-dtf-tipo");
+  setVal("qe-dtf-metros", Number(item.dtfMetrosUsados || 0).toFixed(5));
+  const specialWrap = document.getElementById("qe-dtf-especial-wrap");
+  if (specialWrap) specialWrap.style.display = item.dtfEspecial ? "flex" : "none";
+  const metrosWrap = document.getElementById("qe-dtf-metros-wrap");
+  if (metrosWrap) metrosWrap.style.display = item.dtfEspecial ? "none" : "block";
   setVal("qe-num-estampados", (item.estampados || []).length || 1);
-  setVal("qe-gangsheet-metros", item.gangSheetMetros || 0);
-  setChecked("qe-gangsheet-blanco-solido", !!item.gangSheetBlancoSolido);
-  onQuoteEstampadoModoChange();
   renderQuoteEstampadosList();
+  updateQuoteDtfPreview(item);
   openModal("modal-quote-estampados");
 }
-function toggleQuoteAreaDtfEspecial(isChecked) {
+function onQuoteDtfEspecialChange(isChecked) {
   const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
   if (!item) return;
+  if (isChecked && !gangSheetTipos().length) {
+    setChecked("qe-dtf-especial", false);
+    showToast("Primero agrega un tipo especial en Ajustes de costos.", "error");
+    return;
+  }
   item.dtfEspecial = isChecked;
+  const wrap = document.getElementById("qe-dtf-especial-wrap");
+  if (wrap) wrap.style.display = isChecked ? "flex" : "none";
+  const metrosWrap = document.getElementById("qe-dtf-metros-wrap");
+  if (metrosWrap) metrosWrap.style.display = isChecked ? "none" : "block";
   renderQuoteItems();
+  updateQuoteDtfPreview(item);
 }
-function onQuoteEstampadoModoChange() {
+function updateQuoteDtfTipo(tipoId) {
   const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
   if (!item) return;
-  item.modoCosteo = val("qe-modo-costeo");
-  const esGangSheet = item.modoCosteo === "gangsheet";
-  document.getElementById("qe-area-wrap").style.display = esGangSheet ? "none" : "block";
-  document.getElementById("qe-gangsheet-wrap").style.display = esGangSheet ? "flex" : "none";
+  item.dtfTipoId = tipoId;
   renderQuoteItems();
+  updateQuoteDtfPreview(item);
+}
+function updateQuoteDtfMetros(value) {
+  const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
+  if (!item) return;
+  item.dtfMetrosUsados = Math.max(0, Number.parseFloat(value) || 0);
+  renderQuoteItems();
+  updateQuoteDtfPreview(item);
+}
+function updateQuoteDtfPreview(item) {
+  const preview = document.getElementById("qe-dtf-costo-preview");
+  if (!preview || !item) return;
+  const area = areaTotalCm2(item.estampados);
+  const precio = precioDtfMetro(!!item.dtfEspecial, item.dtfTipoId || "");
+  const costo = item.dtfEspecial
+    ? costoEstampadoDtfTipo(item.estampados, item.dtfTipoId || "")
+    : costoDtfPorMetros(item.dtfMetrosUsados || 0, false);
+  preview.textContent = item.dtfEspecial
+    ? `Costo de impresión: ${area.toFixed(1)} cm² × ${fmt(precio / (100 * (Number(AppState.settings.dtfAnchoRolloCm) || 58)))} por cm² = ${fmt(costo)}.`
+    : `Costo de impresión: ${Number(item.dtfMetrosUsados || 0).toFixed(5)} m × ${fmt(precio)} por metro = ${fmt(costo)}.`;
 }
 function updateQuoteEstampadoField(estId, field, value) {
   const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
   if (!item) return;
   const e = (item.estampados || []).find(x => x.id === estId);
   if (e) e[field] = parseFloat(value) || 0;
+  item.dtfMetrosUsados = metrosEstimadosPorArea(areaTotalCm2(item.estampados));
+  setVal("qe-dtf-metros", Number(item.dtfMetrosUsados).toFixed(5));
+  updateQuoteDtfPreview(item);
   item.costoEstampadoManual = null;
   renderQuoteEstampadosList();
   renderQuoteItems();
@@ -2733,7 +3134,13 @@ function updateQuoteEstampadoField(estId, field, value) {
 function updateQuoteGangSheetField(field, value) {
   const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
   if (!item) return;
-  item[field] = field === "gangSheetBlancoSolido" ? value : (parseFloat(value) || 0);
+  if (field === "gangSheetTipo") {
+    const selection = gangSheetSelection(value);
+    item.gangSheetTipoId = selection.tipoId;
+    item.gangSheetBlancoSolido = selection.blancoSolido;
+  } else {
+    item[field] = parseFloat(value) || 0;
+  }
   renderQuoteItems();
 }
 function renderQuoteEstampadosList() {
@@ -2782,6 +3189,11 @@ function currentQuoteCommission() {
   return a ? { pctArtista: a.pctArtista, pctEstudio: a.pctEstudio, nombre: a.nombre } : { pctArtista: 0, pctEstudio: 100, nombre: "" };
 }
 function renderQuoteItems() {
+  quoteStickerItems.forEach(item => {
+    if (item.dtfMetrosUsados !== undefined && item.dtfMetrosUsados !== null) {
+      item.costo = Math.round(costoImpresionSticker(item) * 100) / 100;
+    }
+  });
   const body = document.getElementById("quote-items-list");
   const hasQuoteContent = quoteItems.length || quoteStickerItems.length;
   const emptyHintEl = document.getElementById("quote-empty-hint");
@@ -2792,8 +3204,7 @@ function renderQuoteItems() {
     const gananciaUnit = (item.precioVenta || 0) - costoUnitarioItem(item);
     const flags = [];
     if (item.prendaCliente) flags.push(`<span class="card-badge badge-media">🎁 Prenda del cliente</span>`);
-    if (item.modoCosteo === "gangsheet") flags.push(`<span class="card-badge badge-alta">🧻 Gang Sheet</span>`);
-    else if (item.dtfEspecial) flags.push(`<span class="card-badge badge-alta">✨ DTF especial</span>`);
+    if (item.dtfEspecial) flags.push(`<span class="card-badge badge-alta">✨ ${escapeHtml(gangSheetTipos().find(tipo => tipo.id === item.dtfTipoId)?.nombre || "DTF especial")}</span>`);
     return `
     <div class="qitem">
       <div class="qitem-main">
@@ -3010,6 +3421,9 @@ function resetQuoteForm() {
 }
 function saveQuote() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker.", "error");
+  const impresionSinTipo = gangSheetTipos().length > 0 && [...quoteItems, ...quoteStickerItems].some(item =>
+    item.dtfEspecial && item.dtfMetrosUsados !== undefined && item.dtfMetrosUsados !== null && !item.dtfTipoId);
+  if (impresionSinTipo) return showToast("Selecciona un tipo de DTF especial para cada artículo antes de guardar la cotización.", "error");
   const t = computeQuoteTotals();
   const editingId = val("quote-editing-id");
   const data = {
@@ -3032,7 +3446,8 @@ function saveQuote() {
     ventaBruta: t.ventaBruta,
     descuentoPct: t.descuentoPct, montoDescuento: t.montoDescuento,
     urgente: t.esUrgente, recargoUrgentePct: t.recargoUrgentePct, montoUrgente: t.montoUrgente,
-    totalVenta: t.totalVenta, totalCosto: t.totalCosto, ganancia: t.ganancia,
+    totalVenta: t.totalVenta, totalCosto: t.totalCosto, costoBaseSinGastos: t.totalCosto,
+    gastosCotizacionCosto: 0, ganancia: t.ganancia,
     parteArtista: t.parteArtista, parteEstudio: t.parteEstudio,
     comisionNombre: t.comision.nombre, pctArtista: t.comision.pctArtista, pctEstudio: t.comision.pctEstudio,
     metodoPago: t.metodoPago, montoTarjeta: t.montoTarjeta, montoEfectivo: t.montoEfectivo, comisionTerminal: t.comisionTerminal,
@@ -3050,6 +3465,7 @@ function saveQuote() {
     AppState.cotizaciones.unshift(data);
     showToast("Cotización guardada.");
   }
+  recalcularCostosCotizacionesPorGastos();
   saveState();
   resetQuoteForm();
   renderCotizacionesGuardadas();
@@ -3261,6 +3677,7 @@ function renderCotizacionesGuardadas() {
   document.getElementById("cotizaciones-empty-hint").style.display = list.length ? "none" : "block";
   grid.innerHTML = list.map(c => {
     const semaforo = semaforoCotizacion(c);
+    const gastosRelacionados = gastosLigadosACotizacion(c.id);
     const tagsOpHtml = (c.tagsOperativos || []).map(tid => {
       const e = AppState.etiquetasOperativas.find(x => x.id === tid);
       return e ? `<span class="card-badge" style="background:${e.color}22;color:${e.color}">${escapeHtml(e.nombre)}</span>` : "";
@@ -3281,6 +3698,7 @@ function renderCotizacionesGuardadas() {
       </div>
       <div class="card-row"><span>Total de venta</span><span>${fmt(c.totalVenta)}</span></div>
       <div class="card-row"><span>Ganancia</span><span>${fmt(c.ganancia)}</span></div>
+      ${gastosRelacionados.length ? `<div class="card-meta">💸 ${gastosRelacionados.length} gasto(s) relacionado(s) · ${fmt(gastosRelacionados.reduce((total, link) => total + (Number(link.montoAsignado) || 0), 0))} aplicados${gastosRelacionados.some(link => !link.destino) ? " (asignación pendiente)" : ""}</div>` : ""}
       <div class="card-actions">
         <button onclick="viewCotizacion('${c.id}')">👁️ Ver</button>
         <button onclick="openModalAsignarBazar('${c.id}')">🏪 Bazar</button>
@@ -3293,9 +3711,10 @@ let viewingCotizacionId = null;
 function viewCotizacion(id) {
   viewingCotizacionId = id;
   const c = AppState.cotizaciones.find(x => x.id === id);
+  const gastosRelacionados = gastosLigadosACotizacion(c.id);
   document.getElementById("ver-cot-title").textContent = c.folio + " — " + c.cliente;
   const rows = c.items.map(item => {
-    const flags = [item.prendaCliente ? "🎁 prenda cliente" : "", item.dtfEspecial ? "✨ DTF especial" : "", item.modoCosteo === "gangsheet" ? "🧻 gang sheet" : ""].filter(Boolean).join(" · ");
+    const flags = [item.prendaCliente ? "🎁 prenda cliente" : "", item.dtfEspecial ? `✨ ${gangSheetTipos().find(tipo => tipo.id === item.dtfTipoId)?.nombre || "DTF especial"}` : ""].filter(Boolean).join(" · ");
     return `<div class="card-row"><span>${escapeHtml(item.nombre||"—")} (${escapeHtml(item.tipo||"")}, ${escapeHtml(item.talla)}, ${colorNombre(item.colorId)}) ×${item.cantidad}${flags ? " — " + flags : ""}</span><span>${fmt(item.precioVenta*item.cantidad)}</span></div>`;
   }).join("");
   const stickerRows = (c.stickers || []).map(sticker => `<div class="card-row"><span>✂️ ${escapeHtml(sticker.nombre || "Sticker")} (${escapeHtml(sticker.tamano || "—")}) ×${sticker.cantidad}</span><span>${fmt(sticker.precioVenta * sticker.cantidad)}</span></div>`).join("");
@@ -3319,6 +3738,9 @@ function viewCotizacion(id) {
     ${stickerRows}
     ${serviciosExtraRows}
     <div class="card-row"><span>Total costo</span><span>${fmt(c.totalCosto)}</span></div>
+    ${gastosRelacionados.length ? `
+    <div class="card-meta" style="margin-top:10px;">💸 Gastos ligados y aplicados al costo de producción</div>
+    ${gastosRelacionados.map(link => `<div class="card-row"><span>${escapeHtml(link.gasto.concepto)} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"}</span><span>${fmt(link.montoAsignado || 0)}</span></div>`).join("")}` : ""}
     ${c.montoDescuento ? `<div class="card-row"><span>Descuento (${c.descuentoPct}%)</span><span>− ${fmt(c.montoDescuento)}</span></div>` : ""}
     ${c.montoUrgente ? `<div class="card-row"><span>Recargo urgencia (${c.recargoUrgentePct}%)</span><span>+ ${fmt(c.montoUrgente)}</span></div>` : ""}
     <div class="card-row"><span><b>Total venta</b></span><span><b>${fmt(c.totalVenta)}</b></span></div>
@@ -3390,6 +3812,12 @@ function duplicateCotizacion(id) {
   const copy = JSON.parse(JSON.stringify(c));
   copy.id = uid(); copy.folio = "LX-" + (1000 + AppState.cotizaciones.length + 1);
   copy.estado = "Pendiente"; copy.fecha = new Date().toISOString().slice(0,10);
+  copy.totalCosto = Number(c.costoBaseSinGastos ?? (c.totalCosto - (c.gastosCotizacionCosto || 0))) || 0;
+  copy.costoBaseSinGastos = copy.totalCosto;
+  copy.gastosCotizacionCosto = 0;
+  copy.ganancia = (Number(copy.totalVenta) || 0) - copy.totalCosto - (Number(copy.comisionTerminal) || 0);
+  copy.parteArtista = copy.ganancia * (Number(copy.pctArtista) || 0) / 100;
+  copy.parteEstudio = copy.ganancia - copy.parteArtista;
   AppState.cotizaciones.unshift(copy);
   saveState(); renderCotizacionesGuardadas();
   showToast("Cotización duplicada.");
@@ -3397,7 +3825,12 @@ function duplicateCotizacion(id) {
 async function deleteCotizacion() {
   if (!(await pedirConfirmacion("¿Eliminar esta cotización?", { aviso: "Cotización eliminada." }))) return;
   AppState.cotizaciones = AppState.cotizaciones.filter(x => x.id !== viewingCotizacionId);
+  AppState.gastos.forEach(g => {
+    g.cotizacionesLigadas = cotizacionesLigadasDeGasto(g).filter(link => link.id !== viewingCotizacionId);
+  });
+  recalcularCostosCotizacionesPorGastos();
   saveState(); closeModal("modal-ver-cotizacion"); renderCotizacionesGuardadas();
+  renderGastos();
 }
 
 /* =================================================================
@@ -4351,13 +4784,13 @@ Object.assign(window, {
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
-  deleteServicioExtra, deleteSticker, deleteTallaEtiqueta,
+  deleteServicioExtra, deleteSticker, deleteTallaEtiqueta, deleteGangSheetTipo,
   deleteGasto, deleteCompra, addAhorroCompra, toggleCompraComprada, desvincularCostoRealDePiezaBoton, recalcularRepartoGasto,
   deleteMerma, deleteConsignacion,
   deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
-  onAbStatusChange, onAscConsignacionChange, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraModoCosteoChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
-  onPrendaClienteChange, onQuoteArtistChange, onQuoteEstampadoModoChange, onQuoteItemProductChange,
+  onAbStatusChange, onAscConsignacionChange, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
+  onPrendaClienteChange, onQuoteArtistChange, onQuoteDtfEspecialChange, onQuoteItemProductChange,
   onQuoteMetodoPagoChange, onQuoteClienteSelectChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,
   openPreviewCotizacion, openPreviewCotizacionGuardada, confirmarExportarPDF, confirmarExportarWhatsApp,
@@ -4376,9 +4809,10 @@ Object.assign(window, {
   saveGrafica, saveIngresoExtra, savePlayera, saveProveedor, saveQuote, saveServicioExtra,
   saveSettings, saveSticker, saveGasto, saveCompra,
   saveTallaEtiqueta, setClienteEtiquetaFiltro, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
-  toggleGraficaInventarioOptions, toggleQuoteAreaDtfEspecial, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras,
+  addGangSheetTipo,
+  toggleGraficaInventarioOptions, onQuoteStickerDtfEspecialChange, onStickerDtfEspecialChange, onStickerDtfTipoChange, onStickerDimensionChange, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
-  updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
+  updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
   viewCotizacion
 });

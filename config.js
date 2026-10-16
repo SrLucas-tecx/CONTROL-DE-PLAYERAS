@@ -18,6 +18,7 @@ export function defaultState() {
       stockMinimoDefault: 2,
       gangSheetPrecioMetro: 190,
       gangSheetBlancoSolidoPrecioMetro: 230,
+      gangSheetTipos: [],
       recargoUrgentePct: 20,
       comisionTerminalPct: 3.5,
       umbralLlenadoPct: 30,

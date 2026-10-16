@@ -36,11 +36,30 @@ export function areaTotalCm2(estampados) {
 export function costoEstampado(estampados, especial) {
   return areaTotalCm2(estampados) * costoPorCm2(especial);
 }
-// Costo de un Gang Sheet: se cobra por metro lineal (el blanco sólido usa un precio más alto
-// porque consume mucha más tinta blanca).
-export function costoGangSheet(metros, blancoSolido) {
+export function precioDtfMetro(especial, tipoId = "") {
+  const tipo = especial && tipoId && (AppState.settings.gangSheetTipos || []).find(item => item.id === tipoId);
+  if (tipo) return Number(tipo.precioMetro) || 0;
+  return especial ? (AppState.settings.dtfPrecioMetroEspecial || AppState.settings.dtfPrecioMetro || 0) : (AppState.settings.dtfPrecioMetro || 0);
+}
+export function costoDtfPorMetros(metros, especial, tipoId = "") {
+  return Math.max(0, Number(metros) || 0) * precioDtfMetro(especial, tipoId);
+}
+export function costoDtfPorArea(areaCm2, tipoId = "") {
+  const anchoRollo = Number(AppState.settings.dtfAnchoRolloCm) || 0;
+  if (!anchoRollo) return 0;
+  return Math.max(0, Number(areaCm2) || 0) * precioDtfMetro(true, tipoId) / (100 * anchoRollo);
+}
+export function costoEstampadoDtfTipo(estampados, tipoId = "") {
+  return costoDtfPorArea(areaTotalCm2(estampados), tipoId);
+}
+// Costo de un Gang Sheet: usa el precio del tipo personalizado si se eligió;
+// los registros anteriores conservan los precios base normal y blanco sólido.
+export function costoGangSheet(metros, blancoSolido, tipoId) {
   const s = AppState.settings;
-  const precio = blancoSolido ? (s.gangSheetBlancoSolidoPrecioMetro || 0) : (s.gangSheetPrecioMetro || 0);
+  const tipo = tipoId && (s.gangSheetTipos || []).find(item => item.id === tipoId);
+  const precio = tipo
+    ? (Number(tipo.precioMetro) || 0)
+    : (blancoSolido ? (s.gangSheetBlancoSolidoPrecioMetro || 0) : (s.gangSheetPrecioMetro || 0));
   return (metros || 0) * precio;
 }
 // Sobrecargo por talla 2XL o mayor (en esta tienda: XXG, XXXG... o 2XL, 3XL, XXL...).
@@ -50,11 +69,16 @@ export function sobrecargoTalla(talla) {
   const esGrandeExtra = /^(XX+G|XX+L|[2-9]X(G|L))$/.test(t);
   return esGrandeExtra ? (AppState.settings.sobrecargo2XLMonto || 0) : 0;
 }
-// Costo de impresión de una prenda/item, respetando su modo de costeo:
-// "area" (DTF por área, normal o especial) o "gangsheet" (por metro lineal).
+// Los registros nuevos usan metros explícitos; los existentes mantienen su fórmula guardada.
 export function costoImpresion(obj) {
+  if (obj.dtfEspecial) {
+    return costoEstampadoDtfTipo(obj.estampados, obj.dtfTipoId);
+  }
+  if (obj.dtfMetrosUsados !== undefined && obj.dtfMetrosUsados !== null) {
+    return costoDtfPorMetros(obj.dtfMetrosUsados, !!obj.dtfEspecial, obj.dtfTipoId || "");
+  }
   if (obj.modoCosteo === "gangsheet") {
-    return costoGangSheet(obj.gangSheetMetros, obj.gangSheetBlancoSolido);
+    return costoGangSheet(obj.gangSheetMetros, obj.gangSheetBlancoSolido, obj.gangSheetTipoId);
   }
   return costoEstampado(obj.estampados, obj.dtfEspecial);
 }
@@ -119,6 +143,8 @@ export function piezaCabeEnRollo(anchoCm, largoCm, anchoRolloCm) {
 // estampado (modo área) y el usuario lo editó manualmente, se respeta ese valor; si no, se
 // calcula con la fórmula de área × costo DTF, o con el costo de Gang Sheet si aplica.
 export function getCostoEstampadoEfectivo(item) {
+  if (item.dtfEspecial && item.dtfTipoId) return costoImpresion(item);
+  if (item.dtfMetrosUsados !== undefined && item.dtfMetrosUsados !== null) return costoImpresion(item);
   if (item.modoCosteo !== "gangsheet") {
     const numEstampados = (item.estampados || []).length;
     if (numEstampados > 1 && item.costoEstampadoManual !== null && item.costoEstampadoManual !== undefined) {

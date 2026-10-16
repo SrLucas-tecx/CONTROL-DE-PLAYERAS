@@ -222,7 +222,10 @@
         <div class="quote-step" data-step="2">
           <div class="section-header" style="justify-content:space-between;">
             <h2 class="quote-step-title" style="margin:0;">Prendas de la cotización</h2>
-            <button class="btn-secondary" onclick="addQuoteItem()">+ Agregar prenda</button>
+            <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;">
+              <button class="btn-secondary" onclick="addQuoteItem()">+ Agregar prenda</button>
+              <button class="btn-secondary" onclick="addQuoteSticker()">+ Agregar sticker</button>
+            </div>
           </div>
           <div id="quote-items-list" class="quote-items-list"></div>
           <div class="quote-add-space" id="quote-add-space">
@@ -235,9 +238,6 @@
           <details class="quote-fold" id="quote-stickers-fold">
             <summary>✂️ Stickers de la cotización</summary>
             <div class="quote-fold-body">
-              <div style="display:flex;justify-content:flex-end;margin-bottom:var(--space-3);">
-                <button class="btn-secondary" onclick="addQuoteSticker()">+ Agregar sticker</button>
-              </div>
               <div id="quote-stickers-list" class="quote-items-list"></div>
               <p class="empty-hint" id="quote-stickers-empty">No agregas stickers a esta cotización.</p>
 
@@ -682,7 +682,7 @@
         <div class="section-header" style="justify-content:space-between;">
           <div>
             <h2 class="section-title">Gastos generales del negocio</h2>
-            <p class="section-sub">Materiales, herramientas, renta, servicios y demás gastos que no son de una cotización específica.</p>
+            <p class="section-sub">Registra tus gastos y relaciónalos con las playeras, stickers o cotizaciones correspondientes para darles seguimiento.</p>
           </div>
           <button class="btn-primary" onclick="openModalGasto()">+ Nuevo gasto</button>
         </div>
@@ -1183,67 +1183,137 @@
       <section id="page-ajustes" class="page-section">
         <div class="section-header">
           <div>
-            <h2 class="section-title">Costo del DTF</h2>
-            <p class="section-sub">El costo de estampado se calcula dividiendo el precio del metro de DTF entre el área del rollo, y multiplicándolo por el tamaño de tu estampado.</p>
+            <h2 class="section-title">Configuración de costos</h2>
+            <p class="section-sub">El costo de impresión se calcula con los metros utilizados multiplicados por el precio por metro del tipo de DTF seleccionado.</p>
           </div>
         </div>
-        <div class="settings-card">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Costo del metro de DTF ($)</label>
-              <input type="number" id="set-dtf-precio" class="form-input" min="0" step="0.01">
+        <div class="settings-grid">
+          <div class="settings-column">
+            <div class="settings-card settings-panel">
+              <div>
+                <h3 class="settings-panel-title">Recargos y comisiones</h3>
+                <p class="settings-panel-description">Define los porcentajes que se aplican a pedidos y pagos.</p>
+              </div>
+              <div class="settings-fields">
+                <div class="form-group">
+                  <label class="form-label" for="set-recargo-urgente">Recargo por pedido urgente (%)</label>
+                  <input type="number" id="set-recargo-urgente" class="form-input" min="0" step="1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-comision-terminal">Comisión de terminal (tarjeta) (%)</label>
+                  <input type="number" id="set-comision-terminal" class="form-input" min="0" step="0.1">
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Costo del metro de DTF especial ($)</label>
-              <input type="number" id="set-dtf-precio-especial" class="form-input" min="0" step="0.01">
+
+            <div class="settings-card settings-panel">
+              <div>
+                <h3 class="settings-panel-title">Costo del DTF estándar</h3>
+                <p class="settings-panel-description">Define el precio del metro y el ancho del rollo para estimar el costo de impresión.</p>
+              </div>
+              <div class="settings-fields">
+                <div class="form-group">
+                  <label class="form-label" for="set-dtf-precio">Precio por metro de DTF estándar ($)</label>
+                  <input type="number" id="set-dtf-precio" class="form-input" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-dtf-ancho">Ancho del rollo de DTF (cm)</label>
+                  <input type="number" id="set-dtf-ancho" class="form-input" min="1" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-moneda">Moneda</label>
+                  <input type="text" id="set-moneda" class="form-input" placeholder="MXN">
+                </div>
+              </div>
+              <div class="settings-cost-summary">
+                <p class="cost-preview">Costo estándar por cm²: <b id="preview-costo-cm2">$0.0000</b> — una impresión de 30×40 cm te cuesta <b id="preview-costo-ejemplo">$0.00</b></p>
+                <p class="cost-preview">Precio estándar por metro: <b id="preview-costo-metro">$0.00</b></p>
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Ancho del rollo de DTF (cm)</label>
-              <input type="number" id="set-dtf-ancho" class="form-input" min="1" step="0.1">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Moneda</label>
-              <input type="text" id="set-moneda" class="form-input" placeholder="MXN">
+
+            <div class="settings-card settings-panel">
+              <div>
+                <h3 class="settings-panel-title">Costos y existencias</h3>
+                <p class="settings-panel-description">Ajustes para tallas grandes y alertas de inventario.</p>
+              </div>
+              <div class="settings-fields">
+                <div class="form-group">
+                  <label class="form-label" for="set-sobrecargo-2xl">Sobrecargo por talla 2XL o mayor ($)</label>
+                  <input type="number" id="set-sobrecargo-2xl" class="form-input" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-stock-minimo-default">Alerta de stock mínimo (default)</label>
+                  <input type="number" id="set-stock-minimo-default" class="form-input" min="0" step="1">
+                </div>
+              </div>
             </div>
           </div>
-          <p class="cost-preview">Costo actual por cm²: <b id="preview-costo-cm2">$0.0000</b> — una impresión de 30×40 cm te cuesta <b id="preview-costo-ejemplo">$0.00</b></p>
-          <p class="cost-preview">DTF especial: una impresión de 30×40 cm te cuesta <b id="preview-costo-especial-ejemplo">$0.00</b></p>
-          <div class="form-row" style="margin-top:12px;">
-            <div class="form-group">
-              <label class="form-label">Sobrecargo por talla 2XL o mayor ($)</label>
-              <input type="number" id="set-sobrecargo-2xl" class="form-input" min="0" step="0.01">
+
+          <div class="settings-column">
+            <div class="settings-card settings-panel">
+              <div>
+                <h3 class="settings-panel-title">Alerta de uso del rollo</h3>
+                <p class="settings-panel-description">Recibe un aviso si un lote aprovecha muy poco el rollo de DTF.</p>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="set-umbral-llenado">Alerta de llenado bajo del rollo (%)</label>
+                <input type="number" id="set-umbral-llenado" class="form-input" min="0" max="100" step="1">
+                <span class="form-hint">Si un lote ligado a un gasto usa menos de este porcentaje del rollo, se avisa que el costo por pieza se puede disparar.</span>
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Alerta de stock mínimo (default)</label>
-              <input type="number" id="set-stock-minimo-default" class="form-input" min="0" step="1">
+
+            <div class="settings-card settings-panel settings-gang-sheet">
+              <div class="settings-card-heading">
+                <div>
+                  <h3 class="settings-panel-title">Tipos de DTF</h3>
+                  <p class="settings-panel-description">Agrega tipos especiales con su precio por metro y proveedor.</p>
+                </div>
+                <button type="button" class="btn-secondary settings-add-type" onclick="document.getElementById('gangsheet-tipo-form').open = !document.getElementById('gangsheet-tipo-form').open">+ Agregar tipo</button>
+              </div>
+              <details id="gangsheet-tipo-form" class="settings-type-details">
+                <summary class="settings-type-heading">Datos del nuevo tipo</summary>
+                <div class="settings-fields">
+                  <div class="form-group">
+                    <label class="form-label" for="set-gangsheet-tipo-nombre">Nombre del tipo</label>
+                    <input type="text" id="set-gangsheet-tipo-nombre" class="form-input" maxlength="60" placeholder="Ej. DTF glitter">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="set-gangsheet-tipo-categoria">Categoría</label>
+                    <select id="set-gangsheet-tipo-categoria" class="form-select">
+                      <option value="gang_sheet">DTF especial</option>
+                      <option value="gang_sheet_blanco">DTF especial blanco sólido</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="set-gangsheet-tipo-precio">Precio por metro ($)</label>
+                    <input type="number" id="set-gangsheet-tipo-precio" class="form-input" min="0" step="0.01" placeholder="0.00">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="set-gangsheet-tipo-proveedor">Proveedor</label>
+                    <select id="set-gangsheet-tipo-proveedor" class="form-select"></select>
+                  </div>
+                </div>
+                <button type="button" class="btn-secondary" onclick="addGangSheetTipo()">Guardar tipo</button>
+              </details>
+              <div class="settings-type-table-wrap">
+                <table class="settings-type-table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Categoría</th>
+                      <th>Precio por metro</th>
+                      <th>Proveedor</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="gangsheet-tipos-list"></tbody>
+                </table>
+              </div>
             </div>
           </div>
-          <div class="form-row" style="margin-top:12px;">
-            <div class="form-group">
-              <label class="form-label">Gang Sheet — precio por metro ($)</label>
-              <input type="number" id="set-gangsheet-precio" class="form-input" min="0" step="0.01">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Gang Sheet blanco sólido — precio por metro ($)</label>
-              <input type="number" id="set-gangsheet-blanco-precio" class="form-input" min="0" step="0.01">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Recargo por pedido urgente (%)</label>
-              <input type="number" id="set-recargo-urgente" class="form-input" min="0" step="1">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Comisión de terminal (tarjeta) (%)</label>
-              <input type="number" id="set-comision-terminal" class="form-input" min="0" step="0.1">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Alerta de llenado bajo del rollo (%)</label>
-              <input type="number" id="set-umbral-llenado" class="form-input" min="0" max="100" step="1">
-              <span class="form-hint">Si un lote ligado a un gasto usa menos de este % del rollo, se avisa que el costo por pieza se puede disparar.</span>
-            </div>
-          </div>
-          <button class="btn-primary" onclick="saveSettings()">Guardar ajustes</button>
+        </div>
+        <div class="settings-savebar">
+          <button class="btn-primary" onclick="saveSettings()">Guardar cambios</button>
         </div>
 
         <div class="section-header" style="margin-top:32px;">
@@ -1384,7 +1454,7 @@
           <div class="form-switch">
             <span class="switch-label">✨ DTF especial</span>
             <label class="switch">
-              <input type="checkbox" id="p-dtf-especial" onchange="updatePlayeraPreview()">
+              <input type="checkbox" id="p-dtf-especial" onchange="onPlayeraDtfEspecialChange()">
               <span class="slider"></span>
             </label>
           </div>
@@ -1396,12 +1466,17 @@
           <label class="form-label">Costo de la playera ($)</label>
           <input type="number" id="p-costo-playera" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
         </div>
-        <div class="form-group">
-          <label class="form-label">Modo de costeo de impresión</label>
-          <select id="p-modo-costeo" class="form-select" onchange="onPlayeraModoCosteoChange()">
-            <option value="area">Por área (DTF)</option>
-            <option value="gangsheet">Gang Sheet (por metro)</option>
-          </select>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" id="p-dtf-especial-wrap" style="display:none;">
+          <label class="form-label" for="p-dtf-tipo">Tipo de DTF Especial</label>
+          <select id="p-dtf-tipo" class="form-select" onchange="onPlayeraDtfTipoChange()"></select>
+        </div>
+        <div class="form-group" id="p-dtf-metros-wrap">
+          <label class="form-label" for="p-dtf-metros">Metros de DTF utilizados</label>
+          <input type="number" id="p-dtf-metros" class="form-input" min="0" step="0.00001" oninput="onPlayeraDtfMetrosChange(this.value)">
+          <span class="form-hint" id="p-dtf-precio-hint">Se calcula con los metros y el precio del DTF estándar.</span>
         </div>
       </div>
 
@@ -1411,22 +1486,6 @@
           <input type="number" id="p-num-estampados" class="form-input" min="1" value="1" onchange="onPlayeraNumEstampadosChange()" style="max-width:120px;">
         </div>
         <div id="p-estampados-list" class="estampados-list"></div>
-      </div>
-
-      <div id="p-gangsheet-wrap" class="form-row" style="display:none;">
-        <div class="form-group">
-          <label class="form-label">Metros lineales de Gang Sheet</label>
-          <input type="number" id="p-gangsheet-metros" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
-        </div>
-        <div class="form-group">
-          <div class="form-switch">
-            <span class="switch-label">🧻 Blanco sólido</span>
-            <label class="switch">
-              <input type="checkbox" id="p-gangsheet-blanco-solido" onchange="updatePlayeraPreview()">
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
       </div>
 
       <div class="form-group">
@@ -1545,16 +1604,16 @@
         </div>
           <div class="form-group">
             <label class="form-label">Ancho (cm)</label>
-            <input type="number" id="s-ancho" class="form-input" min="0" step="0.01" oninput="updateStickerCostPreview()">
+            <input type="number" id="s-ancho" class="form-input" min="0" step="0.01" oninput="onStickerDimensionChange()">
           </div>
           <div class="form-group">
             <label class="form-label">Largo (cm)</label>
-            <input type="number" id="s-largo" class="form-input" min="0" step="0.01" oninput="updateStickerCostPreview()">
+            <input type="number" id="s-largo" class="form-input" min="0" step="0.01" oninput="onStickerDimensionChange()">
           </div>
         <div class="form-group">
             <label class="form-label">Costo producción ($)</label>
             <input type="number" id="s-costo" class="form-input" min="0" step="0.01" readonly>
-            <span class="form-hint" id="s-costo-preview">Costo calculado por área.</span>
+            <span class="form-hint" id="s-costo-preview">Costo calculado según el método de impresión seleccionado.</span>
           </div>
           <div class="form-group">
             <label class="form-label">Precio de venta ($)</label>
@@ -1567,6 +1626,28 @@
         <div class="form-group">
           <label class="form-label">Stock mínimo (alerta)</label>
           <input type="number" id="s-stock-minimo" class="form-input" min="0" value="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <div class="form-switch">
+            <span class="switch-label">✨ DTF especial</span>
+            <label class="switch">
+              <input type="checkbox" id="s-dtf-especial" onchange="onStickerDtfEspecialChange()">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="s-dtf-especial-wrap" style="display:none;">
+          <label class="form-label" for="s-dtf-tipo">Tipo de DTF Especial</label>
+          <select id="s-dtf-tipo" class="form-select" onchange="onStickerDtfTipoChange()"></select>
+        </div>
+        <div class="form-group" id="s-dtf-metros-wrap">
+          <label class="form-label" for="s-dtf-metros">Metros de DTF utilizados</label>
+          <input type="number" id="s-dtf-metros" class="form-input" min="0" step="0.00001" oninput="updateStickerCostPreview()">
+          <span class="form-hint" id="s-dtf-precio-hint">Se calcula con los metros y el precio del DTF estándar.</span>
         </div>
       </div>
       <div class="form-row">
@@ -2043,6 +2124,12 @@
       </div>
 
       <div class="form-group">
+        <label class="form-label">🧾 Cotizaciones relacionadas</label>
+        <p class="form-hint">Elige si el gasto se agrega al costo del estampado o de la prenda en cada cotización. Si seleccionas varias, el monto se reparte proporcionalmente al costo de esa parte (en partes iguales si no hay costo registrado) y se actualiza la ganancia.</p>
+        <div id="gasto-cotizaciones-list" class="gasto-ligar-list" style="max-height:200px;overflow-y:auto;"></div>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">Notas</label>
         <textarea id="gasto-notas" class="form-textarea" placeholder="Opcional"></textarea>
       </div>
@@ -2383,11 +2470,32 @@
         <div class="form-group">
           <label class="form-label">Costo de producción c/u ($)</label>
           <input type="number" id="qs-costo" class="form-input" readonly>
-          <span class="form-hint">Se calcula con el ancho y largo.</span>
+          <span class="form-hint">DTF especial: área × costo por cm². DTF estándar: metros × precio por metro.</span>
         </div>
         <div class="form-group">
           <label class="form-label">Precio de venta c/u ($)</label>
           <input type="number" id="qs-precio" class="form-input" min="0" step="0.01" onchange="updateQuoteStickerFieldDesdeModal('precioVenta', this.value)">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <div class="form-switch">
+            <span class="switch-label">✨ DTF especial</span>
+            <label class="switch">
+              <input type="checkbox" id="qs-dtf-especial" onchange="onQuoteStickerDtfEspecialChange(this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="qs-dtf-especial-wrap" style="display:none;">
+          <label class="form-label" for="qs-dtf-tipo">Tipo de DTF Especial</label>
+          <select id="qs-dtf-tipo" class="form-select" onchange="updateQuoteStickerFieldDesdeModal('dtfTipoId', this.value)"></select>
+        </div>
+        <div class="form-group" id="qs-dtf-metros-wrap">
+          <label class="form-label" for="qs-dtf-metros">Metros de DTF utilizados</label>
+          <input type="number" id="qs-dtf-metros" class="form-input" min="0" step="0.00001" oninput="updateQuoteStickerFieldDesdeModal('dtfMetrosUsados', this.value)">
         </div>
       </div>
       <p class="cost-preview" id="qs-preview">—</p>
@@ -2467,7 +2575,7 @@
   </div>
 </div>
 
-<!-- MODAL: IMPRESIÓN DE UNA PRENDA DEL COTIZADOR (ÁREAS MÚLTIPLES / GANG SHEET) -->
+<!-- MODAL: IMPRESIÓN DE UNA PRENDA DEL COTIZADOR -->
 <div class="modal-overlay" id="modal-quote-estampados">
   <div class="modal-box">
     <div class="modal-header">
@@ -2475,20 +2583,12 @@
       <button class="modal-close" data-modal="modal-quote-estampados">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Modo de costeo</label>
-        <select id="qe-modo-costeo" class="form-select" onchange="onQuoteEstampadoModoChange()">
-          <option value="area">Por área (DTF, uno o varios estampados)</option>
-          <option value="gangsheet">Gang Sheet (por metro lineal)</option>
-        </select>
-      </div>
-
       <div id="qe-area-wrap">
         <div class="form-group">
           <div class="form-switch">
             <span class="switch-label">✨ DTF especial</span>
             <label class="switch">
-              <input type="checkbox" id="qe-dtf-especial" onchange="toggleQuoteAreaDtfEspecial(this.checked)">
+              <input type="checkbox" id="qe-dtf-especial" onchange="onQuoteDtfEspecialChange(this.checked)">
               <span class="slider"></span>
             </label>
           </div>
@@ -2498,26 +2598,22 @@
           <input type="number" id="qe-num-estampados" class="form-input" min="1" value="1"
             onchange="updateQuoteEstampadosCountFromModal(this.value)" style="max-width:120px;">
         </div>
-        <p class="section-sub">Cada estampado puede tener su propio tamaño — el costo se calcula sumando todas las áreas.</p>
+        <p class="section-sub">El DTF especial se cobra según el área total de los estampados y el precio por cm² del tipo seleccionado.</p>
         <div id="qe-estampados-list" class="estampados-list"></div>
         <p class="estampados-total">Área total: <b id="qe-estampados-total">0.0 cm²</b></p>
       </div>
 
-      <div id="qe-gangsheet-wrap" class="form-row" style="display:none;">
+      <div id="qe-dtf-especial-wrap" class="form-row" style="display:none;">
         <div class="form-group">
-          <label class="form-label">Metros lineales de Gang Sheet</label>
-          <input type="number" id="qe-gangsheet-metros" class="form-input" min="0" step="0.01" onchange="updateQuoteGangSheetField('gangSheetMetros', this.value)">
-        </div>
-        <div class="form-group">
-          <div class="form-switch">
-            <span class="switch-label">🧻 Blanco sólido</span>
-            <label class="switch">
-              <input type="checkbox" id="qe-gangsheet-blanco-solido" onchange="updateQuoteGangSheetField('gangSheetBlancoSolido', this.checked)">
-              <span class="slider"></span>
-            </label>
-          </div>
+          <label class="form-label" for="qe-dtf-tipo">Tipo de DTF Especial</label>
+          <select id="qe-dtf-tipo" class="form-select" onchange="updateQuoteDtfTipo(this.value)"></select>
         </div>
       </div>
+      <div class="form-group" id="qe-dtf-metros-wrap">
+        <label class="form-label" for="qe-dtf-metros">Metros de DTF utilizados</label>
+        <input type="number" id="qe-dtf-metros" class="form-input" min="0" step="0.00001" oninput="updateQuoteDtfMetros(this.value)">
+      </div>
+      <p class="cost-preview" id="qe-dtf-costo-preview">Costo de impresión: $0.00</p>
     </div>
     <div class="modal-footer">
       <button class="btn-primary" data-modal="modal-quote-estampados">Listo</button>

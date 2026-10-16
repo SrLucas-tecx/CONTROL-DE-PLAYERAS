@@ -695,3 +695,55 @@ button.mb-hoy:hover{background:var(--color-accent-soft);}
 .respaldo-guia ol{margin:var(--space-3) 0 var(--space-2) var(--space-5);display:flex;flex-direction:column;gap:var(--space-2);line-height:1.5;color:var(--color-text-muted);}
 .respaldo-guia ol b{color:var(--color-text);}
 .respaldo-guia ul{list-style:none;}
+
+/* ============================================================
+   AJUSTES: TARJETAS DE COSTOS
+   ============================================================ */
+#page-ajustes .settings-grid{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:var(--space-6);
+}
+#page-ajustes .settings-panel{max-width:none;min-width:0;}
+.settings-column{display:flex;flex-direction:column;gap:var(--space-4);min-width:0;}
+.settings-panel-title{font-family:var(--font-display);font-size:var(--fs-md);font-weight:700;}
+.settings-panel-description{font-size:var(--fs-sm);line-height:1.5;color:var(--color-text-muted);margin-top:var(--space-1);}
+.settings-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4);}
+.settings-fields .form-group{min-width:0;margin-bottom:0;}
+.settings-cost-summary{display:grid;gap:var(--space-2);}
+#page-ajustes .settings-cost-summary .cost-preview{
+  margin:0;background:rgba(30,58,138,.28);border:1px solid rgba(59,130,246,.3);border-radius:var(--radius-md);
+}
+.settings-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);}
+.settings-add-type{flex-shrink:0;}
+.settings-type-details{display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-3);background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);}
+.settings-type-details summary{cursor:pointer;list-style:none;font-size:var(--fs-sm);font-weight:700;}
+.settings-type-details summary::-webkit-details-marker{display:none;}
+.settings-type-details[open] summary{padding-bottom:var(--space-2);border-bottom:1px solid var(--color-border);}
+.settings-type-table-wrap{max-height:400px;overflow:auto;border:1px solid var(--color-border);border-radius:var(--radius-md);}
+.settings-type-table{width:100%;border-collapse:collapse;font-size:var(--fs-xs);text-align:left;}
+.settings-type-table th{
+  position:sticky;top:0;padding:var(--space-3);background:var(--color-surface-alt);color:var(--color-text-muted);
+  font-size:.68rem;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;border-bottom:1px solid var(--color-border);
+}
+.settings-type-table td{padding:var(--space-3);border-bottom:1px solid var(--color-border);vertical-align:middle;}
+.settings-type-table tr:last-child td{border-bottom:0;}
+.settings-type-table td:first-child{font-weight:700;}
+.settings-type-table td:nth-child(3){white-space:nowrap;}
+.settings-type-table td:last-child{text-align:center;}
+.settings-type-empty{text-align:center;color:var(--color-text-muted);}
+.settings-savebar{
+  position:sticky;bottom:0;z-index:50;display:flex;justify-content:flex-end;gap:var(--space-4);
+  margin:0 calc(var(--space-6) * -1);padding:var(--space-4) var(--space-6);
+  background:rgba(18,18,20,.92);backdrop-filter:blur(12px);border-top:1px solid var(--color-border);
+}
+body.light .settings-savebar{background:rgba(244,243,242,.92);}
+.settings-savebar .btn-primary{min-width:200px;min-height:48px;}
+@media (max-width:760px){
+  #page-ajustes .settings-grid{grid-template-columns:1fr;}
+  .settings-savebar{margin-inline:calc(var(--space-4) * -1);padding-inline:var(--space-4);}
+  .settings-type-table{min-width:560px;}
+  .settings-gang-sheet .settings-card-heading{flex-direction:column;}
+}
+@media (max-width:420px){
+  .settings-fields{grid-template-columns:1fr;}
+  .settings-savebar .btn-primary{width:100%;}
+}
