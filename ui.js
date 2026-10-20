@@ -30,7 +30,7 @@ let assignmentModalContext = null;
 /* ---------------------------------------------------------------
    HELPERS GENERALES DE DOM
 --------------------------------------------------------------- */
-function num(id) { const el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : 0; }
+function num(id) { const el = document.getElementById(id); return el ? (parseFloat(String(el.value).replace(",", ".")) || 0) : 0; }
 function val(id) { const el = document.getElementById(id); return el ? el.value : ""; }
 function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
 function checked(id) { const el = document.getElementById(id); return el ? el.checked : false; }
@@ -2040,7 +2040,7 @@ function onPlayeraNumEstampadosChange() {
 }
 function updatePlayeraEstampadoField(estId, field, value) {
   const e = playeraEstampadosDraft.find(x => x.id === estId);
-  if (e) e[field] = parseFloat(value) || 0;
+  if (e) e[field] = parseFloat(String(value).replace(",", ".")) || 0;
   if (!playeraMetrosManuales) setVal("p-dtf-metros", metrosEstimadosPorArea(areaTotalCm2(playeraEstampadosDraft)).toFixed(5));
   updatePlayeraPreview();
 }
@@ -2050,9 +2050,9 @@ function renderPlayeraEstampadosList() {
   container.innerHTML = playeraEstampadosDraft.map((e, idx) => `
     <div class="estampado-row">
       <span class="estampado-row-label">#${idx + 1}</span>
-      <input type="number" min="0" step="0.1" placeholder="Ancho cm" value="${e.anchoCm}" onchange="updatePlayeraEstampadoField('${e.id}','anchoCm',this.value)">
+      <input type="number" min="0" step="0.1" placeholder="Ancho cm" value="${e.anchoCm}" oninput="updatePlayeraEstampadoField('${e.id}','anchoCm',this.value)">
       <span>×</span>
-      <input type="number" min="0" step="0.1" placeholder="Largo cm" value="${e.largoCm}" onchange="updatePlayeraEstampadoField('${e.id}','largoCm',this.value)">
+      <input type="number" min="0" step="0.1" placeholder="Largo cm" value="${e.largoCm}" oninput="updatePlayeraEstampadoField('${e.id}','largoCm',this.value)">
     </div>`).join("");
 }
 function openModalPlayera(id) {
