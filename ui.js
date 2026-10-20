@@ -24,6 +24,7 @@ let uiFilters = {
   playeraTag: "all", stickerSize: "all", playeraSeccion: "stock",
   playeraVista: (function () { try { return localStorage.getItem("LUCXSTUDIO_VISTA_PLAYERAS") || "cuadricula"; } catch (e) { return "cuadricula"; } })()
 };
+let resumenCostoInventarioModo = "prendas";
 let activeBazarId = "";
 let assignmentModalContext = null;
 
@@ -759,6 +760,9 @@ function renderGastoLigarCotizaciones(seleccionadas) {
         <span>${escapeHtml(opcion.label)}</span>
         <b>${fmt(opcion.costo)}</b>
       </label>`).join("");
+    const estampadosDisponibles = opcionesEstampado.length > 0;
+    const cantidadSeleccionada = estampadosSeleccionados === null ? opcionesEstampado.length : estampadosSeleccionados.size;
+    const modo = link ? link.modo : "reemplaza";
     return `
     <div class="gasto-ligar-item gasto-cotizacion-item">
       <input type="checkbox" id="gasto-cot-${escapeHtml(cotizacion.id)}" class="gasto-cotizacion-cb" value="${escapeHtml(cotizacion.id)}" ${link ? "checked" : ""}>
@@ -767,15 +771,17 @@ function renderGastoLigarCotizaciones(seleccionadas) {
         <option value="" ${!link?.destino ? "selected" : ""}>Elegir parte…</option>
         <option value="estampado" ${link?.destino === "estampado" ? "selected" : ""}>Estampado</option>
         <option value="prenda" ${link?.destino === "prenda" ? "selected" : ""}>Prenda</option>
-      </select>${opcionesHtml ? `
-      <details class="gasto-cotizacion-estampados" ${link?.destino === "estampado" ? "open" : ""}>
-        <summary>Elegir estampados o stickers (${estampadosSeleccionados === null ? opcionesEstampado.length : estampadosSeleccionados.size} seleccionados)</summary>
-        <div class="gasto-cotizacion-estampados-list">${opcionesHtml}</div>
-      </details>` : `<span class="gasto-cotizacion-sin-estampados">Esta cotización no tiene estampados o stickers.</span>`}
-      <select class="form-select gasto-cotizacion-modo" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Cómo aplicar el gasto en ${escapeHtml(cotizacion.folio || "cotización")}">
+      </select>
+      <button type="button" class="btn-secondary gasto-cotizacion-estampados-btn" data-cotizacion-id="${escapeHtml(cotizacion.id)}"
+        onclick="abrirPopupGastoCotizacionEstampados(this)" ${link?.destino === "estampado" && estampadosDisponibles ? "" : "hidden"}
+        ${estampadosDisponibles ? "" : "disabled"}>${estampadosDisponibles ? `Elegir estampados o stickers (${cantidadSeleccionada})` : "Sin estampados ni stickers"}</button>
+      <div class="gasto-cotizacion-estampados-ocultos" hidden>${opcionesHtml}</div>
+      <select class="form-select gasto-cotizacion-modo" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Cómo aplicar el gasto en ${escapeHtml(cotizacion.folio || "cotización")}" hidden>
         <option value="reemplaza" ${(link ? link.modo : "reemplaza") === "reemplaza" ? "selected" : ""}>Reemplaza el estimado</option>
         <option value="suma" ${link && link.modo === "suma" ? "selected" : ""}>Suma como extra</option>
       </select>
+      <button type="button" class="btn-secondary gasto-cotizacion-modo-btn" data-cotizacion-id="${escapeHtml(cotizacion.id)}"
+        onclick="abrirPopupGastoCotizacionModo(this)">${modo === "suma" ? "Suma como extra" : "Reemplaza el estimado"}</button>
     </div>`;
   }).join("") || `<p class="empty-hint">Aún no hay cotizaciones guardadas para ligar a este gasto.</p>`;
 }
@@ -821,15 +827,74 @@ function etiquetaDestinoCotizacion(cotizacion, link) {
 }
 function toggleGastoCotizacionEstampados(select) {
   const fila = select.closest(".gasto-cotizacion-item");
-  const opciones = fila && fila.querySelector(".gasto-cotizacion-estampados");
-  if (opciones) opciones.open = select.value === "estampado";
+  const boton = fila && fila.querySelector(".gasto-cotizacion-estampados-btn");
+  if (boton) boton.hidden = select.value !== "estampado";
 }
 function updateGastoCotizacionEstampados(checkbox) {
   const fila = checkbox.closest(".gasto-cotizacion-item");
-  const detalles = fila && fila.querySelector(".gasto-cotizacion-estampados");
-  if (!detalles) return;
-  const seleccionados = detalles.querySelectorAll(".gasto-cotizacion-estampado-cb:checked").length;
-  detalles.querySelector("summary").textContent = `Elegir estampados o stickers (${seleccionados} seleccionados)`;
+  const boton = fila && fila.querySelector(".gasto-cotizacion-estampados-btn");
+  if (!boton) return;
+  const seleccionados = fila.querySelectorAll(".gasto-cotizacion-estampado-cb:checked").length;
+  boton.textContent = `Elegir estampados o stickers (${seleccionados})`;
+}
+let gastoCotizacionPopupId = "";
+function abrirPopupGastoCotizacionEstampados(boton) {
+  const fila = boton.closest(".gasto-cotizacion-item");
+  if (!fila) return;
+  gastoCotizacionPopupId = boton.dataset.cotizacionId;
+  const cotizacion = AppState.cotizaciones.find(item => item.id === gastoCotizacionPopupId);
+  document.getElementById("gasto-cotizacion-popup-title").textContent =
+    `Estampados y stickers · ${cotizacion?.folio || "Cotización"}`;
+  const destino = document.getElementById("gasto-cotizacion-popup-body");
+  destino.innerHTML = [...fila.querySelectorAll(".gasto-cotizacion-estampado-cb")].map(checkbox => {
+    const etiqueta = checkbox.closest(".gasto-cotizacion-estampado");
+    return etiqueta ? `<label class="gasto-cotizacion-estampado">${etiqueta.innerHTML}</label>` : "";
+  }).join("") || `<p class="empty-hint">Esta cotización no tiene estampados o stickers.</p>`;
+  document.getElementById("gasto-cotizacion-popup-save").onclick = guardarPopupGastoCotizacionEstampados;
+  openModal("modal-gasto-cotizacion-popup");
+}
+function guardarPopupGastoCotizacionModo() {
+  const fila = [...document.querySelectorAll(".gasto-cotizacion-item")]
+    .find(item => item.querySelector(".gasto-cotizacion-cb")?.value === gastoCotizacionPopupId);
+  if (!fila) return;
+  const modo = document.querySelector('input[name="gasto-cotizacion-popup-modo"]:checked')?.value || "reemplaza";
+  fila.querySelector(".gasto-cotizacion-modo").value = modo;
+  fila.querySelector(".gasto-cotizacion-modo-btn").textContent = modo === "suma" ? "Suma como extra" : "Reemplaza el estimado";
+  closeModal("modal-gasto-cotizacion-popup");
+}
+function abrirPopupGastoCotizacionModo(boton) {
+  const fila = boton.closest(".gasto-cotizacion-item");
+  if (!fila) return;
+  gastoCotizacionPopupId = boton.dataset.cotizacionId;
+  const modo = fila.querySelector(".gasto-cotizacion-modo").value || "reemplaza";
+  document.getElementById("gasto-cotizacion-popup-title").textContent = "Cómo aplicar el costo real";
+  document.getElementById("gasto-cotizacion-popup-body").innerHTML = `
+    <label class="gasto-cotizacion-modo-opcion">
+      <input type="radio" name="gasto-cotizacion-popup-modo" value="reemplaza" ${modo === "reemplaza" ? "checked" : ""}>
+      <span><strong>Reemplaza el estimado</strong><small>Usa el gasto real en lugar del costo estimado de esta parte.</small></span>
+    </label>
+    <label class="gasto-cotizacion-modo-opcion">
+      <input type="radio" name="gasto-cotizacion-popup-modo" value="suma" ${modo === "suma" ? "checked" : ""}>
+      <span><strong>Suma como extra</strong><small>Agrega este gasto al costo estimado, sin sustituirlo.</small></span>
+    </label>`;
+  document.getElementById("gasto-cotizacion-popup-save").onclick = guardarPopupGastoCotizacionModo;
+  openModal("modal-gasto-cotizacion-popup");
+}
+function guardarPopupGastoCotizacionEstampados() {
+  const fila = [...document.querySelectorAll(".gasto-cotizacion-item")]
+    .find(item => item.querySelector(".gasto-cotizacion-cb")?.value === gastoCotizacionPopupId);
+  if (fila) {
+    const seleccionadas = new Map([...document.querySelectorAll("#gasto-cotizacion-popup-body .gasto-cotizacion-estampado-cb")]
+      .map(checkbox => [checkbox.dataset.estampadoKey, checkbox.checked]));
+    fila.querySelectorAll(".gasto-cotizacion-estampado-cb").forEach(checkbox => {
+      if (seleccionadas.has(checkbox.dataset.estampadoKey)) {
+        checkbox.checked = seleccionadas.get(checkbox.dataset.estampadoKey);
+      }
+    });
+    const original = fila.querySelector(".gasto-cotizacion-estampado-cb");
+    if (original) updateGastoCotizacionEstampados(original);
+  }
+  closeModal("modal-gasto-cotizacion-popup");
 }
 function repartirGastoEntreCotizaciones(links, monto) {
   const elegibles = links.filter(link => link.destino && AppState.cotizaciones.some(c => c.id === link.id));
@@ -2447,6 +2512,16 @@ function resumenInventarioPlayeras() {
   const resumen = {
     totalCosto: disponibles.reduce((total, playera) =>
       total + costoSoloPrenda(playera) * (Number(playera.stock) || 0), 0),
+    totalProduccion: disponibles.reduce((total, playera) =>
+      total + costoTotalPlayera(playera) * (Number(playera.stock) || 0), 0),
+    unidadesEnProceso: disponibles.reduce((total, playera) =>
+      total + (playera.estado === "En proceso" ? Number(playera.stock) || 0 : 0), 0),
+    unidadesEnStock: disponibles.reduce((total, playera) =>
+      total + (playera.estado === "En stock" ? Number(playera.stock) || 0 : 0), 0),
+    valorVenta: disponibles.reduce((total, playera) =>
+      total + (Number(playera.precioVenta) || 0) * (Number(playera.stock) || 0), 0),
+    gananciaPotencial: disponibles.reduce((total, playera) =>
+      total + ((Number(playera.precioVenta) || 0) - costoTotalPlayera(playera)) * (Number(playera.stock) || 0), 0),
     colores: {
       blancas: { unidades: 0, costo: 0, tallas: new Map() },
       negras: { unidades: 0, costo: 0, tallas: new Map() },
@@ -2466,7 +2541,28 @@ function resumenInventarioPlayeras() {
 }
 function renderResumenInventarioPlayeras() {
   const resumen = resumenInventarioPlayeras();
-  document.getElementById("inventory-total-cost").textContent = fmt(resumen.totalCosto);
+  const costoProduccion = resumenCostoInventarioModo === "produccion";
+  document.getElementById("inventory-total-cost-label").textContent = costoProduccion
+    ? "Costo total de producción"
+    : "Costo de las puras prendas";
+  document.getElementById("inventory-total-cost").textContent = fmt(costoProduccion ? resumen.totalProduccion : resumen.totalCosto);
+  document.getElementById("inventory-total-cost-help").textContent = costoProduccion
+    ? "Incluye prenda, impresión y recargo de talla × unidades disponibles."
+    : "Solo costo de la playera o prenda × unidades disponibles; excluye impresión y estampado.";
+  document.getElementById("inventory-units-process").textContent = String(resumen.unidadesEnProceso);
+  document.getElementById("inventory-units-stock").textContent = String(resumen.unidadesEnStock);
+  document.getElementById("inventory-total-sale-value").textContent = fmt(resumen.valorVenta);
+  const profit = document.getElementById("inventory-total-profit");
+  profit.textContent = fmt(resumen.gananciaPotencial);
+  profit.classList.toggle("inventory-profit-negative", resumen.gananciaPotencial < 0);
+  profit.classList.toggle("inventory-profit-positive", resumen.gananciaPotencial > 0);
+  document.querySelectorAll("[data-inventory-cost-mode]").forEach(button => {
+    button.classList.toggle("active", button.dataset.inventoryCostMode === resumenCostoInventarioModo);
+  });
+}
+function cambiarResumenCostoInventario(modo) {
+  resumenCostoInventarioModo = modo === "produccion" ? "produccion" : "prendas";
+  renderResumenInventarioPlayeras();
 }
 function openModalInventarioColores() {
   const resumen = resumenInventarioPlayeras();
@@ -5033,7 +5129,7 @@ Object.assign(window, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras,
+  verDetallePlayera,   cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,
@@ -5064,6 +5160,7 @@ Object.assign(window, {
   saveTallaEtiqueta, setClienteEtiquetaFiltro, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
   addGangSheetTipo,
   toggleGraficaInventarioOptions, onQuoteStickerDtfEspecialChange, onStickerDtfEspecialChange, onStickerDtfTipoChange, onStickerDimensionChange, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras, toggleGastoCotizacionEstampados, updateGastoCotizacionEstampados,
+  abrirPopupGastoCotizacionEstampados, abrirPopupGastoCotizacionModo, guardarPopupGastoCotizacionEstampados, guardarPopupGastoCotizacionModo,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
