@@ -17,6 +17,13 @@ export function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 }
 
+export function cantidadVendidaPlayera(playera) {
+  if ((playera.bazarEstado || "Disponible") !== "Vendida") return 0;
+  return Number(playera.stockDescontadoVenta) > 0
+    ? Number(playera.stockDescontadoVenta)
+    : (Number(playera.stock) || 0);
+}
+
 /* ---------------------------------------------------------------
    CÁLCULO DE COSTOS DTF
    costo_cm2 = precio_metro_dtf / (100 * ancho_rollo_cm)
@@ -226,7 +233,7 @@ export function saldoPendienteCliente(cotizacion) {
 // Lo usan tanto el cierre de un bazar como la Caja general (sin bazar) — Sprint 4.
 function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCaja, efectivoContadoRaw) {
   const cots = AppState.cotizaciones.filter(c => !c.ventaNula && filtroCot(c));
-  const playerasVendidas = AppState.playeras.filter(p => (p.bazarEstado || "Disponible") === "Vendida" && (p.stock || 0) > 0 && filtroPlayera(p));
+  const playerasVendidas = AppState.playeras.filter(p => cantidadVendidaPlayera(p) > 0 && filtroPlayera(p));
   let ventasTarjeta = 0, comisionTerminal = 0, totalVendido = 0;
   cots.forEach(c => {
     totalVendido += c.totalVenta || 0;
@@ -234,7 +241,7 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCa
     comisionTerminal += c.comisionTerminal || 0;
   });
   playerasVendidas.forEach(p => {
-    totalVendido += (p.precioVenta || 0) * (p.stock || 0);
+    totalVendido += (p.precioVenta || 0) * cantidadVendidaPlayera(p);
     ventasTarjeta += p.montoTarjeta || 0;
     comisionTerminal += p.comisionTerminal || 0;
   });
@@ -329,8 +336,8 @@ export function playerasDisponibles() {
 export function totalVentasSinBazar() {
   const cots = AppState.cotizaciones.filter(c => !c.ventaNula && bazarIdsDe(c).length === 0)
     .reduce((s, c) => s + (c.totalVenta || 0), 0);
-  const playeras = AppState.playeras.filter(p => (p.bazarEstado || "Disponible") === "Vendida" && (p.stock || 0) > 0 && bazarIdsDe(p).length === 0)
-    .reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0);
+  const playeras = AppState.playeras.filter(p => cantidadVendidaPlayera(p) > 0 && bazarIdsDe(p).length === 0)
+    .reduce((s, p) => s + (p.precioVenta || 0) * cantidadVendidaPlayera(p), 0);
   const stickers = (AppState.ventasStickers || []).filter(v => bazarIdsDe(v).length === 0)
     .reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0);
   return cots + playeras + stickers;
@@ -342,15 +349,15 @@ export function getBazarVentasYGanancia(bazarId) {
   const totalVendidoCots = cots.reduce((s, c) => s + c.totalVenta, 0);
   const gananciaVentasCots = cots.reduce((s, c) => s + c.ganancia, 0);
 
-  const playerasAsignadas = AppState.playeras.filter(p => bazarTiene(p, bazarId) && (p.stock || 0) > 0);
+  const playerasAsignadas = AppState.playeras.filter(p => bazarTiene(p, bazarId) && ((p.stock || 0) > 0 || cantidadVendidaPlayera(p) > 0));
   const totalVendidoPlayeras = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
-    return s + ((p.precioVenta || 0) * (p.stock || 0));
+    return s + ((p.precioVenta || 0) * cantidadVendidaPlayera(p));
   }, 0);
   const gananciaVentasPlayeras = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
     const costoTotalUnit = costoTotalPlayera(p);
-    return s + ((p.precioVenta || 0) - costoTotalUnit) * (p.stock || 0);
+    return s + ((p.precioVenta || 0) - costoTotalUnit) * cantidadVendidaPlayera(p);
   }, 0);
   const perdidaPlayerasNulas = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
@@ -562,14 +569,14 @@ export function statsCliente(cliente) {
   );
   // Playeras del inventario que se le asignaron a este cliente como encargo y ya se
   // vendieron directo (sin pasar por una cotización) también cuentan en su historial.
-  const playerasVendidas = AppState.playeras.filter(p => p.clienteId === cliente.id && p.bazarEstado === "Vendida");
+  const playerasVendidas = AppState.playeras.filter(p => p.clienteId === cliente.id && cantidadVendidaPlayera(p) > 0);
   let totalGastado = 0, ultimaFecha = "";
   pedidos.forEach(c => {
     if (!c.ventaNula) totalGastado += c.totalVenta || 0;
     if ((c.fecha || "") > ultimaFecha) ultimaFecha = c.fecha || "";
   });
   playerasVendidas.forEach(p => {
-    totalGastado += (p.precioVenta || 0) * (p.stock || 0);
+    totalGastado += (p.precioVenta || 0) * cantidadVendidaPlayera(p);
   });
   return {
     pedidos: pedidos.length + playerasVendidas.length, totalGastado, ultimaFecha,
@@ -613,10 +620,11 @@ export function agruparArtes() {
     });
   });
   AppState.playeras.forEach(p => {
-    if ((p.bazarEstado || "Disponible") !== "Vendida") return;
-    const monto = (p.precioVenta || 0) * (p.stock || 0);
-    const ganancia = ((p.precioVenta || 0) - costoTotalPlayera(p)) * (p.stock || 0);
-    agregar(p.nombre, p.stock || 0, monto, ganancia);
+    const cantidad = cantidadVendidaPlayera(p);
+    if (!cantidad) return;
+    const monto = (p.precioVenta || 0) * cantidad;
+    const ganancia = ((p.precioVenta || 0) - costoTotalPlayera(p)) * cantidad;
+    agregar(p.nombre, cantidad, monto, ganancia);
   });
   (AppState.ventasStickers || []).forEach(v => {
     const cant = v.cantidad || 0;

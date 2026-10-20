@@ -5,7 +5,7 @@
 import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
-  fmt, escapeHtml, costoTotalPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
+  fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
   bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
@@ -2183,7 +2183,7 @@ function openModalPlayera(id) {
     setChecked("p-tiene-etiqueta", true);
     setChecked("p-prenda-cliente", false); setChecked("p-dtf-especial", false);
     setVal("p-stock-minimo", AppState.settings.stockMinimoDefault || 0);
-    setVal("p-precio-venta", ""); setVal("p-precio-mayoreo", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En stock");
+    setVal("p-precio-venta", ""); setVal("p-precio-mayoreo", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En proceso");
     setVal("p-estado-venta", "Disponible"); setVal("p-metodo-pago", "Efectivo");
     playeraEstampadosDraft = [{ id: uid(), anchoCm: 0, largoCm: 0 }];
     setVal("p-num-estampados", 1);
@@ -2329,6 +2329,21 @@ function reclamarEtiquetaTallaParaPlayera(playera) {
   playera.etiquetaTallaConsumo = { tallaEtiquetaId: t.id, talla: t.talla, color: t.color, cantidad };
   if (t.cantidad === 0) showToast(`⚠️ Se agotaron las etiquetas de talla ${t.talla} · ${t.color}.`, "error");
 }
+function actualizarStockPorCambioEstadoVenta(playera, estadoAnterior, estadoNuevo, estadoPrendaAnterior) {
+  if (estadoAnterior !== "Vendida" && estadoNuevo === "Vendida") {
+    if ((Number(playera.stock) || 0) < 1) return false;
+    playera.estadoAntesVenta = estadoPrendaAnterior || playera.estado;
+    playera.stockDescontadoVenta = 1;
+    playera.stock = Math.max(0, (Number(playera.stock) || 0) - 1);
+    if (playera.stock === 0) playera.estado = "Agotado";
+  } else if (estadoAnterior === "Vendida" && estadoNuevo !== "Vendida" && (Number(playera.stockDescontadoVenta) || 0) > 0) {
+    playera.stock = (Number(playera.stock) || 0) + Number(playera.stockDescontadoVenta);
+    playera.estado = playera.estadoAntesVenta || (playera.estado === "Agotado" ? "En proceso" : playera.estado);
+    delete playera.stockDescontadoVenta;
+    delete playera.estadoAntesVenta;
+  }
+  return true;
+}
 function savePlayera() {
   const nombre = val("p-nombre").trim();
   if (!nombre) return showToast("Ponle un nombre al diseño.", "error");
@@ -2341,12 +2356,18 @@ function savePlayera() {
   const tags = Array.from(document.querySelectorAll(".p-tag-cb:checked")).map(cb => cb.value);
   const prendaCliente = checked("p-prenda-cliente");
   const antesVendida = existing ? playeraVendidaORegalada(existing) : false;
+  const estadoVentaAnterior = existing ? (existing.bazarEstado || "Disponible") : "Disponible";
+  const estadoPrendaAnterior = existing ? existing.estado : "";
   const estadoVenta = (existing && existing.ventaRapida) ? "Vendida" : (val("p-estado-venta") || "Disponible");
+  const stockCapturado = parseInt(num("p-stock")) || 0;
+  if (estadoVentaAnterior !== "Vendida" && estadoVenta === "Vendida" && stockCapturado < 1) {
+    return showToast("No puedes marcar como vendida una playera sin stock.", "error");
+  }
   const metodoVenta = estadoVenta === "Vendida" ? (val("p-metodo-pago") || "Efectivo") : "";
-  const montoTarjetaVenta = metodoVenta === "Tarjeta" ? (parseFloat(num("p-precio-venta")) || 0) * (parseInt(num("p-stock")) || 0) : 0;
+  const montoTarjetaVenta = metodoVenta === "Tarjeta" ? (parseFloat(num("p-precio-venta")) || 0) : 0;
   const data = {
     nombre, tipo: val("p-tipo"), talla: val("p-talla").trim(), colorId: val("p-color"),
-    stock: parseInt(num("p-stock")) || 0,
+    stock: stockCapturado,
     costoPlayera: prendaCliente ? 0 : (parseFloat(num("p-costo-playera")) || 0),
     estampados: JSON.parse(JSON.stringify(playeraEstampadosDraft)),
     modoCosteo: "metros",
@@ -2377,10 +2398,14 @@ function savePlayera() {
     // toggle de etiqueta cosida).
     liberarEtiquetaTallaDePlayera(existing);
     Object.assign(existing, data);
+    actualizarStockPorCambioEstadoVenta(existing, estadoVentaAnterior, estadoVenta, estadoPrendaAnterior);
     reclamarEtiquetaTallaParaPlayera(existing);
     guardada = existing;
   } else {
     const nueva = Object.assign({ id: uid() }, data);
+    if (!actualizarStockPorCambioEstadoVenta(nueva, estadoVentaAnterior, estadoVenta, estadoPrendaAnterior)) {
+      return showToast("No puedes marcar como vendida una playera sin stock.", "error");
+    }
     reclamarEtiquetaTallaParaPlayera(nueva);
     AppState.playeras.push(nueva);
     guardada = nueva;
@@ -2687,11 +2712,19 @@ function aplicarEstadoVenta(id, estado, metodo) {
   const p = AppState.playeras.find(x => x.id === id);
   if (!p) return;
   const antes = playeraVendidaORegalada(p);
+  const estadoAnterior = p.bazarEstado || "Disponible";
+  const estadoPrendaAnterior = p.estado;
+  if (estadoAnterior !== "Vendida" && estado === "Vendida" && (Number(p.stock) || 0) < 1) {
+    return showToast("No puedes marcar como vendida una playera sin stock.", "error");
+  }
   const copia = tomarCopiaEstado();
+  if (!actualizarStockPorCambioEstadoVenta(p, estadoAnterior, estado, estadoPrendaAnterior)) {
+    return showToast("No puedes marcar como vendida una playera sin stock.", "error");
+  }
   p.bazarEstado = estado;
   if (estado === "Vendida") {
     p.metodoPago = metodo || "Efectivo";
-    p.montoTarjeta = p.metodoPago === "Tarjeta" ? (p.precioVenta || 0) * (p.stock || 0) : 0;
+    p.montoTarjeta = p.metodoPago === "Tarjeta" ? (p.precioVenta || 0) : 0;
     p.comisionTerminal = comisionTerminalMonto(p.montoTarjeta, AppState.settings.comisionTerminalPct);
     if (!p.fechaVenta) p.fechaVenta = new Date().toLocaleDateString("sv-SE");
   } else {
@@ -4391,16 +4424,16 @@ function renderBazarDetalle() {
   const todas = AppState.cotizaciones.filter(c => bazarTiene(c, b.id));
   const validas = todas.filter(c => !c.ventaNula);
   const nulas = todas.filter(c => c.ventaNula);
-  const playerasAsignadas = AppState.playeras.filter(p => bazarTiene(p, b.id) && (p.stock || 0) > 0);
+  const playerasAsignadas = AppState.playeras.filter(p => bazarTiene(p, b.id) && ((p.stock || 0) > 0 || cantidadVendidaPlayera(p) > 0));
 
   const totalVendidoPlayeras = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
-    return s + ((p.precioVenta || 0) * (p.stock || 0));
+    return s + ((p.precioVenta || 0) * cantidadVendidaPlayera(p));
   }, 0);
   const gananciaVentasPlayeras = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
     const costoTotalUnit = costoTotalPlayera(p);
-    return s + ((p.precioVenta || 0) - costoTotalUnit) * (p.stock || 0);
+    return s + ((p.precioVenta || 0) - costoTotalUnit) * cantidadVendidaPlayera(p);
   }, 0);
   const perdidaPlayerasNulas = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
@@ -4428,7 +4461,7 @@ function renderBazarDetalle() {
   const gananciaNeta = totalVendido + sumIngresosExtra - costoReal - cierre.comisionTerminal - mermasBazar;
   const playerasVendidas = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") === "Vendida");
   const playerasDisponibles = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") !== "Vendida");
-  const unidadesVendidas = playerasVendidas.reduce((s, p) => s + (p.stock || 0), 0);
+  const unidadesVendidas = playerasVendidas.reduce((s, p) => s + cantidadVendidaPlayera(p), 0);
   const unidadesDisponibles = playerasDisponibles.reduce((s, p) => s + (p.stock || 0), 0);
   const unidadesTotales = unidadesVendidas + unidadesDisponibles;
   const rotacion = unidadesTotales ? Math.round((unidadesVendidas / unidadesTotales) * 100) : 0;
@@ -4572,14 +4605,14 @@ function renderBazarDetalle() {
 
   const nombresPlayeras = items => items.map(p => p.nombre || p.tipo || "Sin nombre");
   const vendidasLabels = nombresPlayeras(playerasVendidas);
-  const vendidasValores = playerasVendidas.map(p => p.stock || 0);
+  const vendidasValores = playerasVendidas.map(p => cantidadVendidaPlayera(p));
   const disponiblesLabels = nombresPlayeras(playerasDisponibles);
   const disponiblesValores = playerasDisponibles.map(p => p.stock || 0);
   const etiquetasVendidas = {};
   playerasVendidas.forEach(p => (p.tags || []).forEach(tagId => {
     const etiqueta = AppState.etiquetas.find(e => e.id === tagId);
     const nombre = etiqueta ? etiqueta.nombre : "Sin etiqueta";
-    etiquetasVendidas[nombre] = (etiquetasVendidas[nombre] || 0) + (p.stock || 0);
+    etiquetasVendidas[nombre] = (etiquetasVendidas[nombre] || 0) + cantidadVendidaPlayera(p);
   }));
   const etiquetasOrdenadas = Object.entries(etiquetasVendidas).sort((a, b) => b[1] - a[1]);
   chartBazarVendidas = renderBazarChart(chartBazarVendidas, "chart-bazar-vendidas", "chart-bazar-vendidas-empty", vendidasLabels, vendidasValores, "Playeras vendidas", colorAcento());
@@ -4657,15 +4690,24 @@ function saveAsignarBazar() {
     const p = AppState.playeras.find(x => x.id === playeraId);
     if (!p) return;
     const antesVendida = playeraVendidaORegalada(p);
+    const estadoAnterior = p.bazarEstado || "Disponible";
+    const estadoNuevo = val("ab-status") || "Disponible";
+    const estadoPrendaAnterior = p.estado;
+    if (estadoAnterior !== "Vendida" && estadoNuevo === "Vendida" && (Number(p.stock) || 0) < 1) {
+      return showToast("No puedes marcar como vendida una playera sin stock.", "error");
+    }
+    if (!actualizarStockPorCambioEstadoVenta(p, estadoAnterior, estadoNuevo, estadoPrendaAnterior)) {
+      return showToast("No puedes marcar como vendida una playera sin stock.", "error");
+    }
     p.bazarId = bazarId;
     p.bazarIds = selectedBazarIds;
-    p.bazarEstado = val("ab-status") || "Disponible";
+    p.bazarEstado = estadoNuevo;
     if (p.bazarEstado === "Vendida" && !p.fechaVenta) p.fechaVenta = new Date().toLocaleDateString("sv-SE");
     // Si se vendió con tarjeta, se calcula y guarda su comisión de terminal (con el %
     // vigente al momento de la venta, para que quede fijo aunque el % cambie después).
     if (p.bazarEstado === "Vendida") {
       p.metodoPago = val("ab-metodo-pago") || "Efectivo";
-      const montoVenta = (p.precioVenta || 0) * (p.stock || 0);
+      const montoVenta = p.precioVenta || 0;
       p.montoTarjeta = p.metodoPago === "Tarjeta" ? montoVenta : 0;
       p.comisionTerminal = comisionTerminalMonto(p.montoTarjeta, AppState.settings.comisionTerminalPct);
     } else {
@@ -4745,15 +4787,15 @@ function getRecommendedStyle(id) {
 function renderEstadisticas() {
   const validCots = AppState.cotizaciones.filter(c => !c.ventaNula);
   const nullCots = AppState.cotizaciones.filter(c => c.ventaNula);
-  const playerasAsignadas = AppState.playeras.filter(p => (bazarIdsDe(p).length || p.ventaRapida) && (p.stock || 0) > 0);
+  const playerasAsignadas = AppState.playeras.filter(p => (bazarIdsDe(p).length || p.ventaRapida) && ((p.stock || 0) > 0 || cantidadVendidaPlayera(p) > 0));
   const totalVendidoPlayeras = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
-    return s + ((p.precioVenta || 0) * (p.stock || 0));
+    return s + ((p.precioVenta || 0) * cantidadVendidaPlayera(p));
   }, 0);
   const totalGananciaPlayeras = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Vendida") return s;
     const costoTotalUnit = costoTotalPlayera(p);
-    return s + ((p.precioVenta || 0) - costoTotalUnit) * (p.stock || 0);
+    return s + ((p.precioVenta || 0) - costoTotalUnit) * cantidadVendidaPlayera(p);
   }, 0);
   const perdidaPlayerasNulas = playerasAsignadas.reduce((s, p) => {
     if ((p.bazarEstado || "Disponible") !== "Venta nula") return s;
