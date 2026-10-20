@@ -549,6 +549,22 @@
           <button type="button" data-seccion="completo" onclick="cambiarSeccionPlayeras('completo')">🗂️ Inventario completo <span class="inv-tab-n" id="inv-tab-n-completo">0</span></button>
           <button type="button" data-seccion="vendidas" onclick="cambiarSeccionPlayeras('vendidas')">✅ Vendidas y regaladas <span class="inv-tab-n" id="inv-tab-n-vendidas">0</span></button>
         </div>
+        <div class="inventory-summary">
+          <div class="inventory-summary-card inventory-summary-cost">
+            <span>Costo total de prendas en stock</span>
+            <strong id="inventory-total-cost">$0.00</strong>
+            <small>Calculado con el costo vigente por pieza y las unidades disponibles.</small>
+          </div>
+          <div class="inventory-summary-card inventory-summary-colors">
+            <span>Unidades disponibles por color</span>
+            <div class="inventory-color-totals">
+              <div><small>Blancas</small><strong id="inventory-total-white">0</strong></div>
+              <div><small>Negras</small><strong id="inventory-total-black">0</strong></div>
+              <div><small>Otros colores</small><strong id="inventory-total-other">0</strong></div>
+            </div>
+            <button type="button" class="btn-secondary" onclick="openModalInventarioColores()">Ver tallas disponibles</button>
+          </div>
+        </div>
         <div class="inv-toolbar">
           <button type="button" class="btn-secondary" id="inv-filtros-btn" onclick="toggleFiltrosPlayeras()" aria-expanded="false">🔎 Filtros <span class="inv-count" id="inv-filtros-count" style="display:none;"></span></button>
           <input type="search" class="filter-select inventory-search" id="inventory-playera-search" placeholder="Buscar playera por nombre, talla o color..." aria-label="Buscar playeras en el inventario" oninput="renderPlayeras()">
@@ -580,6 +596,21 @@
       </section>
       <!-- ======================= /INVENTARIO PLAYERAS ======================= -->
 
+      <div class="modal-overlay" id="modal-inventario-colores">
+        <div class="modal-box modal-box-sm">
+          <div class="modal-header">
+            <h2 class="modal-title">Unidades disponibles por color y talla</h2>
+            <button class="modal-close" data-modal="modal-inventario-colores">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="section-sub">Solo se muestran tallas que tienen prendas disponibles en stock.</p>
+            <div id="inventory-color-sizes" class="inventory-color-sizes"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-modal="modal-inventario-colores">Cerrar</button>
+          </div>
+        </div>
+      </div>
 
       <!-- ======================= INVENTARIO STICKERS ======================= -->
       <section id="page-stickers" class="page-section">
@@ -2139,7 +2170,7 @@
 
       <div class="form-group">
         <label class="form-label">🧾 Cotizaciones relacionadas</label>
-        <p class="form-hint">Elige si el gasto se agrega al costo del estampado o de la prenda en cada cotización. Si seleccionas varias, el monto se reparte proporcionalmente al costo de esa parte (en partes iguales si no hay costo registrado) y se actualiza la ganancia.</p>
+        <p class="form-hint">Elige si el gasto corresponde a la prenda o al estampado de cada cotización. Para estampados puedes seleccionar cuáles incluye; el monto se reparte entre cotizaciones según el costo de las partes elegidas y actualiza la ganancia.</p>
         <div id="gasto-cotizaciones-list" class="gasto-ligar-list" style="max-height:200px;overflow-y:auto;"></div>
       </div>
 

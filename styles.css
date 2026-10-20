@@ -214,6 +214,22 @@ ul{list-style:none;}
   font-size:var(--fs-sm);color:var(--color-text);
 }
 .inventory-search{flex:1;min-width:220px;max-width:420px;}
+.inventory-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:var(--space-3);margin:var(--space-4) 0;}
+.inventory-summary-card{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);}
+.inventory-summary-card>span{font-size:var(--fs-sm);font-weight:700;color:var(--color-text-muted);}
+.inventory-summary-cost>strong{font-size:var(--fs-xl);color:var(--color-text);}
+.inventory-summary-card>small,.inventory-color-totals small{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.inventory-summary-colors .btn-secondary{align-self:flex-start;font-size:var(--fs-xs);}
+.inventory-color-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);}
+.inventory-color-totals>div{display:flex;flex-direction:column;gap:2px;}
+.inventory-color-totals strong{font-size:var(--fs-md);}
+.inventory-color-sizes{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-4);}
+.inventory-color-size-group{padding:var(--space-3);background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);}
+.inventory-color-size-heading,.inventory-size-row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);}
+.inventory-color-size-heading{padding-bottom:var(--space-2);border-bottom:1px solid var(--color-border);}
+.inventory-color-size-heading span{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.inventory-size-row{padding-top:var(--space-2);font-size:var(--fs-sm);}
+@media(max-width:700px){.inventory-summary{grid-template-columns:1fr;}}
 
 /* ============ FORMS ============ */
 .form-row{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);}
@@ -244,6 +260,12 @@ ul{list-style:none;}
 .gasto-cotizacion-label{flex:1;cursor:pointer;}
 .gasto-cotizacion-destino{width:auto;min-width:130px;max-width:160px;}
 .gasto-cotizacion-modo{width:auto;min-width:150px;max-width:190px;}
+.gasto-cotizacion-estampados{flex-basis:100%;margin-left:26px;}
+.gasto-cotizacion-estampados summary{color:var(--color-accent);font-weight:700;cursor:pointer;}
+.gasto-cotizacion-estampados-list{display:flex;flex-direction:column;gap:4px;margin-top:6px;padding:8px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);max-height:150px;overflow:auto;}
+.gasto-cotizacion-estampado{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;font-size:var(--fs-xs);cursor:pointer;}
+.gasto-cotizacion-estampado span{overflow-wrap:anywhere;}
+.gasto-cotizacion-sin-estampados{font-size:var(--fs-xs);color:var(--color-text-muted);}
 @media(max-width:600px){.gasto-cotizacion-item{flex-wrap:wrap;}.gasto-cotizacion-label{min-width:calc(100% - 30px);}.gasto-cotizacion-destino,.gasto-cotizacion-modo{margin-left:26px;}}
 .tag-checkbox{
   display:flex;align-items:center;gap:6px;padding:var(--space-1) var(--space-3);

@@ -703,6 +703,43 @@ function cotizacionesLigadasDeGasto(gasto) {
       ? { id: link, destino: "", modo: "suma", montoAsignado: 0 }
       : { ...link, modo: link.modo || "suma" });
 }
+function claveEstampadoCotizacion(item, itemIndex, estampado, estampadoIndex) {
+  return `prenda:${item.rowId || itemIndex}:estampado:${estampado.id || estampadoIndex}`;
+}
+function opcionesEstampadoCotizacion(cotizacion) {
+  const opciones = [];
+  (cotizacion.items || []).forEach((item, itemIndex) => {
+    const cantidad = Math.max(0, Number(item.cantidad) || 0);
+    const estampados = item.estampados || [];
+    const costoTotal = Math.max(0, Number(getCostoEstampadoEfectivo(item)) || 0) * cantidad;
+    const areas = estampados.map(estampado => Math.max(0, (Number(estampado.anchoCm) || 0) * (Number(estampado.largoCm) || 0)));
+    const areaTotal = areas.reduce((total, area) => total + area, 0);
+    estampados.forEach((estampado, estampadoIndex) => {
+      const area = areas[estampadoIndex];
+      const proporcion = areaTotal > 0 ? area / areaTotal : (estampados.length ? 1 / estampados.length : 0);
+      opciones.push({
+        key: claveEstampadoCotizacion(item, itemIndex, estampado, estampadoIndex),
+        label: `${item.nombre || "Prenda"} · Estampado #${estampadoIndex + 1} (${Number(estampado.anchoCm) || 0} × ${Number(estampado.largoCm) || 0} cm) ×${cantidad}`,
+        costo: costoTotal * proporcion
+      });
+    });
+    if (!estampados.length && costoTotal > 0) {
+      opciones.push({
+        key: `prenda:${item.rowId || itemIndex}:impresion`,
+        label: `${item.nombre || "Prenda"} · Impresión ×${cantidad}`,
+        costo: costoTotal
+      });
+    }
+  });
+  (cotizacion.stickers || []).forEach((sticker, stickerIndex) => {
+    opciones.push({
+      key: `sticker:${sticker.rowId || stickerIndex}`,
+      label: `Sticker: ${sticker.nombre || "Sin nombre"} (${sticker.tamano || "—"}) ×${Number(sticker.cantidad) || 0}`,
+      costo: Math.max(0, Number(sticker.costo) || 0) * Math.max(0, Number(sticker.cantidad) || 0)
+    });
+  });
+  return opciones;
+}
 function renderGastoLigarCotizaciones(seleccionadas) {
   const list = document.getElementById("gasto-cotizaciones-list");
   if (!list) return;
@@ -711,15 +748,30 @@ function renderGastoLigarCotizaciones(seleccionadas) {
   const linksGuardados = new Map(seleccionadas.map(link => [link.id, link]));
   list.innerHTML = cotizaciones.map(cotizacion => {
     const link = linksGuardados.get(cotizacion.id);
+    const opcionesEstampado = opcionesEstampadoCotizacion(cotizacion);
+    const estampadosSeleccionados = Array.isArray(link?.estampadosSeleccionados)
+      ? new Set(link.estampadosSeleccionados)
+      : null;
+    const opcionesHtml = opcionesEstampado.map(opcion => `
+      <label class="gasto-cotizacion-estampado">
+        <input type="checkbox" class="gasto-cotizacion-estampado-cb" data-cotizacion-id="${escapeHtml(cotizacion.id)}" data-estampado-key="${escapeHtml(opcion.key)}"
+          ${estampadosSeleccionados === null || estampadosSeleccionados.has(opcion.key) ? "checked" : ""} onchange="updateGastoCotizacionEstampados(this)">
+        <span>${escapeHtml(opcion.label)}</span>
+        <b>${fmt(opcion.costo)}</b>
+      </label>`).join("");
     return `
     <div class="gasto-ligar-item gasto-cotizacion-item">
       <input type="checkbox" id="gasto-cot-${escapeHtml(cotizacion.id)}" class="gasto-cotizacion-cb" value="${escapeHtml(cotizacion.id)}" ${link ? "checked" : ""}>
       <label class="gasto-cotizacion-label" for="gasto-cot-${escapeHtml(cotizacion.id)}">🧾 ${escapeHtml(cotizacion.folio || "Cotización")} · ${escapeHtml(cotizacion.cliente || "Cliente sin nombre")} · ${fmt(cotizacion.totalVenta || 0)}</label>
-      <select class="form-select gasto-cotizacion-destino" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Asignar gasto para ${escapeHtml(cotizacion.folio || "cotización")}">
+      <select class="form-select gasto-cotizacion-destino" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Asignar gasto para ${escapeHtml(cotizacion.folio || "cotización")}" onchange="toggleGastoCotizacionEstampados(this)">
         <option value="" ${!link?.destino ? "selected" : ""}>Elegir parte…</option>
         <option value="estampado" ${link?.destino === "estampado" ? "selected" : ""}>Estampado</option>
         <option value="prenda" ${link?.destino === "prenda" ? "selected" : ""}>Prenda</option>
-      </select>
+      </select>${opcionesHtml ? `
+      <details class="gasto-cotizacion-estampados" ${link?.destino === "estampado" ? "open" : ""}>
+        <summary>Elegir estampados o stickers (${estampadosSeleccionados === null ? opcionesEstampado.length : estampadosSeleccionados.size} seleccionados)</summary>
+        <div class="gasto-cotizacion-estampados-list">${opcionesHtml}</div>
+      </details>` : `<span class="gasto-cotizacion-sin-estampados">Esta cotización no tiene estampados o stickers.</span>`}
       <select class="form-select gasto-cotizacion-modo" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Cómo aplicar el gasto en ${escapeHtml(cotizacion.folio || "cotización")}">
         <option value="reemplaza" ${(link ? link.modo : "reemplaza") === "reemplaza" ? "selected" : ""}>Reemplaza el estimado</option>
         <option value="suma" ${link && link.modo === "suma" ? "selected" : ""}>Suma como extra</option>
@@ -727,24 +779,62 @@ function renderGastoLigarCotizaciones(seleccionadas) {
     </div>`;
   }).join("") || `<p class="empty-hint">Aún no hay cotizaciones guardadas para ligar a este gasto.</p>`;
 }
-function costoParteCotizacion(cotizacion, destino) {
+function componentesCostoParteCotizacion(cotizacion, destino, estampadosSeleccionados) {
   const prendas = cotizacion.items || [];
   if (destino === "prenda") {
-    return prendas.reduce((total, item) => {
+    const costo = prendas.reduce((total, item) => {
       const costoPrenda = item.prendaCliente ? 0 : Number(item.costoPlayera) || 0;
       return total + (costoPrenda + sobrecargoTalla(item.talla)) * (Number(item.cantidad) || 0);
     }, 0);
+    return [{ key: "prenda", costo }];
   }
-  const costoEstampados = prendas.reduce((total, item) =>
-    total + getCostoEstampadoEfectivo(item) * (Number(item.cantidad) || 0), 0);
-  const costoStickers = (cotizacion.stickers || []).reduce((total, sticker) =>
-    total + (Number(sticker.costo) || 0) * (Number(sticker.cantidad) || 0), 0);
-  return costoEstampados + costoStickers;
+  const opciones = opcionesEstampadoCotizacion(cotizacion);
+  const seleccion = Array.isArray(estampadosSeleccionados) ? new Set(estampadosSeleccionados) : null;
+  return opciones.filter(opcion => seleccion === null || seleccion.has(opcion.key));
+}
+function costoParteCotizacion(cotizacion, destino, estampadosSeleccionados) {
+  return componentesCostoParteCotizacion(cotizacion, destino, estampadosSeleccionados)
+    .reduce((total, componente) => total + componente.costo, 0);
+}
+function resumenReemplazosCotizacion(cotizacion, links) {
+  const estimados = new Map();
+  let real = 0;
+  links.forEach(link => {
+    real += Number(link.montoAsignado) || 0;
+    componentesCostoParteCotizacion(cotizacion, link.destino, link.estampadosSeleccionados)
+      .forEach(componente => {
+        if (!estimados.has(componente.key)) estimados.set(componente.key, componente.costo);
+      });
+  });
+  return { real, estimado: [...estimados.values()].reduce((total, costo) => total + costo, 0) };
+}
+function etiquetaDestinoCotizacion(cotizacion, link) {
+  if (link.destino === "prenda") return "Prenda";
+  if (link.destino !== "estampado") return "Sin asignar";
+  const seleccion = Array.isArray(link.estampadosSeleccionados)
+    ? new Set(link.estampadosSeleccionados)
+    : null;
+  const etiquetas = opcionesEstampadoCotizacion(cotizacion)
+    .filter(opcion => seleccion === null || seleccion.has(opcion.key))
+    .map(opcion => opcion.label);
+  return etiquetas.length ? `Estampado / sticker: ${etiquetas.join(", ")}` : "Estampado";
+}
+function toggleGastoCotizacionEstampados(select) {
+  const fila = select.closest(".gasto-cotizacion-item");
+  const opciones = fila && fila.querySelector(".gasto-cotizacion-estampados");
+  if (opciones) opciones.open = select.value === "estampado";
+}
+function updateGastoCotizacionEstampados(checkbox) {
+  const fila = checkbox.closest(".gasto-cotizacion-item");
+  const detalles = fila && fila.querySelector(".gasto-cotizacion-estampados");
+  if (!detalles) return;
+  const seleccionados = detalles.querySelectorAll(".gasto-cotizacion-estampado-cb:checked").length;
+  detalles.querySelector("summary").textContent = `Elegir estampados o stickers (${seleccionados} seleccionados)`;
 }
 function repartirGastoEntreCotizaciones(links, monto) {
   const elegibles = links.filter(link => link.destino && AppState.cotizaciones.some(c => c.id === link.id));
   const pesos = elegibles.map(link => Math.max(0, costoParteCotizacion(
-    AppState.cotizaciones.find(c => c.id === link.id), link.destino
+    AppState.cotizaciones.find(c => c.id === link.id), link.destino, link.estampadosSeleccionados
   )));
   const sumaPesos = pesos.reduce((total, peso) => total + peso, 0);
   const centavos = Math.max(0, Math.round((Number(monto) || 0) * 100));
@@ -782,12 +872,11 @@ function recalcularCostosCotizacionesPorGastos() {
       .reduce((t, l) => t + (Number(l.montoAsignado) || 0), 0);
     // Gastos "reemplaza": el costo real sustituye al estimado de esa parte. Si varios gastos
     // reemplazan la misma parte, el estimado se quita una sola vez.
-    ["estampado", "prenda"].forEach(destino => {
-      const reemplazos = links.filter(l => l.modo === "reemplaza" && l.destino === destino);
-      if (!reemplazos.length) return;
-      const real = reemplazos.reduce((t, l) => t + (Number(l.montoAsignado) || 0), 0);
-      costoExtra += real - costoParteCotizacion(cotizacion, destino);
-    });
+    const reemplazos = links.filter(link => link.modo === "reemplaza" && link.destino);
+    if (reemplazos.length) {
+      const resumen = resumenReemplazosCotizacion(cotizacion, reemplazos);
+      costoExtra += resumen.real - resumen.estimado;
+    }
     cotizacion.costoBaseSinGastos = costoBase;
     cotizacion.gastosCotizacionCosto = Math.round(costoExtra * 100) / 100;   // puede ser negativo
     cotizacion.totalCosto = Math.max(0, Math.round((costoBase + cotizacion.gastosCotizacionCosto) * 100) / 100);
@@ -944,10 +1033,16 @@ function saveGasto() {
     const modoSel = [...document.querySelectorAll(".gasto-cotizacion-modo")]
       .find(item => item.dataset.cotizacionId === cb.value);
     const destino = selector?.value || "";
-    return { id: cb.value, destino, modo: modoSel?.value || "reemplaza", montoAsignado: 0 };
+    const estampadosSeleccionados = [...document.querySelectorAll(".gasto-cotizacion-estampado-cb:checked")]
+      .filter(item => item.dataset.cotizacionId === cb.value)
+      .map(item => item.dataset.estampadoKey);
+    return { id: cb.value, destino, estampadosSeleccionados, modo: modoSel?.value || "reemplaza", montoAsignado: 0 };
   });
   if (cotizacionesLigadas.some(link => !link.destino)) {
     return showToast("Elige si el gasto corresponde al estampado o a la prenda de cada cotización seleccionada.", "error");
+  }
+  if (cotizacionesLigadas.some(link => link.destino === "estampado" && !link.estampadosSeleccionados.length)) {
+    return showToast("Selecciona al menos un estampado o sticker para cada cotización seleccionada.", "error");
   }
   if (seleccionadas.length && cotizacionesLigadas.length) {
     return showToast("Para no duplicar el monto, liga este gasto a playeras/stickers o a cotizaciones, no a ambos.", "error");
@@ -1068,7 +1163,7 @@ function renderGastos() {
         <summary>Ver cotizaciones ligadas</summary>
         <div class="gasto-desglose-rows">${cotizacionesInfo.map(link => `
           <div class="card-row">
-            <span>${escapeHtml(link.cotizacion.folio || "Cotización")} · ${escapeHtml(link.cotizacion.cliente || "Cliente sin nombre")} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"}${link.modo === "reemplaza" ? " · reemplaza estimado" : ""}</span>
+            <span>${escapeHtml(link.cotizacion.folio || "Cotización")} · ${escapeHtml(link.cotizacion.cliente || "Cliente sin nombre")} · ${escapeHtml(etiquetaDestinoCotizacion(link.cotizacion, link))}${link.modo === "reemplaza" ? " · reemplaza estimado" : ""}</span>
             <button type="button" class="btn-secondary" onclick="viewCotizacion('${link.cotizacion.id}')">Ver · ${fmt(link.montoAsignado || 0)}</button>
           </div>`).join("")}</div>
       </details>` : ""}
@@ -2321,9 +2416,64 @@ function renderAlertaPlayerasSorpresa() {
       </span>
     </div>`;
 }
+function resumenInventarioPlayeras() {
+  const disponibles = playerasDisponibles().filter(playera => (Number(playera.stock) || 0) > 0);
+  const resumen = {
+    totalCosto: disponibles.reduce((total, playera) =>
+      total + costoTotalPlayera(playera) * (Number(playera.stock) || 0), 0),
+    colores: {
+      blancas: { unidades: 0, tallas: new Map() },
+      negras: { unidades: 0, tallas: new Map() },
+      otros: { unidades: 0, tallas: new Map() }
+    }
+  };
+  disponibles.forEach(playera => {
+    const color = colorNombre(playera.colorId).trim().toLocaleLowerCase();
+    const grupo = color === "blanco" ? resumen.colores.blancas : color === "negro" ? resumen.colores.negras : resumen.colores.otros;
+    const cantidad = Number(playera.stock) || 0;
+    const talla = (playera.talla || "").trim().toLocaleUpperCase() || "Sin talla";
+    grupo.unidades += cantidad;
+    grupo.tallas.set(talla, (grupo.tallas.get(talla) || 0) + cantidad);
+  });
+  return resumen;
+}
+function renderResumenInventarioPlayeras() {
+  const resumen = resumenInventarioPlayeras();
+  document.getElementById("inventory-total-cost").textContent = fmt(resumen.totalCosto);
+  document.getElementById("inventory-total-white").textContent = resumen.colores.blancas.unidades;
+  document.getElementById("inventory-total-black").textContent = resumen.colores.negras.unidades;
+  document.getElementById("inventory-total-other").textContent = resumen.colores.otros.unidades;
+}
+function openModalInventarioColores() {
+  const resumen = resumenInventarioPlayeras();
+  const tallasOrdenadas = ["CH", "MD", "G", "XG", "XXG"];
+  const grupos = [
+    ["Blancas", resumen.colores.blancas],
+    ["Negras", resumen.colores.negras],
+    ["Otros colores", resumen.colores.otros]
+  ];
+  document.getElementById("inventory-color-sizes").innerHTML = grupos.map(([nombre, grupo]) => {
+    const tallas = [...grupo.tallas.entries()].sort(([a], [b]) => {
+      const indiceA = tallasOrdenadas.indexOf(a);
+      const indiceB = tallasOrdenadas.indexOf(b);
+      const ordenA = indiceA === -1 ? tallasOrdenadas.length : indiceA;
+      const ordenB = indiceB === -1 ? tallasOrdenadas.length : indiceB;
+      return ordenA - ordenB || a.localeCompare(b, "es", { sensitivity: "base" });
+    });
+    return `
+      <section class="inventory-color-size-group">
+        <div class="inventory-color-size-heading"><strong>${nombre}</strong><span>${grupo.unidades} unidad(es)</span></div>
+        ${tallas.length
+          ? tallas.map(([talla, cantidad]) => `<div class="inventory-size-row"><span>Talla ${escapeHtml(talla)}</span><strong>${cantidad}</strong></div>`).join("")
+          : `<p class="card-meta">Sin prendas disponibles.</p>`}
+      </section>`;
+  }).join("");
+  openModal("modal-inventario-colores");
+}
 function renderPlayeras() {
   renderPlayeraTagChips();
   renderAlertaPlayerasSorpresa();
+  renderResumenInventarioPlayeras();
   const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
   const inventorySearchTerm = document.getElementById("inventory-playera-search").value.trim().toLowerCase();
   const estadoF = document.getElementById("filter-playera-estado").value;
@@ -3384,15 +3534,15 @@ function costoRealDelFormulario(t) {
     extra += m;
     filas.push([`${l.gasto.concepto} (suma extra)`, "+ " + fmt(m)]);
   });
-  [["estampado", "Estampado / stickers"], ["prenda", "Prenda"]].forEach(([destino, nombre]) => {
-    const rs = links.filter(l => l.modo === "reemplaza" && l.destino === destino);
-    if (!rs.length) return;
-    const real = rs.reduce((s, l) => s + (Number(l.montoAsignado) || 0), 0);
-    const est = costoParteCotizacion(ctx, destino);
-    extra += real - est;
-    rs.forEach(l => filas.push([`${l.gasto.concepto} → ${nombre}`, fmt(l.montoAsignado || 0), "accent"]));
-    filas.push([`${nombre}: estimado que se reemplaza`, "− " + fmt(est)]);
-  });
+  const reemplazos = links.filter(link => link.modo === "reemplaza" && link.destino);
+  if (reemplazos.length) {
+    const resumen = resumenReemplazosCotizacion(ctx, reemplazos);
+    extra += resumen.real - resumen.estimado;
+    reemplazos.forEach(link => {
+      filas.push([`${link.gasto.concepto} → ${etiquetaDestinoCotizacion(ctx, link)}`, fmt(link.montoAsignado || 0), "accent"]);
+    });
+    filas.push(["Estimado seleccionado que se reemplaza", "− " + fmt(resumen.estimado)]);
+  }
   return { links, filas, extra, real: Math.max(0, Math.round((t.totalCosto + extra) * 100) / 100) };
 }
 function actualizarBloqueCostos(t) {
@@ -3781,7 +3931,7 @@ function viewCotizacion(id) {
     ${gastosRelacionados.length ? `
     <div class="card-row"><span>Costo base (estimado)</span><span>${fmt(c.costoBaseSinGastos ?? ((c.totalCosto || 0) - (c.gastosCotizacionCosto || 0)))}</span></div>
     <div class="card-meta" style="margin-top:10px;">💸 Gastos ligados</div>
-    ${gastosRelacionados.map(link => `<div class="card-row"><span>${escapeHtml(link.gasto.concepto)} · ${link.destino === "prenda" ? "Prenda" : link.destino === "estampado" ? "Estampado" : "Sin asignar"} · ${link.modo === "reemplaza" ? "reemplaza el estimado" : "suma extra"}</span><span>${fmt(link.montoAsignado || 0)}</span></div>`).join("")}
+    ${gastosRelacionados.map(link => `    <div class="card-row"><span>${escapeHtml(link.gasto.concepto)} · ${escapeHtml(etiquetaDestinoCotizacion(c, link))} · ${link.modo === "reemplaza" ? "reemplaza el estimado" : "suma extra"}</span><span>${fmt(link.montoAsignado || 0)}</span></div>`).join("")}
     <div class="card-row"><span>Efecto neto de los gastos en el costo</span><span>${fmt(c.gastosCotizacionCosto || 0)}</span></div>` : ""}
     <div class="card-row"><span><b>Total costo</b></span><span><b>${fmt(c.totalCosto)}</b></span></div>
     ${c.montoDescuento ? `<div class="card-row"><span>Descuento (${c.descuentoPct}%)</span><span>− ${fmt(c.montoDescuento)}</span></div>` : ""}
@@ -4842,7 +4992,7 @@ Object.assign(window, {
   openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalAsignarConsignacion, openModalBazar,
   openModalBazarDesdeAsignacion, openModalCliente, openModalClienteDetalle, openModalClienteDetalleLegacy, openModalClienteEtiqueta,
   openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalMerma, openModalMermaDesdePlayera,
-  openModalIngresoExtra, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
+  openModalIngresoExtra, openModalInventarioColores, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
   openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
   addBazarExpense, removeBazarExpense, updateBazarCostTotal, updateEfectivoContadoBazar, updateMermaCostoPreview,
   renderCaja, updateFondoCaja, updateEfectivoContadoCaja,
@@ -4855,7 +5005,7 @@ Object.assign(window, {
   saveSettings, saveSticker, saveGasto, saveCompra,
   saveTallaEtiqueta, setClienteEtiquetaFiltro, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
   addGangSheetTipo,
-  toggleGraficaInventarioOptions, onQuoteStickerDtfEspecialChange, onStickerDtfEspecialChange, onStickerDtfTipoChange, onStickerDimensionChange, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras,
+  toggleGraficaInventarioOptions, onQuoteStickerDtfEspecialChange, onStickerDtfEspecialChange, onStickerDtfTipoChange, onStickerDimensionChange, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras, toggleGastoCotizacionEstampados, updateGastoCotizacionEstampados,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
