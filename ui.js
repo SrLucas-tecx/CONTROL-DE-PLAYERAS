@@ -2701,6 +2701,10 @@ function cambiarSeccionPlayeras(seccion) {
   uiFilters.playeraSeccion = ["stock", "completo", "vendidas"].includes(seccion) ? seccion : "stock";
   renderPlayeras();
 }
+function mostrarPlayeraEnSeccionDestino(seccion) {
+  if (!document.getElementById("page-playeras").classList.contains("active")) return;
+  cambiarSeccionPlayeras(seccion);
+}
 function etiquetaEstadoVenta(p) {
   const estado = p.ventaRapida ? "Vendida" : (p.bazarEstado || "Disponible");
   if (estado === "Vendida") return `Vendida ✅${p.metodoPago ? " · " + (p.metodoPago === "Tarjeta" ? "tarjeta" : "efectivo") : ""}`;
@@ -2733,6 +2737,7 @@ function aplicarEstadoVenta(id, estado, metodo) {
   saveState();
   refrescarVistaActual();
   const despues = playeraVendidaORegalada(p);
+  mostrarPlayeraEnSeccionDestino(despues ? "vendidas" : "stock");
   ofrecerDeshacer(despues && !antes ? `${p.nombre}: pasó a Vendidas y regaladas.`
     : (!despues && antes ? `${p.nombre}: volvió a tu inventario.` : `${p.nombre}: estado actualizado.`), copia);
 }
@@ -2757,8 +2762,17 @@ function cambiarEstadoVenta(id) {
 }
 // Aviso cuando guardar una playera la hace pasar de una pestaña a otra.
 function avisarCambioVenta(p, antes, despues) {
-  if (despues && !antes) showToast(`${p.nombre}: pasó a Vendidas y regaladas.`, "success", { accion: "Ver", alAccionar: () => { cambiarSeccionPlayeras("vendidas"); switchPage("playeras"); }, duracion: 5000 });
-  else if (!despues && antes) showToast(`${p.nombre}: volvió a tu inventario.`);
+  if (despues === antes) return;
+  const seccion = despues ? "vendidas" : "stock";
+  mostrarPlayeraEnSeccionDestino(seccion);
+  const mensaje = despues
+    ? `${p.nombre}: pasó a Vendidas y regaladas.`
+    : `${p.nombre}: volvió a tu inventario.`;
+  showToast(mensaje, "success", {
+    accion: "Ver",
+    alAccionar: () => { cambiarSeccionPlayeras(seccion); switchPage("playeras"); },
+    duracion: 5000
+  });
 }
 function onPlayeraEstadoVentaChange() {
   document.getElementById("p-metodo-pago-wrap").style.display = val("p-estado-venta") === "Vendida" ? "block" : "none";
