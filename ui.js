@@ -2564,6 +2564,10 @@ function cambiarResumenCostoInventario(modo) {
   resumenCostoInventarioModo = modo === "produccion" ? "produccion" : "prendas";
   renderResumenInventarioPlayeras();
 }
+function openModalInventarioResumen() {
+  renderResumenInventarioPlayeras();
+  openModal("modal-inventario-resumen");
+}
 function openModalInventarioColores() {
   const resumen = resumenInventarioPlayeras();
   const tallasOrdenadas = ["CH", "MD", "G", "XG", "XXG"];
@@ -5146,7 +5150,7 @@ Object.assign(window, {
   openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalAsignarConsignacion, openModalBazar,
   openModalBazarDesdeAsignacion, openModalCliente, openModalClienteDetalle, openModalClienteDetalleLegacy, openModalClienteEtiqueta,
   openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalMerma, openModalMermaDesdePlayera,
-  openModalIngresoExtra, openModalInventarioColores, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
+  openModalIngresoExtra, openModalInventarioColores, openModalInventarioResumen, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
   openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
   addBazarExpense, removeBazarExpense, updateBazarCostTotal, updateEfectivoContadoBazar, updateMermaCostoPreview,
   renderCaja, updateFondoCaja, updateEfectivoContadoCaja,

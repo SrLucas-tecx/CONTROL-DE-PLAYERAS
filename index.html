@@ -549,34 +549,9 @@
           <button type="button" data-seccion="completo" onclick="cambiarSeccionPlayeras('completo')">🗂️ Inventario completo <span class="inv-tab-n" id="inv-tab-n-completo">0</span></button>
           <button type="button" data-seccion="vendidas" onclick="cambiarSeccionPlayeras('vendidas')">✅ Vendidas y regaladas <span class="inv-tab-n" id="inv-tab-n-vendidas">0</span></button>
         </div>
-        <div class="inventory-summary">
-          <div class="inventory-summary-card inventory-summary-cost">
-            <span id="inventory-total-cost-label">Costo de las puras prendas</span>
-            <strong id="inventory-total-cost">$0.00</strong>
-            <div class="inventory-cost-mode" role="group" aria-label="Tipo de costo mostrado">
-              <button type="button" class="active" data-inventory-cost-mode="prendas" onclick="cambiarResumenCostoInventario('prendas')">Puras prendas</button>
-              <button type="button" data-inventory-cost-mode="produccion" onclick="cambiarResumenCostoInventario('produccion')">Producción total</button>
-            </div>
-            <small id="inventory-total-cost-help">Solo costo de la playera o prenda × unidades disponibles; excluye impresión y estampado.</small>
-            <div class="inventory-summary-status">
-              <span>En proceso <strong id="inventory-units-process">0</strong></span>
-              <span>En stock <strong id="inventory-units-stock">0</strong></span>
-            </div>
-            <button type="button" class="btn-secondary" onclick="openModalInventarioColores()">Ver costos y tallas por color</button>
-          </div>
-          <div class="inventory-summary-card">
-            <span>Valor total de venta</span>
-            <strong id="inventory-total-sale-value">$0.00</strong>
-            <small>Precio de venta actual × unidades disponibles.</small>
-          </div>
-          <div class="inventory-summary-card">
-            <span>Ganancia potencial total</span>
-            <strong id="inventory-total-profit">$0.00</strong>
-            <small>Precio de venta menos costo real por playera (prenda, impresión y recargo de talla) × unidades disponibles.</small>
-          </div>
-        </div>
         <div class="inv-toolbar">
           <button type="button" class="btn-secondary" id="inv-filtros-btn" onclick="toggleFiltrosPlayeras()" aria-expanded="false">🔎 Filtros <span class="inv-count" id="inv-filtros-count" style="display:none;"></span></button>
+          <button type="button" class="btn-secondary" onclick="openModalInventarioResumen()">📊 Ver resumen</button>
           <input type="search" class="filter-select inventory-search" id="inventory-playera-search" placeholder="Buscar playera por nombre, talla o color..." aria-label="Buscar playeras en el inventario" oninput="renderPlayeras()">
           <button type="button" class="btn-secondary" id="inv-filtros-limpiar" onclick="limpiarFiltrosPlayeras()" style="display:none;">Limpiar filtros</button>
           <div class="view-toggle" id="inv-vista-toggle">
@@ -605,6 +580,46 @@
         <div class="empty-state" id="playeras-empty-hint"><div class="empty-ico">👕</div><strong id="playeras-empty-title">Aún no hay playeras</strong><span id="playeras-empty-text">Registra tu primera playera para empezar a controlar tu inventario.</span><button type="button" class="btn-primary" id="playeras-empty-btn" onclick="openModalPlayera()">+ Nueva playera</button></div>
       </section>
       <!-- ======================= /INVENTARIO PLAYERAS ======================= -->
+
+      <div class="modal-overlay" id="modal-inventario-resumen">
+        <div class="modal-box inventory-summary-modal">
+          <div class="modal-header">
+            <h2 class="modal-title">📊 Resumen del inventario</h2>
+            <button class="modal-close" data-modal="modal-inventario-resumen">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="inventory-summary">
+              <div class="inventory-summary-card inventory-summary-cost">
+                <span id="inventory-total-cost-label">Costo de las puras prendas</span>
+                <strong id="inventory-total-cost">$0.00</strong>
+                <div class="inventory-cost-mode" role="group" aria-label="Tipo de costo mostrado">
+                  <button type="button" class="active" data-inventory-cost-mode="prendas" onclick="cambiarResumenCostoInventario('prendas')">Puras prendas</button>
+                  <button type="button" data-inventory-cost-mode="produccion" onclick="cambiarResumenCostoInventario('produccion')">Producción total</button>
+                </div>
+                <small id="inventory-total-cost-help">Solo costo de la playera o prenda × unidades disponibles; excluye impresión y estampado.</small>
+                <div class="inventory-summary-status">
+                  <span>En proceso <strong id="inventory-units-process">0</strong></span>
+                  <span>En stock <strong id="inventory-units-stock">0</strong></span>
+                </div>
+                <button type="button" class="btn-secondary" onclick="openModalInventarioColores()">Ver costos y tallas por color</button>
+              </div>
+              <div class="inventory-summary-card">
+                <span>Valor total de venta</span>
+                <strong id="inventory-total-sale-value">$0.00</strong>
+                <small>Precio de venta actual × unidades disponibles.</small>
+              </div>
+              <div class="inventory-summary-card">
+                <span>Ganancia potencial total</span>
+                <strong id="inventory-total-profit">$0.00</strong>
+                <small>Precio de venta menos costo real por playera (prenda, impresión y recargo de talla) × unidades disponibles.</small>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-modal="modal-inventario-resumen">Cerrar</button>
+          </div>
+        </div>
+      </div>
 
       <div class="modal-overlay" id="modal-inventario-colores">
         <div class="modal-box modal-box-sm">

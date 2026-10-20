@@ -229,6 +229,8 @@ ul{list-style:none;}
 .inventory-cost-mode button{padding:5px 9px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface-alt);color:var(--color-text-muted);font-size:var(--fs-xs);font-weight:700;cursor:pointer;}
 .inventory-cost-mode button.active{border-color:var(--color-accent);background:var(--color-accent-soft);color:var(--color-text);}
 .inventory-summary-card .btn-secondary{align-self:flex-start;font-size:var(--fs-xs);}
+.inventory-summary-modal{width:min(100%,1080px);}
+.inventory-summary-modal .inventory-summary{margin:0;grid-template-columns:repeat(3,minmax(0,1fr));}
 .inventory-color-sizes{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-4);}
 .inventory-color-size-group{padding:var(--space-3);background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);}
 .inventory-color-size-heading,.inventory-size-row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);}
@@ -238,6 +240,7 @@ ul{list-style:none;}
 .inventory-size-row{padding-top:var(--space-2);font-size:var(--fs-sm);}
 @media(max-width:1100px){.inventory-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:700px){.inventory-summary{grid-template-columns:1fr;}}
+@media(max-width:760px){.inventory-summary-modal .inventory-summary{grid-template-columns:1fr;}}
 
 /* ============ FORMS ============ */
 .form-row{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);}
