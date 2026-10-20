@@ -213,6 +213,7 @@ ul{list-style:none;}
   background:var(--color-surface-alt);border:1px solid var(--color-border);
   font-size:var(--fs-sm);color:var(--color-text);
 }
+.inventory-search{flex:1;min-width:220px;max-width:420px;}
 
 /* ============ FORMS ============ */
 .form-row{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);}

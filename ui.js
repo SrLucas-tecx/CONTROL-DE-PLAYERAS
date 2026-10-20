@@ -2325,6 +2325,7 @@ function renderPlayeras() {
   renderPlayeraTagChips();
   renderAlertaPlayerasSorpresa();
   const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
+  const inventorySearchTerm = document.getElementById("inventory-playera-search").value.trim().toLowerCase();
   const estadoF = document.getElementById("filter-playera-estado").value;
   const colorF = document.getElementById("filter-playera-color").value;
   const tallaF = document.getElementById("filter-playera-talla").value;
@@ -2339,6 +2340,8 @@ function renderPlayeras() {
     if (colorF !== "all" && p.colorId !== colorF) return false;
     if (tallaF !== "all" && p.talla !== tallaF) return false;
     if (searchTerm && !p.nombre.toLowerCase().includes(searchTerm)) return false;
+    const datosBusqueda = [p.nombre, p.talla, p.tipo, colorNombre(p.colorId), ...(p.tags || [])].join(" ").toLowerCase();
+    if (inventorySearchTerm && !datosBusqueda.includes(inventorySearchTerm)) return false;
     return true;
   });
   const prioridadColor = nombre => {
@@ -2718,6 +2721,7 @@ function setStickerSizeFilter(size, btn) {
 }
 function renderStickers() {
   const searchTerm = document.getElementById("global-search").value.trim().toLowerCase();
+  const inventorySearchTerm = document.getElementById("inventory-sticker-search").value.trim().toLowerCase();
   const counts = { Chico: 0, Mediano: 0, Grande: 0 };
   AppState.stickers.forEach(s => { counts[s.tamano] = (counts[s.tamano] || 0) + (s.stock || 0); });
   document.getElementById("count-chico").textContent = counts.Chico;
@@ -2728,6 +2732,8 @@ function renderStickers() {
   let list = AppState.stickers.filter(s => {
     if (uiFilters.stickerSize !== "all" && s.tamano !== uiFilters.stickerSize) return false;
     if (searchTerm && !s.nombre.toLowerCase().includes(searchTerm)) return false;
+    const datosBusqueda = [s.nombre, s.tamano, s.notas || ""].join(" ").toLowerCase();
+    if (inventorySearchTerm && !datosBusqueda.includes(inventorySearchTerm)) return false;
     return true;
   });
   const grid = document.getElementById("stickers-grid");

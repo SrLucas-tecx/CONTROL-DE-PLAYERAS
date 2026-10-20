@@ -551,6 +551,7 @@
         </div>
         <div class="inv-toolbar">
           <button type="button" class="btn-secondary" id="inv-filtros-btn" onclick="toggleFiltrosPlayeras()" aria-expanded="false">🔎 Filtros <span class="inv-count" id="inv-filtros-count" style="display:none;"></span></button>
+          <input type="search" class="filter-select inventory-search" id="inventory-playera-search" placeholder="Buscar playera por nombre, talla o color..." aria-label="Buscar playeras en el inventario" oninput="renderPlayeras()">
           <button type="button" class="btn-secondary" id="inv-filtros-limpiar" onclick="limpiarFiltrosPlayeras()" style="display:none;">Limpiar filtros</button>
           <div class="view-toggle" id="inv-vista-toggle">
             <button type="button" data-vista="cuadricula" onclick="cambiarVistaPlayeras('cuadricula')" title="Ver en cuadrícula">▦</button>
@@ -610,6 +611,7 @@
           <button class="filter-chip" data-size="Chico" onclick="setStickerSizeFilter('Chico',this)">Chico</button>
           <button class="filter-chip" data-size="Mediano" onclick="setStickerSizeFilter('Mediano',this)">Mediano</button>
           <button class="filter-chip" data-size="Grande" onclick="setStickerSizeFilter('Grande',this)">Grande</button>
+          <input type="search" class="filter-select inventory-search" id="inventory-sticker-search" placeholder="Buscar estampado por nombre o tamaño..." aria-label="Buscar estampados en el inventario" oninput="renderStickers()">
           <button class="btn-primary" style="margin-left:auto;" onclick="openModalSticker()">+ Nuevo estampado</button>
         </div>
         <div id="stickers-grid" class="cards-grid"></div>
