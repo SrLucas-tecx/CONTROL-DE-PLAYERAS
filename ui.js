@@ -2347,13 +2347,19 @@ function renderPlayeras() {
     if (color === "blanco") return 1;
     return 2;
   };
+  const ordenTallas = ["CH", "MD", "G", "XG", "XXG"];
+  const prioridadTalla = talla => {
+    const indice = ordenTallas.indexOf((talla || "").trim().toLocaleUpperCase());
+    return indice === -1 ? ordenTallas.length : indice;
+  };
   list.sort((a, b) => {
     const colorA = colorNombre(a.colorId);
     const colorB = colorNombre(b.colorId);
     const prioridad = prioridadColor(colorA) - prioridadColor(colorB);
     if (prioridad !== 0) return prioridad;
     const porColor = colorA.localeCompare(colorB, "es", { sensitivity: "base" });
-    return porColor || a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" });
+    const porTalla = prioridadTalla(a.talla) - prioridadTalla(b.talla);
+    return porColor || porTalla || a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" });
   });
   const grid = document.getElementById("playeras-grid");
   document.getElementById("playeras-empty-hint").style.display = list.length ? "none" : "block";
