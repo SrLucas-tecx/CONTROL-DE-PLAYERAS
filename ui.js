@@ -2025,7 +2025,10 @@ function onPlayeraDtfTipoChange() {
   updatePlayeraPreview();
 }
 function onPlayeraDtfMetrosChange() {
-  playeraMetrosManuales = true;
+  playeraMetrosManuales = num("p-dtf-metros") > 0;
+  if (!playeraMetrosManuales) {
+    setVal("p-dtf-metros", metrosEstimadosPorArea(areaTotalCm2(playeraEstampadosDraft)).toFixed(5));
+  }
   updatePlayeraPreview();
 }
 function onPlayeraNumEstampadosChange() {
@@ -2105,6 +2108,9 @@ function openModalPlayera(id) {
     onPlayeraEstadoVentaChange();
   }
   renderPlayeraEstampadosList();
+  if (!checked("p-dtf-especial") && !num("p-dtf-metros") && areaTotalCm2(playeraEstampadosDraft) > 0) {
+    setVal("p-dtf-metros", metrosEstimadosPorArea(areaTotalCm2(playeraEstampadosDraft)).toFixed(5));
+  }
   onPlayeraModoCosteoChange();
   onPlayeraDtfTipoChange();
   onPlayeraTieneEtiquetaChange();
