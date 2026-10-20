@@ -3316,6 +3316,7 @@ function computeQuoteTotals() {
 }
 function updateQuoteSummary() {
   const t = computeQuoteTotals();
+  actualizarBloqueCostos(t);
   document.getElementById("sum-venta").textContent = fmt(t.totalVenta);
   document.getElementById("sum-costo").textContent = fmt(t.totalCosto);
   document.getElementById("sum-ganancia").textContent = fmt(t.ganancia);
@@ -3350,6 +3351,65 @@ function updateQuoteSummary() {
       total: fmt(t.totalVenta), ganancia: fmt(t.ganancia)
     });
   }
+}
+// Costo real de la cotización que está en el formulario: aplica los gastos ligados
+// (si se está editando una guardada) con la misma lógica de recalcularCostosCotizacionesPorGastos.
+function costoRealDelFormulario(t) {
+  const editingId = val("quote-editing-id");
+  const ctx = { items: quoteItems, stickers: quoteStickerItems };
+  const links = editingId ? gastosLigadosACotizacion(editingId) : [];
+  const filas = [];
+  let extra = 0;
+  links.filter(l => l.modo !== "reemplaza").forEach(l => {
+    const m = Number(l.montoAsignado) || 0;
+    extra += m;
+    filas.push([`${l.gasto.concepto} (suma extra)`, "+ " + fmt(m)]);
+  });
+  [["estampado", "Estampado / stickers"], ["prenda", "Prenda"]].forEach(([destino, nombre]) => {
+    const rs = links.filter(l => l.modo === "reemplaza" && l.destino === destino);
+    if (!rs.length) return;
+    const real = rs.reduce((s, l) => s + (Number(l.montoAsignado) || 0), 0);
+    const est = costoParteCotizacion(ctx, destino);
+    extra += real - est;
+    rs.forEach(l => filas.push([`${l.gasto.concepto} → ${nombre}`, fmt(l.montoAsignado || 0), "accent"]));
+    filas.push([`${nombre}: estimado que se reemplaza`, "− " + fmt(est)]);
+  });
+  return { links, filas, extra, real: Math.max(0, Math.round((t.totalCosto + extra) * 100) / 100) };
+}
+function actualizarBloqueCostos(t) {
+  const tot = document.getElementById("qc-total");
+  if (!tot) return;
+  const r = costoRealDelFormulario(t);
+  tot.textContent = fmt(t.totalCosto);
+  document.getElementById("qc-sub").textContent = r.links.length
+    ? `Estimado · real con gastos ligados: ${fmt(r.real)}`
+    : "Estimado · sin gastos ligados";
+}
+function verCostosReales() {
+  const t = computeQuoteTotals();
+  const r = costoRealDelFormulario(t);
+  const costoPrendas = quoteItems.reduce((s, i) => s + costoUnitarioItem(i) * (i.cantidad || 0), 0);
+  const costoStickers = quoteStickerItems.reduce((s, i) => s + (i.costo || 0) * (i.cantidad || 0), 0);
+  const gananciaReal = t.totalVenta - r.real - t.comisionTerminal;
+  const secciones = [{ title: "Costo estimado", rows: [
+    ["Prendas (playera + impresión)", fmt(costoPrendas)],
+    ["Stickers", fmt(costoStickers)],
+    ["Total estimado", fmt(t.totalCosto)]
+  ] }];
+  if (r.links.length) {
+    secciones.push({ title: "Gastos reales ligados", rows: r.filas });
+    secciones.push({ title: "Con gastos reales", rows: [
+      ["Costo real de producción", fmt(r.real), "accent"],
+      ["Diferencia contra el estimado", (r.extra >= 0 ? "+ " : "− ") + fmt(Math.abs(r.extra)), r.extra > 0 ? "bad" : "good"],
+      ["Ganancia real", fmt(gananciaReal), gananciaReal >= 0 ? "good" : "bad"]
+    ] });
+  } else {
+    secciones.push({ text: "Esta cotización no tiene gastos ligados. Guárdala y, en Gastos generales, liga un gasto real a ella para ver aquí cuánto queda el costo real." });
+  }
+  window.openQuickDetail({
+    icon: "🔍", title: "Costos reales", subtitle: "Estimado vs. gastos reales ligados",
+    sections: secciones, actions: [{ label: "Cerrar", variant: "primary" }]
+  });
 }
 // Muestra/oculta el campo de "monto con tarjeta" y lo autocompleta según el método
 // elegido: Efectivo → $0, Tarjeta → el total completo, Mixto → lo que capturen a mano.
@@ -4780,5 +4840,5 @@ Object.assign(window, {
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
-  viewCotizacion, recalcularCostosCotizacionesPorGastos
+  viewCotizacion, recalcularCostosCotizacionesPorGastos, verCostosReales
 });
