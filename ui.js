@@ -2161,7 +2161,7 @@ function updatePlayeraPreview() {
   const tipoGanancia = costoRealVinculado !== null ? "real" : "estimada";
   document.getElementById("p-cost-preview").innerHTML = textoCosto
     + (sobrecargo ? ` — Sobrecargo talla: <b>${fmt(sobrecargo)}</b>` : "")
-    + ` — Costo total: <b>${fmt(cTotal)}</b> — Ganancia ${tipoGanancia}: <b>${fmt(ganancia)}</b>`;
+    + ` — Costo total: <b class="playera-cost-total">${fmt(cTotal)}</b> — Ganancia ${tipoGanancia}: <b class="playera-gain${ganancia < 0 ? " is-negative" : ""}">${fmt(ganancia)}</b>`;
   // Reparto de esa ganancia entre artista y estudio — el % siempre se aplica sobre la
   // ganancia (no sobre el precio de venta), tal como se calcula en el cotizador.
   const pct = Math.max(0, Math.min(100, num("p-pct-artista")));
@@ -2170,7 +2170,8 @@ function updatePlayeraPreview() {
   const nombreArtista = (artistaSel && artistaSel.value) ? (AppState.artistas.find(a => a.id === artistaSel.value) || {}).nombre : "";
   const comisionPreview = document.getElementById("p-comision-preview");
   if (comisionPreview) {
-    comisionPreview.innerHTML = `Parte ${nombreArtista ? escapeHtml(nombreArtista) : "artista"} (${pct}%): <b>${fmt(parteArtista)}</b> — Parte estudio (${100 - pct}%): <b>${fmt(ganancia - parteArtista)}</b>`;
+    const parteEstudio = ganancia - parteArtista;
+    comisionPreview.innerHTML = `Parte ${nombreArtista ? escapeHtml(nombreArtista) : "artista"} (${pct}%): <b class="playera-gain${parteArtista < 0 ? " is-negative" : ""}">${fmt(parteArtista)}</b> — Parte estudio (${100 - pct}%): <b class="playera-gain${parteEstudio < 0 ? " is-negative" : ""}">${fmt(parteEstudio)}</b>`;
   }
 }
 // Libera (regresa al stock) lo que esta playera había reclamado de etiquetas de talla

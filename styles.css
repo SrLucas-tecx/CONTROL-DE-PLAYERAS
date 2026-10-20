@@ -270,6 +270,9 @@ ul{list-style:none;}
   font-size:var(--fs-sm);background:var(--color-surface-alt);border:1px dashed var(--color-border);
   border-radius:var(--radius-md);padding:var(--space-3);margin-bottom:var(--space-4);color:var(--color-text-muted);
 }
+.playera-cost-total{color:#fff!important;}
+.playera-gain{color:var(--color-success)!important;}
+.playera-gain.is-negative{color:var(--color-danger)!important;}
 .form-hint{display:block;color:var(--color-text-muted);font-size:var(--fs-xs);margin-top:4px;}
 .cost-preview b{color:var(--color-text);}
 .stock-alerta-banner{
