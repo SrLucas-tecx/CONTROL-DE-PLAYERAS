@@ -2418,13 +2418,14 @@ function renderAlertaPlayerasSorpresa() {
 }
 function resumenInventarioPlayeras() {
   const disponibles = playerasDisponibles().filter(playera => (Number(playera.stock) || 0) > 0);
+  const costoSoloPrenda = playera => playera.prendaCliente ? 0 : (Number(playera.costoPlayera) || 0);
   const resumen = {
     totalCosto: disponibles.reduce((total, playera) =>
-      total + costoTotalPlayera(playera) * (Number(playera.stock) || 0), 0),
+      total + costoSoloPrenda(playera) * (Number(playera.stock) || 0), 0),
     colores: {
-      blancas: { unidades: 0, tallas: new Map() },
-      negras: { unidades: 0, tallas: new Map() },
-      otros: { unidades: 0, tallas: new Map() }
+      blancas: { unidades: 0, costo: 0, tallas: new Map() },
+      negras: { unidades: 0, costo: 0, tallas: new Map() },
+      otros: { unidades: 0, costo: 0, tallas: new Map() }
     }
   };
   disponibles.forEach(playera => {
@@ -2433,6 +2434,7 @@ function resumenInventarioPlayeras() {
     const cantidad = Number(playera.stock) || 0;
     const talla = (playera.talla || "").trim().toLocaleUpperCase() || "Sin talla";
     grupo.unidades += cantidad;
+    grupo.costo += costoSoloPrenda(playera) * cantidad;
     grupo.tallas.set(talla, (grupo.tallas.get(talla) || 0) + cantidad);
   });
   return resumen;
@@ -2440,9 +2442,6 @@ function resumenInventarioPlayeras() {
 function renderResumenInventarioPlayeras() {
   const resumen = resumenInventarioPlayeras();
   document.getElementById("inventory-total-cost").textContent = fmt(resumen.totalCosto);
-  document.getElementById("inventory-total-white").textContent = resumen.colores.blancas.unidades;
-  document.getElementById("inventory-total-black").textContent = resumen.colores.negras.unidades;
-  document.getElementById("inventory-total-other").textContent = resumen.colores.otros.unidades;
 }
 function openModalInventarioColores() {
   const resumen = resumenInventarioPlayeras();
@@ -2462,7 +2461,10 @@ function openModalInventarioColores() {
     });
     return `
       <section class="inventory-color-size-group">
-        <div class="inventory-color-size-heading"><strong>${nombre}</strong><span>${grupo.unidades} unidad(es)</span></div>
+        <div class="inventory-color-size-heading">
+          <strong>${nombre}</strong>
+          <span>${grupo.unidades} playera(s) · Costo total: <b>${fmt(grupo.costo)}</b></span>
+        </div>
         ${tallas.length
           ? tallas.map(([talla, cantidad]) => `<div class="inventory-size-row"><span>Talla ${escapeHtml(talla)}</span><strong>${cantidad}</strong></div>`).join("")
           : `<p class="card-meta">Sin prendas disponibles.</p>`}

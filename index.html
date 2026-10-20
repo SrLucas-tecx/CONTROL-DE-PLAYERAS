@@ -551,18 +551,14 @@
         </div>
         <div class="inventory-summary">
           <div class="inventory-summary-card inventory-summary-cost">
-            <span>Costo total de prendas en stock</span>
+            <span>Costo total de prendas (sin impresión)</span>
             <strong id="inventory-total-cost">$0.00</strong>
-            <small>Calculado con el costo vigente por pieza y las unidades disponibles.</small>
+            <small>Solo costo de la playera o prenda × unidades disponibles. Excluye impresión y estampado.</small>
           </div>
           <div class="inventory-summary-card inventory-summary-colors">
-            <span>Unidades disponibles por color</span>
-            <div class="inventory-color-totals">
-              <div><small>Blancas</small><strong id="inventory-total-white">0</strong></div>
-              <div><small>Negras</small><strong id="inventory-total-black">0</strong></div>
-              <div><small>Otros colores</small><strong id="inventory-total-other">0</strong></div>
-            </div>
-            <button type="button" class="btn-secondary" onclick="openModalInventarioColores()">Ver tallas disponibles</button>
+            <span>Desglose del inventario por color</span>
+            <small>Consulta unidades, costo total y tallas disponibles de cada color.</small>
+            <button type="button" class="btn-secondary" onclick="openModalInventarioColores()">Ver costos y tallas por color</button>
           </div>
         </div>
         <div class="inv-toolbar">
@@ -599,7 +595,7 @@
       <div class="modal-overlay" id="modal-inventario-colores">
         <div class="modal-box modal-box-sm">
           <div class="modal-header">
-            <h2 class="modal-title">Unidades disponibles por color y talla</h2>
+            <h2 class="modal-title">Costos y unidades por color</h2>
             <button class="modal-close" data-modal="modal-inventario-colores">✕</button>
           </div>
           <div class="modal-body">
