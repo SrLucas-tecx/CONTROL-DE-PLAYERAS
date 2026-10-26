@@ -501,9 +501,10 @@ export function totalMermasDeBazar(bazarId) {
 // sobre el precio de venta.
 export function comisionConsignacion(playera, consignacion) {
   const pct = Math.max(0, Math.min(100, (consignacion && consignacion.pctComision) || 0));
-  const ganancia = (playera.precioVenta || 0) - costoTotalPlayera(playera);
+  const precioVenta = Number(playera.precioConsignacion ?? playera.precioVenta) || 0;
+  const ganancia = precioVenta - costoTotalPlayera(playera);
   const parteConsignatario = ganancia * (pct / 100);
-  return { pctConsignatario: pct, pctEstudio: 100 - pct, ganancia, parteConsignatario, parteEstudio: ganancia - parteConsignatario };
+  return { precioVenta, pctConsignatario: pct, pctEstudio: 100 - pct, ganancia, parteConsignatario, parteEstudio: ganancia - parteConsignatario };
 }
 // Resumen de una consignación completa: cuántas piezas se entregaron, cuántas se
 // vendieron, cuántas se devolvieron, y cuánto le toca al consignatario vs. al estudio.
@@ -516,7 +517,7 @@ export function statsConsignacion(consignacion) {
     piezasEntregadas += cantidad;
     if (p.consignacionEstado === "Vendida") {
       piezasVendidas += cantidad;
-      totalVendido += (p.precioVenta || 0) * cantidad;
+      totalVendido += (Number(p.precioConsignacion ?? p.precioVenta) || 0) * cantidad;
       const c = comisionConsignacion(p, consignacion);
       gananciaTotal += c.ganancia * cantidad;
       parteConsignatarioTotal += c.parteConsignatario * cantidad;

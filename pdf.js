@@ -116,6 +116,11 @@ function construirHoja(q, img) {
   const bannerTags = tagsHeader ? `<div style="font-size:12px;color:${ROJO};font-weight:700;margin-bottom:6px;">${tagsHeader}</div>` : "";
 
   const telTxt = q.clienteTelefono ? ` &nbsp;·&nbsp; <b>Tel:</b> ${escapeHtml(q.clienteTelefono)}` : "";
+  const fechasEntrega = q.fechaEntregaPrevista || q.fechaEntregaReal ? `
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin:10px 0;padding:9px 12px;background:#f5f5f5;border-left:3px solid ${ROJO};font-size:12px;">
+      ${q.fechaEntregaPrevista ? `<div><b>Fecha de entrega prevista:</b> ${escapeHtml(fechaCorta(q.fechaEntregaPrevista))}</div>` : ""}
+      ${q.fechaEntregaReal ? `<div><b>Fecha de entrega real:</b> ${escapeHtml(fechaCorta(q.fechaEntregaReal))}</div>` : ""}
+    </div>` : "";
   const subtotalRow = q.montoDescuento ? filaTot("Subtotal", fmt(q.ventaBruta)) + filaTot(`Descuento (${q.descuentoPct}%)`, "- " + fmt(q.montoDescuento), `color:${ROJO};`) : "";
   const urgenteRow = q.montoUrgente ? filaTot(`Recargo por urgencia (${q.recargoUrgentePct}%)`, "+ " + fmt(q.montoUrgente), `color:${ROJO};`) : "";
 
@@ -137,6 +142,7 @@ function construirHoja(q, img) {
         <div><b>Cliente:</b> ${escapeHtml(q.cliente || "Cliente sin nombre")}${telTxt}</div>
         <div><b>Vendedor:</b> ${escapeHtml(q.vendedor || "—")}</div>
       </div>
+      ${fechasEntrega}
       ${bannerTags}
       ${q.ventaNula ? `<p style="font-size:12px;background:#fdeeee;border:1px dashed ${ROJO};border-radius:6px;padding:8px;">Cotización marcada como venta nula (regalo / cortesía).</p>` : ""}
       <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">

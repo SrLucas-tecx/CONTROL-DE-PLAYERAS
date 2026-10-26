@@ -170,38 +170,45 @@
         <div class="quote-step active" data-step="1">
           <div class="quote-meta-card">
             <h2 class="quote-step-title">Cliente y pedido</h2>
-            <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Cliente guardado (opcional)</label>
-              <select id="q-cliente-select" class="form-select" onchange="onQuoteClienteSelectChange(this.value)"><option value="">— Cliente nuevo / sin guardar —</option></select>
-              <input type="hidden" id="q-cliente-id">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Cliente</label>
-              <input type="text" id="q-cliente" class="form-input" placeholder="Nombre del cliente">
-            </div>
-            <div class="form-group">
-              <label class="form-label">WhatsApp del cliente (opcional)</label>
-              <input type="tel" id="q-cliente-tel" class="form-input" placeholder="Ej. 7221234567">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Fecha</label>
-              <input type="date" id="q-fecha" class="form-input">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Vendedor</label>
-              <input type="text" id="q-vendedor" class="form-input" placeholder="Ej. SrLucas">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Artista / colaborador</label>
-              <select id="q-artista" class="form-select" onchange="onQuoteArtistChange()"></select>
-            </div>
-            <div class="form-group" id="q-comision-custom-wrap" style="display:none;">
-              <label class="form-label">% para el artista</label>
-              <input type="number" id="q-comision-pct" class="form-input" min="0" max="100" step="0.1" value="0" onchange="renderQuoteItems()">
-            </div>
-          </div>
-          <div class="form-row">
+            <div class="quote-client-grid">
+              <div class="form-group">
+                <label class="form-label">Cliente guardado (opcional)</label>
+                <select id="q-cliente-select" class="form-select" onchange="onQuoteClienteSelectChange(this.value)"><option value="">— Cliente nuevo / sin guardar —</option></select>
+                <input type="hidden" id="q-cliente-id">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Cliente</label>
+                <input type="text" id="q-cliente" class="form-input" placeholder="Nombre del cliente">
+              </div>
+              <div class="form-group">
+                <label class="form-label">WhatsApp del cliente (opcional)</label>
+                <input type="tel" id="q-cliente-tel" class="form-input" placeholder="Ej. 7221234567">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fecha</label>
+                <input type="date" id="q-fecha" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Entrega prevista</label>
+                <input type="date" id="q-fecha-entrega-prevista" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Entrega real</label>
+                <input type="date" id="q-fecha-entrega-real" class="form-input">
+                <span class="form-hint">Se registra al marcar el pedido como entregado.</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Vendedor</label>
+                <input type="text" id="q-vendedor" class="form-input" placeholder="Ej. SrLucas">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Artista / colaborador</label>
+                <select id="q-artista" class="form-select" onchange="onQuoteArtistChange()"></select>
+              </div>
+              <div class="form-group" id="q-comision-custom-wrap" style="display:none;">
+                <label class="form-label">% para el artista</label>
+                <input type="number" id="q-comision-pct" class="form-input" min="0" max="100" step="0.1" value="0" onchange="renderQuoteItems()">
+              </div>
               <div class="form-group">
                 <label class="form-label">Tipo de venta</label>
                 <select id="q-tipo-venta" class="form-select" onchange="onQuoteTipoVentaChange()">
@@ -210,11 +217,10 @@
                 </select>
               </div>
             </div>
-            <div class="form-group">
+            <div class="form-group quote-operational-tags">
             <label class="form-label">Etiquetas operativas</label>
             <div id="q-tags-operativos-container" class="tag-checkbox-list"></div>
           </div>
-          
           </div>
         </div>
 
@@ -1605,6 +1611,7 @@
             <option value="Disponible">🟢 No, sigue disponible</option>
             <option value="Vendida">✅ Vendida</option>
             <option value="Venta nula">🎁 Regalada (venta nula)</option>
+            <option value="Reventa">🔁 Se vuelve a vender (stock 1)</option>
           </select>
           <span class="form-hint">Al guardar, pasa sola a la pestaña "Vendidas y regaladas". Puedes cambiarla cuando quieras.</span>
         </div>
@@ -2319,6 +2326,11 @@
           <option value="Devuelta">↩️ Devuelta / no se vendió</option>
         </select>
       </div>
+      <div class="form-group" id="asc-precio-wrap" style="display:none;">
+        <label class="form-label">Precio de venta acordado por pieza ($)</label>
+        <input type="number" id="asc-precio" class="form-input" min="0" step="0.01" oninput="updateConsignacionPreview()">
+      </div>
+      <div class="consignment-split-preview" id="asc-reparto-preview" aria-live="polite" style="display:none;"></div>
       <p class="cost-preview">¿No está en la lista? Cierra esta ventana y créala primero en "🤝 Consignaciones".</p>
     </div>
     <div class="modal-footer">

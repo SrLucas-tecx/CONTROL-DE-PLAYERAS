@@ -168,6 +168,10 @@ function deshacerUltimaEliminacion() {
 function colorAcento() {
   return getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim() || "#e3363d";
 }
+function fechaLegible(fecha) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha || "");
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : (fecha || "—");
+}
 
 /* Estado vacío reutilizable: ícono + mensaje + botón de acción opcional. */
 function estadoVacio(icono, titulo, texto, accion) {
@@ -2423,8 +2427,9 @@ function savePlayera() {
   const antesVendida = existing ? playeraVendidaORegalada(existing) : false;
   const estadoVentaAnterior = existing ? (existing.bazarEstado || "Disponible") : "Disponible";
   const estadoPrendaAnterior = existing ? existing.estado : "";
-  const estadoVenta = (existing && existing.ventaRapida) ? "Vendida" : (val("p-estado-venta") || "Disponible");
-  const stockCapturado = parseInt(num("p-stock")) || 0;
+  const seVuelveAVender = !(existing && existing.ventaRapida) && val("p-estado-venta") === "Reventa";
+  const estadoVenta = (existing && existing.ventaRapida) ? "Vendida" : (seVuelveAVender ? "Disponible" : (val("p-estado-venta") || "Disponible"));
+  const stockCapturado = seVuelveAVender ? 1 : (parseInt(num("p-stock")) || 0);
   if (estadoVentaAnterior !== "Vendida" && estadoVenta === "Vendida" && stockCapturado < 1) {
     return showToast("No puedes marcar como vendida una playera sin stock.", "error");
   }
@@ -2443,7 +2448,7 @@ function savePlayera() {
     stockMinimo: parseInt(num("p-stock-minimo")) || 0,
     precioVenta: parseFloat(num("p-precio-venta")) || 0,
     precioMayoreo: parseFloat(num("p-precio-mayoreo")) || 0,
-    prioridad: val("p-prioridad"), estado: val("p-estado"),
+    prioridad: val("p-prioridad"), estado: seVuelveAVender ? "En stock" : val("p-estado"),
     artistaId: val("p-artista") || "",
     pctArtista: Math.max(0, Math.min(100, parseFloat(num("p-pct-artista")) || 0)),
     clienteId: val("p-cliente") || "",
@@ -2463,7 +2468,12 @@ function savePlayera() {
     // toggle de etiqueta cosida).
     liberarEtiquetaTallaDePlayera(existing);
     Object.assign(existing, data);
-    actualizarStockPorCambioEstadoVenta(existing, estadoVentaAnterior, estadoVenta, estadoPrendaAnterior);
+    if (seVuelveAVender) {
+      delete existing.stockDescontadoVenta;
+      delete existing.estadoAntesVenta;
+    } else {
+      actualizarStockPorCambioEstadoVenta(existing, estadoVentaAnterior, estadoVenta, estadoPrendaAnterior);
+    }
     reclamarEtiquetaTallaParaPlayera(existing);
     guardada = existing;
   } else {
@@ -2478,7 +2488,7 @@ function savePlayera() {
   saveState(); closeModal("modal-playera"); refreshAllSelects(); renderPlayeras(); renderTallaEtiquetas();
   const despuesVendida = playeraVendidaORegalada(guardada);
   if (despuesVendida !== antesVendida) avisarCambioVenta(guardada, antesVendida, despuesVendida);
-  else showToast("Playera guardada.");
+  else showToast(seVuelveAVender ? "Playera disponible otra vez con 1 pieza en stock." : "Playera guardada.");
 }
 async function deletePlayera(id) {
   const p0 = AppState.playeras.find(x => x.id === id);
@@ -2751,7 +2761,10 @@ function verDetallePlayera(id) {
 
   const ubicacion = [];
   if (bazarIdsDe(p).length) ubicacion.push(["Bazares", `${nombresBazares(p)} · ${p.bazarEstado || "Disponible"}`]);
-  if (p.consignacionId) ubicacion.push(["Consignación", `${nombreConsignacion(p.consignacionId)} · ${p.consignacionEstado || "En consignación"}`]);
+  if (p.consignacionId) {
+    ubicacion.push(["Consignación", `${nombreConsignacion(p.consignacionId)} · ${p.consignacionEstado || "En consignación"}`]);
+    if (p.precioConsignacion !== undefined) ubicacion.push(["Precio acordado", fmt(p.precioConsignacion)]);
+  }
   if (p.clienteId) ubicacion.push(["Encargo para", clienteNombre(p.clienteId) || "—"]);
   if (ubicacion.length) secciones.push({ title: "Dónde está", rows: ubicacion });
   if (p.notas) secciones.push({ title: "Notas", text: p.notas });
@@ -3807,6 +3820,8 @@ function resetQuoteForm() {
   quoteTagsOperativos = [];
   setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-cliente-tel", ""); setVal("q-cliente-id", ""); setVal("q-cliente-select", ""); setVal("q-vendedor", "");
   setVal("q-fecha", new Date().toISOString().slice(0,10));
+  setVal("q-fecha-entrega-prevista", "");
+  setVal("q-fecha-entrega-real", "");
   setVal("q-artista", ""); setVal("q-comision-pct", 0); setVal("q-notas", "");
   setVal("q-tipo-venta", "Menudeo");
   setVal("q-metodo-pago", "Efectivo"); setVal("q-monto-tarjeta", 0); setVal("q-anticipo", 0); setVal("q-fecha-pago", "");
@@ -3832,6 +3847,8 @@ function saveQuote() {
     clienteId: val("q-cliente-id") || "",
     clienteTelefono: val("q-cliente-tel").trim(),
     fecha: val("q-fecha") || new Date().toISOString().slice(0,10),
+    fechaEntregaPrevista: val("q-fecha-entrega-prevista"),
+    fechaEntregaReal: val("q-fecha-entrega-real"),
     vendedor: val("q-vendedor"),
     artistaId: val("q-artista"),
     comisionPctPersonalizado: val("q-artista") === "__custom__" ? num("q-comision-pct") : null,
@@ -3883,6 +3900,8 @@ function buildQuoteWhatsAppText(q) {
   lineas.push(`🧵 *LUCXSTUDIO* — Cotización`);
   lineas.push(`👤 Cliente: ${q.cliente}`);
   if (q.fecha) lineas.push(`📅 Fecha: ${q.fecha}`);
+  if (q.fechaEntregaPrevista) lineas.push(`📦 Entrega prevista: ${q.fechaEntregaPrevista}`);
+  if (q.fechaEntregaReal) lineas.push(`✅ Entrega real: ${q.fechaEntregaReal}`);
   if (q.tipoVenta === "Mayoreo") lineas.push(`📦 Mayoreo`);
   if (q.esUrgente) lineas.push(`🚀 Pedido urgente`);
   lineas.push("");
@@ -3925,7 +3944,7 @@ function buildQuoteContextDesdeForm() {
   return {
     folio: val("quote-editing-id") ? "Edición" : "Nueva",
     cliente: val("q-cliente") || "Cliente sin nombre", clienteTelefono: val("q-cliente-tel"),
-    fecha: val("q-fecha"), vendedor: val("q-vendedor"),
+    fecha: val("q-fecha"), fechaEntregaPrevista: val("q-fecha-entrega-prevista"), fechaEntregaReal: val("q-fecha-entrega-real"), vendedor: val("q-vendedor"),
     items: quoteItems, stickers: quoteStickerItems, serviciosExtra: quoteServiciosExtra,
     notas: val("q-notas"), ventaNula: checked("q-venta-nula"), tipoVenta: val("q-tipo-venta"),
     estado: ((AppState.cotizaciones.find(c => c.id === val("quote-editing-id")) || {}).estado) || "Pendiente",
@@ -3936,7 +3955,7 @@ function buildQuoteContextDesdeForm() {
 function buildQuoteContextDesdeGuardada(c) {
   return {
     folio: c.folio, cliente: c.cliente || "Cliente sin nombre", clienteTelefono: c.clienteTelefono,
-    fecha: c.fecha, vendedor: c.vendedor,
+    fecha: c.fecha, fechaEntregaPrevista: c.fechaEntregaPrevista || "", fechaEntregaReal: c.fechaEntregaReal || "", vendedor: c.vendedor,
     items: c.items, stickers: c.stickers, serviciosExtra: c.serviciosExtra, notas: c.notas,
     ventaNula: c.ventaNula, tipoVenta: c.tipoVenta, totalVenta: c.totalVenta, totalCosto: c.totalCosto,
     ventaBruta: c.ventaBruta, estado: c.estado, fechaPago: c.fechaPago || "",
@@ -4029,6 +4048,7 @@ function renderCotizacionesGuardadas() {
         <span class="card-badge ${c.estado==='Pagado'?'badge-stock':c.estado==='Entregado'?'badge-alta':c.estado==='Confirmado'?'badge-media':'badge-baja'}">${c.estado}</span>
       </div>
       <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length + (c.stickers || []).length} artículo(s) · 🚦 ${escapeHtml(c.estadoProduccion || "Por hacer")}</div>
+      ${(c.fechaEntregaPrevista || c.fechaEntregaReal) ? `<div class="card-meta">📦 Entrega prevista: ${escapeHtml(fechaLegible(c.fechaEntregaPrevista))}${c.fechaEntregaReal ? ` · ✅ Real: ${escapeHtml(fechaLegible(c.fechaEntregaReal))}` : ""}</div>` : ""}
       <div class="card-tags">
         <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
         ${bazarIdsDe(c).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>` : ""}
@@ -4067,6 +4087,7 @@ function viewCotizacion(id) {
   }).join("");
   document.getElementById("ver-cot-body").innerHTML = `
     <div class="card-meta" style="margin-bottom:10px;">Fecha: ${c.fecha} · Vendedor: ${escapeHtml(c.vendedor||"—")} · Artista: ${escapeHtml(c.comisionNombre||"Sin artista")}</div>
+    <div class="card-meta" style="margin-bottom:10px;">📦 Entrega prevista: ${escapeHtml(fechaLegible(c.fechaEntregaPrevista))} · ✅ Entrega real: ${escapeHtml(fechaLegible(c.fechaEntregaReal))}</div>
     <div class="card-tags" style="margin-bottom:10px;">
       <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
       ${bazarIdsDe(c).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>` : ""}
@@ -4101,7 +4122,9 @@ function updateCotizacionEstado() {
   c.estado = val("ver-cot-estado-select");
   // Al marcarla como pagada se anota el día (se puede corregir editando la cotización).
   if (c.estado === "Pagado" && !c.fechaPago) c.fechaPago = new Date().toLocaleDateString("sv-SE");
+  if (c.estado === "Entregado" && !c.fechaEntregaReal) c.fechaEntregaReal = new Date().toLocaleDateString("sv-SE");
   saveState(); renderCotizacionesGuardadas();
+  viewCotizacion(c.id);
   showToast("Estado actualizado.");
 }
 // Cambia la etapa de producción de una cotización (usado tanto desde el modal "Ver
@@ -4110,9 +4133,11 @@ function updateCotizacionProduccion(id, nuevaEtapa) {
   const c = AppState.cotizaciones.find(x => x.id === id);
   if (!c) return;
   c.estadoProduccion = nuevaEtapa;
+  if (nuevaEtapa === "Entregado" && !c.fechaEntregaReal) c.fechaEntregaReal = new Date().toLocaleDateString("sv-SE");
   saveState();
   renderCotizacionesGuardadas();
   renderProduccionKanban();
+  if (viewingCotizacionId === c.id) viewCotizacion(c.id);
 }
 // Envoltura para el selector dentro del modal "Ver cotización": no se puede referenciar
 // directamente la variable de módulo `viewingCotizacionId` desde un atributo HTML inline.
@@ -4135,6 +4160,7 @@ function editCotizacion() {
   quoteServiciosExtra = JSON.parse(JSON.stringify(c.serviciosExtra || []));
   quoteTagsOperativos = JSON.parse(JSON.stringify(c.tagsOperativos || []));
   setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-cliente-tel", c.clienteTelefono || ""); setVal("q-cliente-id", c.clienteId || ""); setVal("q-cliente-select", c.clienteId || ""); setVal("q-fecha", c.fecha);
+  setVal("q-fecha-entrega-prevista", c.fechaEntregaPrevista || ""); setVal("q-fecha-entrega-real", c.fechaEntregaReal || "");
   setVal("q-vendedor", c.vendedor); setVal("q-artista", c.artistaId || "");
   setVal("q-comision-pct", c.comisionPctPersonalizado || 0); setVal("q-notas", c.notas || "");
   setVal("q-tipo-venta", c.tipoVenta || "Menudeo");
@@ -4156,6 +4182,7 @@ function duplicateCotizacion(id) {
   const copy = JSON.parse(JSON.stringify(c));
   copy.id = uid(); copy.folio = siguienteFolio();
   copy.estado = "Pendiente"; copy.fecha = new Date().toISOString().slice(0,10);
+  copy.estadoProduccion = "Por hacer"; copy.fechaEntregaPrevista = ""; copy.fechaEntregaReal = "";
   copy.totalCosto = Number(c.costoBaseSinGastos ?? (c.totalCosto - (c.gastosCotizacionCosto || 0))) || 0;
   copy.costoBaseSinGastos = copy.totalCosto;
   copy.gastosCotizacionCosto = 0;
@@ -4277,8 +4304,9 @@ function renderConsignaciones() {
       <div class="card-row"><span>Devueltas</span><span>${stats.piezasDevueltas}</span></div>
       <div class="card-row"><span>Pendientes (con el consignatario)</span><span>${stats.piezasPendientes}</span></div>
       <div class="card-row"><span>Total vendido</span><span>${fmt(stats.totalVendido)}</span></div>
+      <div class="card-row"><span>Ganancia total</span><span>${fmt(stats.gananciaTotal)}</span></div>
       <div class="card-row"><span>Parte del consignatario</span><span>${fmt(stats.parteConsignatarioTotal)}</span></div>
-      <div class="card-row"><span>Parte del estudio</span><span style="color:var(--color-success);">${fmt(stats.parteEstudioTotal)}</span></div>
+      <div class="card-row"><span>Ganancia para el estudio</span><span style="color:var(--color-success);">${fmt(stats.parteEstudioTotal)}</span></div>
       ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
       <div class="card-actions">
         <button onclick="openModalConsignacion('${c.id}')">✏️ Editar</button>
@@ -4289,7 +4317,28 @@ function renderConsignaciones() {
 }
 // Modal para ligar UNA playera del inventario a una consignación existente (o quitarla).
 function onAscConsignacionChange() {
-  document.getElementById("asc-estado-wrap").style.display = val("asc-consignacion") ? "block" : "none";
+  const asignada = !!val("asc-consignacion");
+  document.getElementById("asc-estado-wrap").style.display = asignada ? "block" : "none";
+  document.getElementById("asc-precio-wrap").style.display = asignada ? "block" : "none";
+  updateConsignacionPreview();
+}
+function updateConsignacionPreview() {
+  const preview = document.getElementById("asc-reparto-preview");
+  const p = AppState.playeras.find(x => x.id === val("asc-playera-id"));
+  const consignacion = AppState.consignaciones.find(x => x.id === val("asc-consignacion"));
+  if (!preview || !p || !consignacion) {
+    if (preview) preview.style.display = "none";
+    return;
+  }
+  const precioVenta = Math.max(0, Number(num("asc-precio")) || 0);
+  const reparto = comisionConsignacion({ ...p, precioConsignacion: precioVenta }, consignacion);
+  preview.innerHTML = `
+    <div><span>Precio acordado</span><strong>${fmt(reparto.precioVenta)}</strong></div>
+    <div><span>Costo de la playera</span><strong>${fmt(costoTotalPlayera(p))}</strong></div>
+    <div><span>Ganancia a repartir</span><strong>${fmt(reparto.ganancia)}</strong></div>
+    <div><span>Consignatario (${reparto.pctConsignatario}%)</span><strong>${fmt(reparto.parteConsignatario)}</strong></div>
+    <div class="consignment-studio-share"><span>Ganancia para el estudio</span><strong>${fmt(reparto.parteEstudio)}</strong></div>`;
+  preview.style.display = "grid";
 }
 function openModalAsignarConsignacion(playeraId) {
   setVal("asc-playera-id", playeraId);
@@ -4297,9 +4346,12 @@ function openModalAsignarConsignacion(playeraId) {
   sel.innerHTML = `<option value="">— Ninguna —</option>` +
     AppState.consignaciones.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)} (${c.pctComision}%)</option>`).join("");
   const p = AppState.playeras.find(x => x.id === playeraId);
-  setVal("asc-consignacion", (p && p.consignacionId) || "");
+  const consignacionId = (p && p.consignacionId) || "";
+  setVal("asc-consignacion", consignacionId);
   setVal("asc-estado", (p && p.consignacionEstado) || "En consignación");
   document.getElementById("asc-estado-wrap").style.display = (p && p.consignacionId) ? "block" : "none";
+  setVal("asc-precio", p ? (p.precioConsignacion ?? p.precioVenta ?? 0) : 0);
+  onAscConsignacionChange();
   openModal("modal-asignar-consignacion");
 }
 function saveAsignarConsignacion() {
@@ -4307,8 +4359,12 @@ function saveAsignarConsignacion() {
   const p = AppState.playeras.find(x => x.id === playeraId);
   if (!p) return;
   const consignacionId = val("asc-consignacion");
+  const precioConsignacion = Number(num("asc-precio")) || 0;
+  if (consignacionId && precioConsignacion < 0) return showToast("El precio de venta no puede ser negativo.", "error");
   p.consignacionId = consignacionId || "";
   p.consignacionEstado = consignacionId ? (val("asc-estado") || "En consignación") : "";
+  if (consignacionId) p.precioConsignacion = precioConsignacion;
+  else delete p.precioConsignacion;
   saveState(); closeModal("modal-asignar-consignacion"); renderPlayeras(); renderConsignaciones();
   showToast(consignacionId ? "Playera asignada a la consignación." : "Playera quitada de la consignación.");
 }
@@ -4694,8 +4750,9 @@ function renderBazarDetalle() {
   if (fechas.length) {
     chartBazarFecha = new Chart(canvasFecha, {
       type: "bar",
+      plugins: [chartValueLabelsPlugin],
       data: { labels: fechas, datasets: [{ label: "Vendido ($)", data: valoresFecha, backgroundColor: colorAcento(), borderRadius: 6 }] },
-      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      options: chartOptionsWithValues({ label: "Vendido ($)" }, "bar")
     });
   }
 
@@ -4708,12 +4765,9 @@ function renderBazarDetalle() {
     if (!labels.length) return null;
     return new Chart(canvas, {
       type: "bar",
+      plugins: [chartValueLabelsPlugin],
       data: { labels, datasets: [{ label, data: values, backgroundColor: color, borderRadius: 6 }] },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-      }
+      options: chartOptionsWithValues({ label }, "bar")
     });
   };
 
@@ -4945,8 +4999,9 @@ function renderEstadisticas() {
   if (bazarLabels.length) {
     chartBazares = new Chart(chartBazarCanvas, {
       type: "bar",
+      plugins: [chartValueLabelsPlugin],
       data: { labels: bazarLabels, datasets: [{ label: "Total vendido ($)", data: bazarValues, backgroundColor: colorAcento(), borderRadius: 6 }] },
-      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      options: chartOptionsWithValues({ label: "Total vendido ($)" }, "bar")
     });
   }
 
@@ -4971,6 +5026,68 @@ function renderCombinacionesRecomendadas() {
   renderCombinacionRecomendada(selectedRecommendedCombination);
 }
 
+function formatChartValue(value, label) {
+  const amount = Number(value) || 0;
+  return /\(\$\)/.test(label || "")
+    ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
+    : amount.toLocaleString("es-MX", { maximumFractionDigits: 2 });
+}
+const chartValueLabelsPlugin = {
+  id: "chartValueLabels",
+  afterDatasetsDraw(chart) {
+    if (chart.config.type === "doughnut" || chart.config.type === "pie") return;
+    const { ctx, chartArea } = chart;
+    ctx.save();
+    ctx.font = "600 11px sans-serif";
+    ctx.fillStyle = chart.options.color || "#b5b3b8";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      const meta = chart.getDatasetMeta(datasetIndex);
+      if (!chart.isDatasetVisible(datasetIndex)) return;
+      meta.data.forEach((element, index) => {
+        const value = Number(dataset.data[index]);
+        if (!Number.isFinite(value) || value === 0) return;
+        const { x, y } = element.getProps(["x", "y"], true);
+        const label = formatChartValue(value, dataset.label);
+        if (chart.options.indexAxis === "y") {
+          ctx.textAlign = value < 0 ? "right" : "left";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, Math.max(chartArea.left + 4, Math.min(chartArea.right - 4, x + (value < 0 ? -6 : 6))), y);
+        } else {
+          ctx.textAlign = "center";
+          ctx.textBaseline = value < 0 ? "top" : "bottom";
+          ctx.fillText(label, x, value < 0 ? Math.min(chartArea.bottom - 2, y + 6) : Math.max(chartArea.top + 24, y - 6));
+        }
+      });
+    });
+    ctx.restore();
+  }
+};
+function chartOptionsWithValues(data, tipo, legendPosition = false) {
+  const esMoneda = /\(\$\)/.test(data.label || "");
+  const formatAxisValue = value => esMoneda
+    ? formatChartValue(value, data.label)
+    : Number(value).toLocaleString("es-MX", { maximumFractionDigits: 2 });
+  const esCircular = tipo === "doughnut" || tipo === "pie";
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: { top: 20 } },
+    plugins: {
+      legend: { display: !!legendPosition, position: legendPosition || "bottom" },
+      tooltip: {
+        callbacks: {
+          label: context => `${context.dataset.label || data.label}: ${formatChartValue(context.raw, context.dataset.label || data.label)}`
+        }
+      }
+    },
+    scales: esCircular ? {} : {
+      y: { beginAtZero: true, grace: "15%", ticks: { callback: formatAxisValue } }
+    }
+  };
+}
+
 function renderCombinacionRecomendada(id) {
   const combination = RECOMMENDED_COMBINATIONS.find(item => item.id === id) || RECOMMENDED_COMBINATIONS[0];
   const style = getRecommendedStyle(combination.id);
@@ -4990,11 +5107,12 @@ function renderCombinacionRecomendada(id) {
   if (!hasData) return;
   recommendedChart = new Chart(canvas, {
     type: style.tipo,
+    plugins: [chartValueLabelsPlugin],
     data: {
       labels: data.labels,
       datasets: [{ label: data.label, data: data.values, backgroundColor: RECOMMENDED_PALETTES[style.paleta], borderColor: RECOMMENDED_PALETTES[style.paleta][0], borderWidth: 2, tension: .25 }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } }, scales: style.tipo === "doughnut" || style.tipo === "pie" ? {} : { y: { beginAtZero: true } } }
+    options: chartOptionsWithValues(data, style.tipo, "bottom")
   });
 }
 
@@ -5086,11 +5204,12 @@ function renderGraficasPersonalizadas() {
     const data = datosGrafica(g.fuente, g.dimension, g.metrica);
     customChartInstances[g.id] = new Chart(canvas, {
       type: g.tipo,
+      plugins: [chartValueLabelsPlugin],
       data: {
         labels: data.labels,
         datasets: [{ label: data.label, data: data.values, backgroundColor: [colorAcento(), "#3fb87f", "#e0a23a", "#8b8b93"], borderColor: colorAcento(), borderWidth: 2, tension: .25 }]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } }, scales: g.tipo === "doughnut" || g.tipo === "pie" ? {} : { y: { beginAtZero: true } } }
+      options: chartOptionsWithValues(data, g.tipo, "bottom")
     });
   });
 }
@@ -5142,7 +5261,7 @@ Object.assign(window, {
   deleteMerma, deleteConsignacion,
   deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
-  onAbStatusChange, onAscConsignacionChange, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
+  onAbStatusChange, onAscConsignacionChange, updateConsignacionPreview, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteDtfEspecialChange, onQuoteItemProductChange,
   onQuoteMetodoPagoChange, onQuoteClienteSelectChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,

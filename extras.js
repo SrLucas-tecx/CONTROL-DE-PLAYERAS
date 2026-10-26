@@ -407,7 +407,7 @@ function detalleApartada(id) {
     icon: "👕", title: p.nombre, subtitle: m.texto,
     sections: [
       { title: "Por qué no se vende aquí", text: m.explica },
-      { rows: [["Stock", `${p.stock || 0} pza`], ["Talla y color", `${p.talla || "—"} · ${colorNombre(p.colorId)}`], ["Precio", fmt(p.precioVenta)]] }
+      { rows: [["Stock", `${p.stock || 0} pza`], ["Talla y color", `${p.talla || "—"} · ${colorNombre(p.colorId)}`], ["Precio", fmt(p.precioConsignacion ?? p.precioVenta)]] }
     ],
     actions: acciones
   });
