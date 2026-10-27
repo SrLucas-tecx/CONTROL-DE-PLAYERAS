@@ -14,7 +14,7 @@ import {
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
-  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, resumenConsignacionesExternas, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
@@ -1723,8 +1723,15 @@ async function deleteBazar(id) {
     p.bazarIds = bazarIdsDe(p).filter(bazarId => bazarId !== id);
     p.bazarId = p.bazarIds[0] || "";
   });
+  AppState.consignaciones.forEach(consignacion => {
+    (consignacion.productos || []).forEach(producto => {
+      (producto.asignaciones || []).forEach(asignacion => {
+        if (asignacion.bazarId === id) asignacion.bazarId = "";
+      });
+    });
+  });
   if (activeBazarId === id) activeBazarId = "";
-  saveState(); renderBazares(); refreshAllSelects(); renderCotizacionesGuardadas(); renderPlayeras();
+  saveState(); renderBazares(); refreshAllSelects(); renderCotizacionesGuardadas(); renderPlayeras(); renderConsignaciones();
   return true;
 }
 async function deleteBazarFromDetalle() {
@@ -4244,29 +4251,199 @@ function renderProduccionKanban() {
 }
 
 /* =================================================================
-   CONSIGNACIÓN (playeras que le das a alguien más para vender)
+   CONSIGNACIÓN DE PRODUCTOS EXTERNOS
 ================================================================= */
+function opcionesBazarConsignacion(selectedId = "") {
+  return `<option value="" ${!selectedId ? "selected" : ""}>— Sin bazar / fuera del bazar —</option>` +
+    AppState.bazares.map(bazar => `<option value="${escapeHtml(bazar.id)}" ${bazar.id === selectedId ? "selected" : ""}>${escapeHtml(bazar.nombre)}</option>`).join("");
+}
+function addConsignacionBazarAsignacion(productoId, asignacion = {}) {
+  const container = document.querySelector(`.cons-bazar-asignaciones[data-producto-id="${productoId}"]`);
+  if (!container) return;
+  const row = document.createElement("div");
+  row.className = "cons-bazar-row";
+  row.innerHTML = `
+    <select class="form-select cons-bazar-id" aria-label="Bazar donde se deja el producto">${opcionesBazarConsignacion(asignacion.bazarId || "")}</select>
+    <input type="number" class="form-input cons-bazar-entregadas" min="0" step="1" value="${Number(asignacion.cantidadEntregada) || 0}" placeholder="Dejadas" aria-label="Unidades dejadas en el bazar">
+    <input type="number" class="form-input cons-bazar-vendidas" min="0" step="1" value="${Number(asignacion.cantidadVendida) || 0}" placeholder="Vendidas" aria-label="Unidades vendidas en el bazar">
+    <input type="number" class="form-input cons-bazar-devueltas" min="0" step="1" value="${Number(asignacion.cantidadDevuelta) || 0}" placeholder="Devueltas" aria-label="Unidades devueltas por el bazar">
+    <button type="button" class="remove-row" title="Quitar asignación" onclick="this.closest('.cons-bazar-row').remove(); updateConsignacionProductosPreview();">✕</button>`;
+  container.appendChild(row);
+  row.querySelectorAll("input,select").forEach(control => control.addEventListener("input", updateConsignacionProductosPreview));
+}
+function addConsignacionProducto(producto = {}) {
+  const list = document.getElementById("cons-productos-list");
+  if (!list) return;
+  const id = producto.id || uid();
+  const card = document.createElement("div");
+  card.className = "cons-producto-card";
+  card.dataset.productoId = id;
+  card.innerHTML = `
+    <div class="cons-producto-header">
+      <strong>Producto externo</strong>
+      <button type="button" class="remove-row" title="Quitar producto" onclick="this.closest('.cons-producto-card').remove(); updateConsignacionProductosPreview();">✕</button>
+    </div>
+    <div class="cons-producto-grid">
+      <div class="form-group">
+        <label class="form-label">Producto / descripción</label>
+        <input type="text" class="form-input cons-producto-nombre" value="${escapeHtml(producto.nombre || "")}" placeholder="Ej. Figura, llavero, merch">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cantidad recibida</label>
+        <input type="number" class="form-input cons-producto-cantidad" min="1" step="1" value="${Number(producto.cantidadRecibida) || 1}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Precio de venta c/u ($)</label>
+        <input type="number" class="form-input cons-producto-precio" min="0" step="0.01" value="${Number(producto.precioVenta) || 0}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valor unitario del dueño ($)</label>
+        <input type="number" class="form-input cons-producto-valor" min="0" step="0.01" value="${Number(producto.valorDueno) || 0}">
+      </div>
+    </div>
+    <div class="cons-bazar-asignaciones" data-producto-id="${escapeHtml(id)}">
+      <span class="cons-bazar-label">Bazares y unidades (entregadas / vendidas / devueltas)</span>
+    </div>
+    ${AppState.bazares.length ? `<button type="button" class="btn-secondary" onclick="addConsignacionBazarAsignacion('${escapeHtml(id)}')">+ Asignar a bazar</button>` : `<p class="empty-hint">Crea primero un bazar para poder asignar inventario a una ubicación.</p>`}
+    <div class="cons-producto-summary"></div>`;
+  list.appendChild(card);
+  card.querySelectorAll(".cons-producto-nombre,.cons-producto-cantidad,.cons-producto-precio,.cons-producto-valor")
+    .forEach(control => control.addEventListener("input", updateConsignacionProductosPreview));
+  (producto.asignaciones || []).forEach(asignacion => addConsignacionBazarAsignacion(id, asignacion));
+  updateConsignacionProductosPreview();
+}
+function productosConsignacionDesdeFormulario() {
+  const productos = [];
+  for (const card of document.querySelectorAll(".cons-producto-card")) {
+    const nombre = card.querySelector(".cons-producto-nombre").value.trim();
+    const cantidadRecibida = Number(card.querySelector(".cons-producto-cantidad").value);
+    const precioVenta = Number(card.querySelector(".cons-producto-precio").value);
+    const valorDueno = Number(card.querySelector(".cons-producto-valor").value);
+    if (!nombre) return { error: "Escribe el nombre o descripción de cada producto." };
+    if (!Number.isInteger(cantidadRecibida) || cantidadRecibida < 1) return { error: `Indica una cantidad recibida válida para ${nombre}.` };
+    if (!Number.isFinite(precioVenta) || precioVenta < 0 || !Number.isFinite(valorDueno) || valorDueno < 0) {
+      return { error: `Revisa el precio y valor del dueño para ${nombre}.` };
+    }
+    const asignaciones = [];
+    for (const row of card.querySelectorAll(".cons-bazar-row")) {
+      const bazarId = row.querySelector(".cons-bazar-id").value;
+      const cantidadEntregada = Number(row.querySelector(".cons-bazar-entregadas").value);
+      const cantidadVendida = Number(row.querySelector(".cons-bazar-vendidas").value);
+      const cantidadDevuelta = Number(row.querySelector(".cons-bazar-devueltas").value);
+      if ([cantidadEntregada, cantidadVendida, cantidadDevuelta].some(cantidad => !Number.isInteger(cantidad) || cantidad < 0)) {
+        return { error: `Las cantidades de ${nombre} deben ser números enteros iguales o mayores a cero.` };
+      }
+      if (!bazarId && cantidadEntregada + cantidadVendida + cantidadDevuelta === 0) continue;
+      if (cantidadVendida + cantidadDevuelta > cantidadEntregada) {
+        return { error: `En ${nombre}, las unidades vendidas y devueltas no pueden superar las entregadas al bazar.` };
+      }
+      if (asignaciones.some(asignacion => asignacion.bazarId === bazarId)) {
+        return { error: `No repitas el mismo bazar dentro del producto ${nombre}.` };
+      }
+      asignaciones.push({ bazarId, cantidadEntregada, cantidadVendida, cantidadDevuelta });
+    }
+    const asignadas = asignaciones.reduce((total, asignacion) => total + asignacion.cantidadEntregada, 0);
+    if (asignadas > cantidadRecibida) return { error: `Las unidades asignadas de ${nombre} superan las recibidas (${cantidadRecibida}).` };
+    productos.push({ id: card.dataset.productoId || uid(), nombre, cantidadRecibida, precioVenta, valorDueno, asignaciones });
+  }
+  if (!productos.length) return { error: "Agrega al menos un producto externo a la consignación." };
+  return { productos };
+}
+function resumenProductosConsignacion(productos, pctComision) {
+  let piezasRecibidas = 0, piezasAsignadas = 0, piezasVendidas = 0, piezasDevueltas = 0;
+  let totalVendido = 0, comisionLucx = 0, pagoDueno = 0, margenReferencia = 0;
+  const porBazar = new Map();
+  productos.forEach(producto => {
+    piezasRecibidas += producto.cantidadRecibida || 0;
+    (producto.asignaciones || []).forEach(asignacion => {
+      const entregadas = Number(asignacion.cantidadEntregada) || 0;
+      const vendidas = Number(asignacion.cantidadVendida) || 0;
+      const devueltas = Number(asignacion.cantidadDevuelta) || 0;
+      const restantes = Math.max(0, entregadas - vendidas - devueltas);
+      piezasAsignadas += entregadas;
+      piezasVendidas += vendidas;
+      piezasDevueltas += devueltas;
+      const venta = vendidas * (Number(producto.precioVenta) || 0);
+      const comision = venta * (pctComision / 100);
+      totalVendido += venta;
+      comisionLucx += comision;
+      pagoDueno += venta - comision;
+      margenReferencia += vendidas * ((Number(producto.precioVenta) || 0) - (Number(producto.valorDueno) || 0));
+      const bazar = AppState.bazares.find(item => item.id === asignacion.bazarId);
+      if (!bazar) return;
+      const actual = porBazar.get(bazar.id) || { nombre: bazar.nombre, entregadas: 0, vendidas: 0, devueltas: 0, restantes: 0, totalVendido: 0, comisionLucx: 0 };
+      actual.entregadas += entregadas;
+      actual.vendidas += vendidas;
+      actual.devueltas += devueltas;
+      actual.restantes += restantes;
+      actual.totalVendido += venta;
+      actual.comisionLucx += comision;
+      porBazar.set(bazar.id, actual);
+    });
+  });
+  return { piezasRecibidas, piezasAsignadas, piezasVendidas, piezasDevueltas, piezasSinAsignar: Math.max(0, piezasRecibidas - piezasAsignadas), piezasEnBazares: Math.max(0, piezasAsignadas - piezasVendidas - piezasDevueltas), totalVendido, comisionLucx, pagoDueno, margenReferencia, porBazar: [...porBazar.values()] };
+}
+function updateConsignacionProductosPreview() {
+  const preview = document.getElementById("cons-reparto-preview");
+  const list = document.getElementById("cons-productos-list");
+  if (!preview || !list) return;
+  const pct = Math.max(0, Math.min(100, Number(num("cons-pct")) || 0));
+  let totalVenta = 0, comision = 0, pagoDueno = 0, margen = 0;
+  list.querySelectorAll(".cons-producto-card").forEach(card => {
+    const nombre = card.querySelector(".cons-producto-nombre").value.trim() || "Producto";
+    const precio = Math.max(0, Number(card.querySelector(".cons-producto-precio").value) || 0);
+    const valor = Math.max(0, Number(card.querySelector(".cons-producto-valor").value) || 0);
+    const vendidas = [...card.querySelectorAll(".cons-bazar-vendidas")].reduce((total, input) => total + Math.max(0, Number(input.value) || 0), 0);
+    const restantes = [...card.querySelectorAll(".cons-bazar-entregadas")].reduce((total, input, index) =>
+      total + Math.max(0, Number(input.value) - (Number(card.querySelectorAll(".cons-bazar-vendidas")[index].value) || 0) - (Number(card.querySelectorAll(".cons-bazar-devueltas")[index].value) || 0)), 0);
+    const importe = precio * vendidas;
+    totalVenta += importe;
+    comision += importe * pct / 100;
+    pagoDueno += importe * (1 - pct / 100);
+    margen += vendidas * (precio - valor);
+    card.querySelector(".cons-producto-summary").textContent = `${vendidas} vendida(s) · ${restantes} en bazares · ventas ${fmt(importe)}`;
+  });
+  preview.innerHTML = `
+    <div><span>Venta registrada</span><strong>${fmt(totalVenta)}</strong></div>
+    <div class="consignment-studio-share"><span>Comisión LUCXSTUDIO (${pct}%)</span><strong>${fmt(comision)}</strong></div>
+    <div><span>Entrega al dueño</span><strong>${fmt(pagoDueno)}</strong></div>
+    <div><span>Margen de referencia (venta − valor del dueño)</span><strong>${fmt(margen)}</strong></div>`;
+}
 function openModalConsignacion(id) {
   setVal("cons-id", id || "");
   document.getElementById("modal-consignacion-title").textContent = id ? "Editar consignación" : "Nueva consignación";
+  document.getElementById("cons-productos-list").innerHTML = "";
   if (id) {
     const c = AppState.consignaciones.find(x => x.id === id);
+    document.getElementById("cons-pct-label").textContent = c.productos?.length
+      ? "% Comisión para LUCXSTUDIO (sobre venta)"
+      : "% Comisión del consignatario (histórica)";
     setVal("cons-nombre", c.nombre); setVal("cons-fecha", c.fecha || ""); setVal("cons-pct", c.pctComision ?? 30);
     setVal("cons-notas", c.notas || "");
+    (c.productos || []).forEach(producto => addConsignacionProducto(producto));
   } else {
+    document.getElementById("cons-pct-label").textContent = "% Comisión para LUCXSTUDIO (sobre venta)";
     setVal("cons-nombre", ""); setVal("cons-fecha", new Date().toISOString().slice(0, 10));
     setVal("cons-pct", 30); setVal("cons-notas", "");
+    addConsignacionProducto();
   }
+  updateConsignacionProductosPreview();
   openModal("modal-consignacion");
 }
 function saveConsignacion() {
   const nombre = val("cons-nombre").trim();
   if (!nombre) return showToast("Indica a quién le das la consignación.", "error");
+  const resultadoProductos = productosConsignacionDesdeFormulario();
   const id = val("cons-id");
+  const existing = id ? AppState.consignaciones.find(x => x.id === id) : null;
+  const esEdicionLegacySinProductos = !!existing && !(existing.productos || []).length
+    && !document.querySelector(".cons-producto-card");
+  if (resultadoProductos.error && !esEdicionLegacySinProductos) return showToast(resultadoProductos.error, "error");
   const data = {
     nombre, fecha: val("cons-fecha"),
     pctComision: Math.max(0, Math.min(100, parseFloat(num("cons-pct")) || 0)),
-    notas: val("cons-notas")
+    notas: val("cons-notas"),
+    productos: resultadoProductos.error ? (existing.productos || []) : resultadoProductos.productos
   };
   if (id) {
     Object.assign(AppState.consignaciones.find(x => x.id === id), data);
@@ -4279,7 +4456,7 @@ function saveConsignacion() {
 // Al borrar la consignación, las playeras que seguían con ella vuelven a quedar libres
 // (sin consignacionId), en vez de quedar apuntando a un registro que ya no existe.
 async function deleteConsignacion(id) {
-  if (!(await pedirConfirmacion("¿Eliminar esta consignación? Las playeras que seguían con ella quedarán libres.", { aviso: "Consignación eliminada." }))) return;
+  if (!(await pedirConfirmacion("¿Eliminar esta consignación y sus productos externos? Las playeras históricas que seguían ligadas quedarán libres.", { aviso: "Consignación eliminada." }))) return;
   AppState.playeras.forEach(p => {
     if (p.consignacionId === id) { p.consignacionId = ""; p.consignacionEstado = ""; }
   });
@@ -4291,14 +4468,36 @@ function renderConsignaciones() {
   if (!grid) return;
   document.getElementById("consignaciones-empty-hint").style.display = AppState.consignaciones.length ? "none" : "block";
   grid.innerHTML = AppState.consignaciones.map(c => {
-    const stats = statsConsignacion(c);
+    const productos = c.productos || [];
+    const resumen = resumenProductosConsignacion(productos, Number(c.pctComision) || 0);
+    const stats = productos.length ? null : statsConsignacion(c);
+    const detalleProductosHtml = productos.map(producto => {
+      const resumenProducto = resumenProductosConsignacion([producto], Number(c.pctComision) || 0);
+      return `<div class="card-row"><span>${escapeHtml(producto.nombre)} · ×${producto.cantidadRecibida} · Venta ${fmt(producto.precioVenta)} · Dueño ${fmt(producto.valorDueno)}</span><span>${resumenProducto.piezasEnBazares} en bazares</span></div>`;
+    }).join("");
+    const bazaresHtml = resumen.porBazar.map(bazar => `
+      <div class="card-row">
+        <span>${escapeHtml(bazar.nombre)}</span>
+        <span>${bazar.vendidas} vendida(s) · ${bazar.devueltas} devuelta(s) · ${bazar.restantes} restante(s)</span>
+      </div>${bazar.restantes ? `<div class="card-meta cons-alerta-bazar">⚠️ Quedan ${bazar.restantes} unidad(es) de esta consignación en ${escapeHtml(bazar.nombre)}.</div>` : ""}`).join("");
     return `
     <div class="card">
       <div class="card-top">
         <span class="card-title">🤝 ${escapeHtml(c.nombre)}</span>
-        <span class="card-badge badge-media">${c.pctComision}% consignatario</span>
+        <span class="card-badge badge-media">${c.pctComision}% ${productos.length ? "para LUCXSTUDIO" : "consignatario (histórico)"}</span>
       </div>
       ${c.fecha ? `<div class="card-meta">📅 Desde ${escapeHtml(c.fecha)}</div>` : ""}
+      ${productos.length ? `
+      <div class="card-row"><span>Productos / unidades recibidas</span><span>${productos.length} / ${resumen.piezasRecibidas}</span></div>
+      ${detalleProductosHtml}
+      <div class="card-row"><span>Vendidas / devueltas / en bazares</span><span>${resumen.piezasVendidas} / ${resumen.piezasDevueltas} / ${resumen.piezasEnBazares}</span></div>
+      ${resumen.piezasSinAsignar ? `<div class="card-meta">📦 ${resumen.piezasSinAsignar} unidad(es) aún sin asignar a bazar</div>` : ""}
+      <div class="card-row"><span>Total vendido</span><span>${fmt(resumen.totalVendido)}</span></div>
+      <div class="card-row"><span>Comisión LUCXSTUDIO</span><span>${fmt(resumen.comisionLucx)}</span></div>
+      <div class="card-row"><span>Para entregar al dueño</span><span>${fmt(resumen.pagoDueno)}</span></div>
+      <div class="card-row"><span>Margen de referencia</span><span>${fmt(resumen.margenReferencia)}</span></div>
+      ${bazaresHtml ? `<div class="card-meta">📍 Seguimiento por bazar</div>${bazaresHtml}` : `<div class="card-meta">Esta consignación aún no tiene productos asignados a bazares.</div>`}
+      ` : `
       <div class="card-row"><span>Piezas entregadas</span><span>${stats.piezasEntregadas}</span></div>
       <div class="card-row"><span>Vendidas</span><span>${stats.piezasVendidas}</span></div>
       <div class="card-row"><span>Devueltas</span><span>${stats.piezasDevueltas}</span></div>
@@ -4306,7 +4505,7 @@ function renderConsignaciones() {
       <div class="card-row"><span>Total vendido</span><span>${fmt(stats.totalVendido)}</span></div>
       <div class="card-row"><span>Ganancia total</span><span>${fmt(stats.gananciaTotal)}</span></div>
       <div class="card-row"><span>Parte del consignatario</span><span>${fmt(stats.parteConsignatarioTotal)}</span></div>
-      <div class="card-row"><span>Ganancia para el estudio</span><span style="color:var(--color-success);">${fmt(stats.parteEstudioTotal)}</span></div>
+      <div class="card-row"><span>Ganancia para el estudio</span><span style="color:var(--color-success);">${fmt(stats.parteEstudioTotal)}</span></div>`}
       ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
       <div class="card-actions">
         <button onclick="openModalConsignacion('${c.id}')">✏️ Editar</button>
@@ -4344,7 +4543,8 @@ function openModalAsignarConsignacion(playeraId) {
   setVal("asc-playera-id", playeraId);
   const sel = document.getElementById("asc-consignacion");
   sel.innerHTML = `<option value="">— Ninguna —</option>` +
-    AppState.consignaciones.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)} (${c.pctComision}%)</option>`).join("");
+    AppState.consignaciones.filter(c => !c.productos?.length)
+      .map(c => `<option value="${c.id}">${escapeHtml(c.nombre)} (${c.pctComision}%)</option>`).join("");
   const p = AppState.playeras.find(x => x.id === playeraId);
   const consignacionId = (p && p.consignacionId) || "";
   setVal("asc-consignacion", consignacionId);
@@ -4610,12 +4810,16 @@ function renderBazarDetalle() {
     return s + costoTotalPlayera(p) * (p.stock || 0);
   }, 0);
   const stickersBazar = resumenVentasStickers(b.id);
-  const totalVendido = validas.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras + stickersBazar.total;
+  const consignacionesBazar = resumenConsignacionesExternas().asignaciones.filter(asignacion => asignacion.bazarId === b.id);
+  const ventaConsignaciones = consignacionesBazar.reduce((total, asignacion) => total + asignacion.totalVendido, 0);
+  const pagoDuenoConsignaciones = consignacionesBazar.reduce((total, asignacion) => total + (asignacion.totalVendido - asignacion.comisionLucx), 0);
+  const comisionConsignaciones = consignacionesBazar.reduce((total, asignacion) => total + asignacion.comisionLucx, 0);
+  const totalVendido = validas.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras + stickersBazar.total + ventaConsignaciones;
   const perdidaCotsNulas = nulas.reduce((s, c) => s + (c.totalCosto || 0), 0);
   // Ganancia ESTIMADA por catálogo: suma del margen que cada playera/cotización trae
   // calculado por su costeo de área DTF. Es solo referencia para comparar diseños,
   // nunca se resta contra el costo del bazar (eso causaba el doble conteo).
-  const gananciaVentas = validas.reduce((s, c) => s + c.ganancia, 0) + gananciaVentasPlayeras + stickersBazar.ganancia - perdidaCotsNulas - perdidaPlayerasNulas;
+  const gananciaVentas = validas.reduce((s, c) => s + c.ganancia, 0) + gananciaVentasPlayeras + stickersBazar.ganancia + comisionConsignaciones - perdidaCotsNulas - perdidaPlayerasNulas;
   const totalRegalado = perdidaCotsNulas + perdidaPlayerasNulas;
   const desglose = gastosBazarPorTipo(b);
   const costoReal = costoBazarReal(b);
@@ -4628,7 +4832,7 @@ function renderBazarDetalle() {
   // que nunca duplica el gasto de DTF/tela.
   const cierre = desgloseCierreBazar(b);
   const mermasBazar = totalMermasDeBazar(b.id);
-  const gananciaNeta = totalVendido + sumIngresosExtra - costoReal - cierre.comisionTerminal - mermasBazar;
+  const gananciaNeta = totalVendido + sumIngresosExtra - pagoDuenoConsignaciones - costoReal - cierre.comisionTerminal - mermasBazar;
   const playerasVendidas = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") === "Vendida");
   const playerasDisponibles = playerasAsignadas.filter(p => (p.bazarEstado || "Disponible") !== "Vendida");
   const unidadesVendidas = playerasVendidas.reduce((s, p) => s + cantidadVendidaPlayera(p), 0);
@@ -4639,7 +4843,7 @@ function renderBazarDetalle() {
 
   document.getElementById("bd-total-vendido").textContent = fmt(totalVendido);
   document.getElementById("bd-ganancia").textContent = fmt(gananciaVentas);
-  document.getElementById("bd-cotizaciones").textContent = todas.length + playerasAsignadas.length;
+  document.getElementById("bd-cotizaciones").textContent = todas.length + playerasAsignadas.length + consignacionesBazar.reduce((total, asignacion) => total + asignacion.cantidadVendida, 0);
   document.getElementById("bd-regalado").textContent = fmt(totalRegalado);
   document.getElementById("bd-costo-bazar").textContent = fmt(costoReal);
   document.getElementById("bd-costo-bazar-sub").textContent = `Pagado/apartado ${fmt(b.montoPagadoBazar || 0)} · Saldo pendiente ${fmt(saldoPendiente)} · Puesto ${fmt(b.costoBaseBazar || 0)} · 🧵 Producción ${fmt(desglose.produccion)} · 🎪 Evento ${fmt(desglose.evento)}${mermasBazar ? ` · 📉 Mermas ${fmt(mermasBazar)}` : ""}`;
@@ -4970,9 +5174,10 @@ function renderEstadisticas() {
     return s + costoTotalPlayera(p) * (p.stock || 0);
   }, 0);
   const stickersTodos = resumenVentasStickers();
-  const totalVendido = validCots.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras + stickersTodos.total;
+  const consignacionesExternas = resumenConsignacionesExternas();
+  const totalVendido = validCots.reduce((s, c) => s + c.totalVenta, 0) + totalVendidoPlayeras + stickersTodos.total + consignacionesExternas.totalVendido;
   const perdidaCotsNulas = nullCots.reduce((s, c) => s + (c.totalCosto || 0), 0);
-  const totalGanancia = validCots.reduce((s, c) => s + c.ganancia, 0) + totalGananciaPlayeras + stickersTodos.ganancia - perdidaCotsNulas - perdidaPlayerasNulas;
+  const totalGanancia = validCots.reduce((s, c) => s + c.ganancia, 0) + totalGananciaPlayeras + stickersTodos.ganancia + consignacionesExternas.comisionLucx - perdidaCotsNulas - perdidaPlayerasNulas;
   const totalMayoreo = validCots.filter(c => c.tipoVenta === "Mayoreo").reduce((s, c) => s + c.totalVenta, 0);
   const totalRegalado = perdidaCotsNulas + perdidaPlayerasNulas;
 
@@ -4982,7 +5187,7 @@ function renderEstadisticas() {
   document.getElementById("stat-total-regalado").textContent = fmt(totalRegalado);
 
   // Ventas por bazar
-  // Por bazar: cotizaciones + playeras vendidas + stickers sueltos (igual que la tabla de Mis Bazares).
+  // Por bazar: cotizaciones, playeras, stickers y productos externos consignados.
   const porBazar = {};
   AppState.bazares.forEach(b => {
     const vendidoBazar = getBazarVentasYGanancia(b.id).totalVendido;
@@ -5261,7 +5466,7 @@ Object.assign(window, {
   deleteMerma, deleteConsignacion,
   deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
-  onAbStatusChange, onAscConsignacionChange, updateConsignacionPreview, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
+  onAbStatusChange, onAscConsignacionChange, updateConsignacionPreview, updateConsignacionProductosPreview, addConsignacionProducto, addConsignacionBazarAsignacion, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteDtfEspecialChange, onQuoteItemProductChange,
   onQuoteMetodoPagoChange, onQuoteClienteSelectChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,

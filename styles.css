@@ -285,6 +285,26 @@ ul{list-style:none;}
 #modal-gasto-cotizacion-popup .modal-box{max-width:620px;}
 #gasto-cotizacion-popup-body{max-height:60vh;overflow:auto;}
 @media(max-width:760px){.gasto-cotizacion-item{grid-template-columns:auto minmax(0,1fr);}.gasto-cotizacion-destino,.gasto-cotizacion-estampados-btn,.gasto-cotizacion-modo-btn{grid-column:2;max-width:100%;}.gasto-cotizacion-label{min-width:0;}}
+.cons-productos-list{display:flex;flex-direction:column;gap:12px;}
+.cons-producto-card{border:1px solid var(--color-border);border-radius:var(--radius-md);padding:12px;background:var(--color-surface-alt);}
+.cons-producto-header,.cons-bazar-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.cons-producto-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.cons-producto-grid .form-group{margin-bottom:8px;}
+.cons-producto-grid .form-group:first-child{grid-column:span 2;}
+.cons-bazar-asignaciones{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.cons-bazar-row{justify-content:flex-start;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--color-border);}
+.cons-bazar-row select{flex:1;min-width:140px;}
+.cons-bazar-row input{width:90px;}
+.cons-bazar-label{font-size:var(--fs-sm);font-weight:600;min-width:100%;}
+.cons-producto-summary{margin-top:8px;font-size:var(--fs-sm);color:var(--color-text-muted);}
+.cons-alerta-bazar{color:var(--color-warning);font-weight:600;}
+.consignment-split-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin:0 0 var(--space-4);padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface-alt);}
+.consignment-split-preview>div{display:flex;justify-content:space-between;gap:12px;min-width:0;}
+.consignment-split-preview span{color:var(--color-text-muted);}
+.consignment-split-preview strong{white-space:nowrap;text-align:right;}
+.consignment-split-preview .consignment-studio-share{color:var(--color-success);}
+@media(max-width:600px){.cons-producto-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.cons-producto-grid .form-group:first-child{grid-column:span 2;}.cons-bazar-row select{min-width:100%;}}
+@media(max-width:380px){.consignment-split-preview{grid-template-columns:minmax(0,1fr);}}
 .tag-checkbox{
   display:flex;align-items:center;gap:6px;padding:var(--space-1) var(--space-3);
   border-radius:var(--radius-full);border:1px solid var(--color-border);

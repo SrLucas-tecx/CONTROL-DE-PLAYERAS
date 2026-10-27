@@ -852,7 +852,7 @@
         <div class="section-header" style="justify-content:space-between;">
           <div>
             <h2 class="section-title">Consignaciones</h2>
-            <p class="section-sub">Playeras que le das a alguien más (otro vendedor, una tienda) para que las venda por ti, con su propio % de comisión.</p>
+            <p class="section-sub">Productos externos que te entregan para vender. Registra precios, asigna unidades a varios bazares y consulta ventas, comisión y sobrantes.</p>
           </div>
           <button class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button>
         </div>
@@ -995,12 +995,12 @@
           <div class="sticker-count-card size-grande">
             <span class="sticker-count-label">📊 Ganancia estimada</span>
             <span class="sticker-count-value" id="bd-ganancia">$0</span>
-            <span class="sticker-count-sub">por costeo de catálogo · solo referencia</span>
+            <span class="sticker-count-sub">incluye comisiones de productos consignados</span>
           </div>
           <div class="sticker-count-card size-mediano">
-            <span class="sticker-count-label">Cotizaciones</span>
+            <span class="sticker-count-label">Ventas / unidades</span>
             <span class="sticker-count-value" id="bd-cotizaciones">0</span>
-            <span class="sticker-count-sub">ligadas a este bazar</span>
+            <span class="sticker-count-sub">cotizaciones, inventario y consignaciones</span>
           </div>
           <div class="sticker-count-card size-chico">
             <span class="sticker-count-label">🎁 Regalado</span>
@@ -1020,7 +1020,7 @@
           <div class="sticker-count-card sticker-count-net" style="background:var(--color-accent-soft);border-color:var(--color-accent);">
             <span class="sticker-count-label">💰 Ganancia real (efectivo)</span>
             <span class="sticker-count-value" id="bd-ganancia-neta">$0</span>
-            <span class="sticker-count-sub">ventas + extra − costo real del bazar</span>
+            <span class="sticker-count-sub">ventas + extra − dueño − costo real del bazar</span>
           </div>
         </div>
 
@@ -2281,8 +2281,8 @@
     <div class="modal-body">
       <input type="hidden" id="cons-id">
       <div class="form-group">
-        <label class="form-label">Consignatario (persona / tienda)</label>
-        <input type="text" id="cons-nombre" class="form-input" placeholder="Ej. Tienda de mi tía">
+        <label class="form-label">Dueño del producto (persona / tienda)</label>
+        <input type="text" id="cons-nombre" class="form-input" placeholder="Ej. Marca o proveedor externo">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -2290,9 +2290,20 @@
           <input type="date" id="cons-fecha" class="form-input">
         </div>
         <div class="form-group">
-          <label class="form-label">% Comisión del consignatario (sobre la ganancia)</label>
-          <input type="number" id="cons-pct" class="form-input" min="0" max="100" step="1" value="30">
+          <label class="form-label" id="cons-pct-label">% Comisión para LUCXSTUDIO (sobre venta)</label>
+          <input type="number" id="cons-pct" class="form-input" min="0" max="100" step="1" value="30" oninput="updateConsignacionProductosPreview()">
         </div>
+      </div>
+      <div class="form-group">
+        <div class="section-header" style="justify-content:space-between;margin-bottom:8px;">
+          <div>
+            <label class="form-label">Productos externos</label>
+            <p class="form-hint">Registra lo que te entregaron para vender. La comisión de LUCXSTUDIO se calcula sobre cada venta.</p>
+          </div>
+          <button type="button" class="btn-secondary" onclick="addConsignacionProducto()">+ Agregar producto</button>
+        </div>
+        <div id="cons-productos-list" class="cons-productos-list"></div>
+        <div class="consignment-split-preview" id="cons-reparto-preview" aria-live="polite"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Notas</label>

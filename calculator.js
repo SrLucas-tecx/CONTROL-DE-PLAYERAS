@@ -231,7 +231,7 @@ export function saldoPendienteCliente(cotizacion) {
 // contar y de dónde sacar el fondo de caja/efectivo contado, arma el mismo desglose
 // (ventas en efectivo, en tarjeta, comisión de terminal, efectivo esperado vs. contado).
 // Lo usan tanto el cierre de un bazar como la Caja general (sin bazar) — Sprint 4.
-function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCaja, efectivoContadoRaw) {
+function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCaja, efectivoContadoRaw, filtroConsignacion) {
   const cots = AppState.cotizaciones.filter(c => !c.ventaNula && filtroCot(c));
   const playerasVendidas = AppState.playeras.filter(p => cantidadVendidaPlayera(p) > 0 && filtroPlayera(p));
   let ventasTarjeta = 0, comisionTerminal = 0, totalVendido = 0;
@@ -250,6 +250,10 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCa
     ventasTarjeta += v.montoTarjeta || 0;
     comisionTerminal += v.comisionTerminal || 0;
   });
+  const consignaciones = resumenConsignacionesExternas();
+  const consignacionesAsignadas = consignaciones.asignaciones.filter(filtroConsignacion || (() => true));
+  const ventaConsignaciones = consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.totalVendido, 0);
+  totalVendido += ventaConsignaciones;
   const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
   const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo;
   const tieneConteo = efectivoContadoRaw !== null && efectivoContadoRaw !== undefined && efectivoContadoRaw !== "";
@@ -260,7 +264,7 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCa
   };
 }
 export function desgloseCierreBazar(bazar) {
-  return desgloseCierreCajaBase(c => bazarTiene(c, bazar.id), p => bazarTiene(p, bazar.id), v => bazarTiene(v, bazar.id), bazar.fondoCaja, bazar.efectivoContado);
+  return desgloseCierreCajaBase(c => bazarTiene(c, bazar.id), p => bazarTiene(p, bazar.id), v => bazarTiene(v, bazar.id), bazar.fondoCaja, bazar.efectivoContado, a => a.bazarId === bazar.id);
 }
 // Caja general (sin bazar): cuenta las ventas que NO tienen ningún bazar asignado — así
 // sirve para el día a día del taller, fuera de cualquier evento.
@@ -270,7 +274,7 @@ export function desgloseCierreCajaGeneral() {
     c => bazarIdsDe(c).length === 0,
     p => bazarIdsDe(p).length === 0,
     v => bazarIdsDe(v).length === 0,
-    cg.fondoCaja, cg.efectivoContado
+    cg.fondoCaja, cg.efectivoContado, a => !a.bazarId
   );
 }
 // Playeras tipo/etiqueta "Bolsa sorpresa" cuyo stock ya llegó (o bajó) al mínimo
@@ -340,7 +344,38 @@ export function totalVentasSinBazar() {
     .reduce((s, p) => s + (p.precioVenta || 0) * cantidadVendidaPlayera(p), 0);
   const stickers = (AppState.ventasStickers || []).filter(v => bazarIdsDe(v).length === 0)
     .reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0);
-  return cots + playeras + stickers;
+  const consignaciones = resumenConsignacionesExternas().asignaciones
+    .filter(asignacion => !asignacion.bazarId)
+    .reduce((total, asignacion) => total + asignacion.totalVendido, 0);
+  return cots + playeras + stickers + consignaciones;
+}
+export function resumenConsignacionesExternas() {
+  const asignaciones = [];
+  (AppState.consignaciones || []).forEach(consignacion => {
+    const pct = Math.max(0, Math.min(100, Number(consignacion.pctComision) || 0));
+    (consignacion.productos || []).forEach(producto => {
+      (producto.asignaciones || []).forEach(asignacion => {
+        const cantidadVendida = Math.max(0, Number(asignacion.cantidadVendida) || 0);
+        const entregadas = Math.max(0, Number(asignacion.cantidadEntregada) || 0);
+        const devueltas = Math.max(0, Number(asignacion.cantidadDevuelta) || 0);
+        const precioVenta = Math.max(0, Number(producto.precioVenta) || 0);
+        const totalVendido = cantidadVendida * precioVenta;
+        const comisionLucx = totalVendido * pct / 100;
+        asignaciones.push({
+          consignacionId: consignacion.id, bazarId: asignacion.bazarId || "",
+          cantidadEntregada: entregadas, cantidadVendida, cantidadDevuelta: devueltas,
+          cantidadRestante: Math.max(0, entregadas - cantidadVendida - devueltas),
+          totalVendido, comisionLucx
+        });
+      });
+    });
+  });
+  return {
+    asignaciones,
+    totalVendido: asignaciones.reduce((total, asignacion) => total + asignacion.totalVendido, 0),
+    comisionLucx: asignaciones.reduce((total, asignacion) => total + asignacion.comisionLucx, 0),
+    cantidadVendida: asignaciones.reduce((total, asignacion) => total + asignacion.cantidadVendida, 0)
+  };
 }
 export function getBazarVentasYGanancia(bazarId) {
   const cotsAsignadas = AppState.cotizaciones.filter(c => bazarTiene(c, bazarId));
@@ -365,10 +400,13 @@ export function getBazarVentasYGanancia(bazarId) {
   }, 0);
 
   const stickers = resumenVentasStickers(bazarId);
+  const consignaciones = resumenConsignacionesExternas().asignaciones.filter(a => a.bazarId === bazarId);
+  const totalVendidoConsignaciones = consignaciones.reduce((total, a) => total + a.totalVendido, 0);
+  const comisionConsignaciones = consignaciones.reduce((total, a) => total + a.comisionLucx, 0);
   return {
-    totalVendido: totalVendidoCots + totalVendidoPlayeras + stickers.total,
-    gananciaVentas: gananciaVentasCots + gananciaVentasPlayeras + stickers.ganancia - perdidaCotsNulas - perdidaPlayerasNulas,
-    cotsCount: cotsAsignadas.length + playerasAsignadas.length + stickers.count
+    totalVendido: totalVendidoCots + totalVendidoPlayeras + stickers.total + totalVendidoConsignaciones,
+    gananciaVentas: gananciaVentasCots + gananciaVentasPlayeras + stickers.ganancia + comisionConsignaciones - perdidaCotsNulas - perdidaPlayerasNulas,
+    cotsCount: cotsAsignadas.length + playerasAsignadas.length + stickers.count + consignaciones.reduce((total, a) => total + a.cantidadVendida, 0)
   };
 }
 
