@@ -14,8 +14,8 @@ const SECCIONES = [
   { id: "inicio",     icon: "🏠", label: "Inicio",     paginas: ["inicio"] },
   { id: "ventas",     icon: "🧮", label: "Ventas",     paginas: ["cotizador", "cotizaciones", "ventas-rapidas", "clientes"] },
   { id: "produccion", icon: "🚦", label: "Producción", paginas: ["produccion", "artes"] },
-  { id: "inventario", icon: "👕", label: "Inventario", paginas: ["playeras", "stickers", "etiquetas", "mermas"] },
-  { id: "negocio",    icon: "🏪", label: "Negocio",    paginas: ["bazares", "consignaciones", "caja", "gastos", "compras", "artistas", "proveedores"] },
+  { id: "inventario", icon: "👕", label: "Inventario", paginas: ["playeras", "stickers", "consignaciones", "etiquetas", "mermas"] },
+  { id: "negocio",    icon: "🏪", label: "Negocio",    paginas: ["bazares", "caja", "gastos", "compras", "artistas", "socios", "proveedores"] },
   { id: "reportes",   icon: "📊", label: "Reportes",   paginas: ["estadisticas", "interes"] },
   { id: "ajustes",    icon: "⚙️", label: "Ajustes",    paginas: ["ajustes"] }
 ];
@@ -25,7 +25,7 @@ const TAB_LABEL = {
   produccion: "🚦 Kanban", artes: "🎨 Artes",
   playeras: "👕 Playeras", stickers: "✂️ Stickers", etiquetas: "🏷️ Etiquetas", mermas: "📉 Mermas",
   bazares: "🏪 Bazares", consignaciones: "🤝 Consignaciones", caja: "💰 Caja", gastos: "💸 Gastos",
-  compras: "🎯 Compras", artistas: "🎨 Artistas", proveedores: "🚚 Proveedores",
+  compras: "🎯 Compras", artistas: "🎨 Artistas", socios: "🤝 Socios", proveedores: "🚚 Proveedores",
   estadisticas: "📊 Estadísticas", interes: "❓ Interés",
   ajustes: "⚙️ Costos"
 };

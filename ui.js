@@ -606,7 +606,97 @@ function renderArtistas() {
 }
 
 /* =================================================================
-   PROVEEDORES
+     SOCIOS Y ASIGNACIÓN DE CONSIGNACIONES
+================================================================= */
+function openModalSocio(id) {
+    const socio = id ? AppState.socios.find(item => item.id === id) : null;
+    setVal("socio-id", id || "");
+    setVal("socio-nombre", socio?.nombre || "");
+    setVal("socio-contacto", socio?.contacto || "");
+    setVal("socio-notas", socio?.notas || "");
+    document.getElementById("modal-socio-title").textContent = id ? "Editar socio" : "Nuevo socio";
+    openModal("modal-socio");
+}
+function saveSocio() {
+    const nombre = val("socio-nombre").trim();
+    if (!nombre) return showToast("Indica el nombre del socio.", "error");
+    const id = val("socio-id");
+    const socio = { nombre, contacto: val("socio-contacto").trim(), notas: val("socio-notas").trim() };
+    if (id) Object.assign(AppState.socios.find(item => item.id === id), socio);
+    else AppState.socios.push({ id: uid(), ...socio });
+    saveState();
+    closeModal("modal-socio");
+    renderSocios();
+    renderConsignaciones();
+    refreshAllSelects();
+    showToast("Socio guardado.");
+}
+async function deleteSocio(id) {
+    if (AppState.consignaciones.some(consignacion => consignacion.socioId === id)) {
+      return showToast("Quita o reasigna las consignaciones de este socio antes de eliminarlo.", "error");
+    }
+    if (!(await pedirConfirmacion("¿Eliminar este socio?", { aviso: "Socio eliminado." }))) return;
+    AppState.socios = AppState.socios.filter(socio => socio.id !== id);
+    saveState();
+    renderSocios();
+}
+function assignConsignacionToSocio(socioId, consignacionId) {
+    const socio = AppState.socios.find(item => item.id === socioId);
+    const consignacion = AppState.consignaciones.find(item => item.id === consignacionId);
+    if (!socio || !consignacion) return showToast("Selecciona un socio y una consignación válidos.", "error");
+    consignacion.socioId = socio.id;
+    saveState();
+    renderSocios();
+    renderConsignaciones();
+    showToast(`Consignación asignada a ${socio.nombre}.`);
+}
+function unassignConsignacionFromSocio(consignacionId) {
+    const consignacion = AppState.consignaciones.find(item => item.id === consignacionId);
+    if (!consignacion) return;
+    delete consignacion.socioId;
+    saveState();
+    renderSocios();
+    renderConsignaciones();
+}
+function renderSocios() {
+    const grid = document.getElementById("socios-grid");
+    if (!grid) return;
+    const empty = document.getElementById("socios-empty-hint");
+    empty.style.display = AppState.socios.length ? "none" : "block";
+    grid.innerHTML = AppState.socios.map(socio => {
+      const consignaciones = AppState.consignaciones.filter(item => item.socioId === socio.id);
+      const opciones = AppState.consignaciones
+        .filter(item => item.socioId !== socio.id)
+        .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.nombre)}</option>`).join("");
+      const asignadas = consignaciones.map(consignacion => `
+        <div class="socio-consignacion-row">
+          <span>🤝 ${escapeHtml(consignacion.nombre)}</span>
+          <button type="button" class="btn-secondary" onclick="unassignConsignacionFromSocio('${escapeHtml(consignacion.id)}')">Quitar</button>
+        </div>`).join("");
+      return `<article class="card socio-card">
+        <div class="card-top">
+          <span class="card-title">${escapeHtml(socio.nombre)}</span>
+          <span class="card-badge badge-media">${consignaciones.length} consignación(es)</span>
+        </div>
+        ${socio.contacto ? `<div class="card-meta">${escapeHtml(socio.contacto)}</div>` : ""}
+        ${socio.notas ? `<div class="card-meta">${escapeHtml(socio.notas)}</div>` : ""}
+        <div class="socio-consignaciones">${asignadas || `<p class="card-meta">Todavía no tiene consignaciones asignadas.</p>`}</div>
+        <div class="socio-asignar-row">
+          <select class="form-select" id="socio-cons-${escapeHtml(socio.id)}" aria-label="Consignación para ${escapeHtml(socio.nombre)}">
+            <option value="">Asignar consignación…</option>${opciones}
+          </select>
+          <button type="button" class="btn-secondary" onclick="assignConsignacionToSocio('${escapeHtml(socio.id)}', document.getElementById('socio-cons-${escapeHtml(socio.id)}').value)">Asignar</button>
+        </div>
+        <div class="card-actions">
+          <button type="button" onclick="openModalSocio('${escapeHtml(socio.id)}')">✏️ Editar</button>
+          <button type="button" class="danger" onclick="deleteSocio('${escapeHtml(socio.id)}')">🗑️ Eliminar</button>
+        </div>
+      </article>`;
+    }).join("");
+}
+
+/* =================================================================
+     PROVEEDORES
 ================================================================= */
 function openModalProveedor(id) {
   setVal("prov-id", id || "");
@@ -4257,30 +4347,46 @@ function opcionesBazarConsignacion(selectedId = "") {
   return `<option value="" ${!selectedId ? "selected" : ""}>— Sin bazar / fuera del bazar —</option>` +
     AppState.bazares.map(bazar => `<option value="${escapeHtml(bazar.id)}" ${bazar.id === selectedId ? "selected" : ""}>${escapeHtml(bazar.nombre)}</option>`).join("");
 }
+function renderConsignacionSocios(selectedId = "") {
+  const select = document.getElementById("cons-socio");
+  if (!select) return;
+  select.innerHTML = `<option value="">Sin socio asociado</option>` +
+    AppState.socios.map(socio => `<option value="${escapeHtml(socio.id)}">${escapeHtml(socio.nombre)}</option>`).join("");
+  select.value = AppState.socios.some(socio => socio.id === selectedId) ? selectedId : "";
+}
+function onConsSocioChange() {
+  const socio = AppState.socios.find(item => item.id === val("cons-socio"));
+  if (socio) setVal("cons-nombre", socio.nombre);
+}
 function addConsignacionBazarAsignacion(productoId, asignacion = {}) {
   const container = document.querySelector(`.cons-bazar-asignaciones[data-producto-id="${productoId}"]`);
   if (!container) return;
   const row = document.createElement("div");
   row.className = "cons-bazar-row";
   row.innerHTML = `
-    <select class="form-select cons-bazar-id" aria-label="Bazar donde se deja el producto">${opcionesBazarConsignacion(asignacion.bazarId || "")}</select>
-    <input type="number" class="form-input cons-bazar-entregadas" min="0" step="1" value="${Number(asignacion.cantidadEntregada) || 0}" placeholder="Dejadas" aria-label="Unidades dejadas en el bazar">
-    <input type="number" class="form-input cons-bazar-vendidas" min="0" step="1" value="${Number(asignacion.cantidadVendida) || 0}" placeholder="Vendidas" aria-label="Unidades vendidas en el bazar">
-    <input type="number" class="form-input cons-bazar-devueltas" min="0" step="1" value="${Number(asignacion.cantidadDevuelta) || 0}" placeholder="Devueltas" aria-label="Unidades devueltas por el bazar">
+    <label class="cons-bazar-field"><span>Bazar / caja</span><select class="form-select cons-bazar-id" aria-label="Bazar donde se deja el producto">${opcionesBazarConsignacion(asignacion.bazarId || "")}</select></label>
+    <label class="cons-bazar-field"><span>Entregadas</span><input type="number" class="form-input cons-bazar-entregadas" min="0" step="1" value="${Number(asignacion.cantidadEntregada) || 0}" aria-label="Unidades dejadas en el bazar"></label>
+    <label class="cons-bazar-field"><span>Vendidas</span><input type="number" class="form-input cons-bazar-vendidas" min="0" step="1" value="${Number(asignacion.cantidadVendida) || 0}" aria-label="Unidades vendidas en el bazar"></label>
+    <label class="cons-bazar-field"><span>Devueltas</span><input type="number" class="form-input cons-bazar-devueltas" min="0" step="1" value="${Number(asignacion.cantidadDevuelta) || 0}" aria-label="Unidades devueltas por el bazar"></label>
     <button type="button" class="remove-row" title="Quitar asignación" onclick="this.closest('.cons-bazar-row').remove(); updateConsignacionProductosPreview();">✕</button>`;
   container.appendChild(row);
-  row.querySelectorAll("input,select").forEach(control => control.addEventListener("input", updateConsignacionProductosPreview));
+  row.querySelectorAll("input,select").forEach(control => {
+    control.addEventListener("input", updateConsignacionProductosPreview);
+    control.addEventListener("change", updateConsignacionProductosPreview);
+  });
 }
 function addConsignacionProducto(producto = {}) {
   const list = document.getElementById("cons-productos-list");
   if (!list) return;
   const id = producto.id || uid();
+  const esPiezaUnica = producto.esPiezaUnica ?? Number(producto.cantidadRecibida || 1) === 1;
   const card = document.createElement("div");
   card.className = "cons-producto-card";
   card.dataset.productoId = id;
+  card.dataset.cantidadAnterior = String(Number(producto.cantidadRecibida) > 1 ? Number(producto.cantidadRecibida) : 2);
   card.innerHTML = `
     <div class="cons-producto-header">
-      <strong>Producto externo</strong>
+      <strong>Producto consignado</strong>
       <button type="button" class="remove-row" title="Quitar producto" onclick="this.closest('.cons-producto-card').remove(); updateConsignacionProductosPreview();">✕</button>
     </div>
     <div class="cons-producto-grid">
@@ -4290,7 +4396,7 @@ function addConsignacionProducto(producto = {}) {
       </div>
       <div class="form-group">
         <label class="form-label">Cantidad recibida</label>
-        <input type="number" class="form-input cons-producto-cantidad" min="1" step="1" value="${Number(producto.cantidadRecibida) || 1}">
+          <input type="number" class="form-input cons-producto-cantidad" min="1" step="1" value="${esPiezaUnica ? 1 : Number(producto.cantidadRecibida) || 1}" ${esPiezaUnica ? "disabled" : ""}>
       </div>
       <div class="form-group">
         <label class="form-label">Precio de venta c/u ($)</label>
@@ -4300,16 +4406,43 @@ function addConsignacionProducto(producto = {}) {
         <label class="form-label">Valor unitario del dueño ($)</label>
         <input type="number" class="form-input cons-producto-valor" min="0" step="0.01" value="${Number(producto.valorDueno) || 0}">
       </div>
-    </div>
-    <div class="cons-bazar-asignaciones" data-producto-id="${escapeHtml(id)}">
-      <span class="cons-bazar-label">Bazares y unidades (entregadas / vendidas / devueltas)</span>
-    </div>
-    ${AppState.bazares.length ? `<button type="button" class="btn-secondary" onclick="addConsignacionBazarAsignacion('${escapeHtml(id)}')">+ Asignar a bazar</button>` : `<p class="empty-hint">Crea primero un bazar para poder asignar inventario a una ubicación.</p>`}
-    <div class="cons-producto-summary"></div>`;
+        <label class="cons-producto-unico">
+          <input type="checkbox" class="cons-producto-unico-toggle" ${esPiezaUnica ? "checked" : ""} onchange="onConsignacionPiezaUnicaChange(this)">
+          <span>Es una sola pieza</span>
+        </label>
+        <div class="cons-producto-total"><span>Valor total de venta</span><strong class="cons-producto-total-valor">${fmt((Number(producto.cantidadRecibida) || 1) * (Number(producto.precioVenta) || 0))}</strong></div>
+      </div>
+      <div class="cons-bazar-asignaciones" data-producto-id="${escapeHtml(id)}">
+        <span class="cons-bazar-label">Ubicación y cantidades</span>
+      </div>
+      <button type="button" class="btn-secondary" onclick="addConsignacionBazarAsignacion('${escapeHtml(id)}')">+ Agregar bazar o caja</button>
+      <div class="cons-producto-summary"></div>`;
   list.appendChild(card);
   card.querySelectorAll(".cons-producto-nombre,.cons-producto-cantidad,.cons-producto-precio,.cons-producto-valor")
-    .forEach(control => control.addEventListener("input", updateConsignacionProductosPreview));
+      .forEach(control => control.addEventListener("input", updateConsignacionProductosPreview));
+  card.querySelectorAll(".cons-producto-cantidad,.cons-producto-precio").forEach(control =>
+      control.addEventListener("input", () => updateConsignacionProductoTotal(card)));
   (producto.asignaciones || []).forEach(asignacion => addConsignacionBazarAsignacion(id, asignacion));
+  updateConsignacionProductosPreview();
+}
+function updateConsignacionProductoTotal(card) {
+  if (!card) return;
+  const cantidad = Number(card.querySelector(".cons-producto-cantidad").value) || 0;
+  const precio = Number(card.querySelector(".cons-producto-precio").value) || 0;
+  card.querySelector(".cons-producto-total-valor").textContent = fmt(cantidad * precio);
+}
+function onConsignacionPiezaUnicaChange(toggle) {
+  const card = toggle.closest(".cons-producto-card");
+  const cantidad = card.querySelector(".cons-producto-cantidad");
+  if (toggle.checked) {
+      if (Number(cantidad.value) > 1) card.dataset.cantidadAnterior = cantidad.value;
+      cantidad.value = 1;
+      cantidad.disabled = true;
+  } else {
+      cantidad.disabled = false;
+      cantidad.value = Math.max(2, Number(card.dataset.cantidadAnterior) || 2);
+  }
+  updateConsignacionProductoTotal(card);
   updateConsignacionProductosPreview();
 }
 function productosConsignacionDesdeFormulario() {
@@ -4317,6 +4450,7 @@ function productosConsignacionDesdeFormulario() {
   for (const card of document.querySelectorAll(".cons-producto-card")) {
     const nombre = card.querySelector(".cons-producto-nombre").value.trim();
     const cantidadRecibida = Number(card.querySelector(".cons-producto-cantidad").value);
+    const esPiezaUnica = card.querySelector(".cons-producto-unico-toggle").checked;
     const precioVenta = Number(card.querySelector(".cons-producto-precio").value);
     const valorDueno = Number(card.querySelector(".cons-producto-valor").value);
     if (!nombre) return { error: "Escribe el nombre o descripción de cada producto." };
@@ -4324,6 +4458,9 @@ function productosConsignacionDesdeFormulario() {
     if (!Number.isFinite(precioVenta) || precioVenta < 0 || !Number.isFinite(valorDueno) || valorDueno < 0) {
       return { error: `Revisa el precio y valor del dueño para ${nombre}.` };
     }
+    const id = card.dataset.productoId || uid();
+    const consignacionExistente = AppState.consignaciones.find(item => item.id === val("cons-id"));
+    const productoExistente = consignacionExistente?.productos?.find(item => item.id === id);
     const asignaciones = [];
     for (const row of card.querySelectorAll(".cons-bazar-row")) {
       const bazarId = row.querySelector(".cons-bazar-id").value;
@@ -4333,18 +4470,23 @@ function productosConsignacionDesdeFormulario() {
       if ([cantidadEntregada, cantidadVendida, cantidadDevuelta].some(cantidad => !Number.isInteger(cantidad) || cantidad < 0)) {
         return { error: `Las cantidades de ${nombre} deben ser números enteros iguales o mayores a cero.` };
       }
-      if (!bazarId && cantidadEntregada + cantidadVendida + cantidadDevuelta === 0) continue;
+      if (cantidadEntregada + cantidadVendida + cantidadDevuelta === 0) continue;
       if (cantidadVendida + cantidadDevuelta > cantidadEntregada) {
         return { error: `En ${nombre}, las unidades vendidas y devueltas no pueden superar las entregadas al bazar.` };
+      }
+      const ventas = productoExistente?.asignaciones?.find(actual => (actual.bazarId || "") === bazarId)?.ventas || [];
+      const cantidadVendidaEnCaja = ventas.reduce((total, venta) => total + (Number(venta.cantidad) || 0), 0);
+      if (cantidadVendida < cantidadVendidaEnCaja) {
+        return { error: `Las unidades vendidas en caja de ${nombre} no se pueden reducir desde esta pantalla.` };
       }
       if (asignaciones.some(asignacion => asignacion.bazarId === bazarId)) {
         return { error: `No repitas el mismo bazar dentro del producto ${nombre}.` };
       }
-      asignaciones.push({ bazarId, cantidadEntregada, cantidadVendida, cantidadDevuelta });
+      asignaciones.push({ bazarId, cantidadEntregada, cantidadVendida, cantidadDevuelta, ventas });
     }
     const asignadas = asignaciones.reduce((total, asignacion) => total + asignacion.cantidadEntregada, 0);
     if (asignadas > cantidadRecibida) return { error: `Las unidades asignadas de ${nombre} superan las recibidas (${cantidadRecibida}).` };
-    productos.push({ id: card.dataset.productoId || uid(), nombre, cantidadRecibida, precioVenta, valorDueno, asignaciones });
+    productos.push({ id, nombre, esPiezaUnica, cantidadRecibida, precioVenta, precioTotal: cantidadRecibida * precioVenta, valorDueno, asignaciones });
   }
   if (!productos.length) return { error: "Agrega al menos un producto externo a la consignación." };
   return { productos };
@@ -4363,7 +4505,10 @@ function resumenProductosConsignacion(productos, pctComision) {
       piezasAsignadas += entregadas;
       piezasVendidas += vendidas;
       piezasDevueltas += devueltas;
-      const venta = vendidas * (Number(producto.precioVenta) || 0);
+      const ventasCaja = asignacion.ventas || [];
+      const cantidadVendidaEnCaja = ventasCaja.reduce((total, venta) => total + (Number(venta.cantidad) || 0), 0);
+      const venta = Math.max(0, vendidas - cantidadVendidaEnCaja) * (Number(producto.precioVenta) || 0) +
+        ventasCaja.reduce((total, registro) => total + (Number(registro.total) || 0), 0);
       const comision = venta * (pctComision / 100);
       totalVendido += venta;
       comisionLucx += comision;
@@ -4388,50 +4533,66 @@ function updateConsignacionProductosPreview() {
   const list = document.getElementById("cons-productos-list");
   if (!preview || !list) return;
   const pct = Math.max(0, Math.min(100, Number(num("cons-pct")) || 0));
-  let totalVenta = 0, comision = 0, pagoDueno = 0, margen = 0;
+  let totalVenta = 0, comision = 0, margen = 0;
   list.querySelectorAll(".cons-producto-card").forEach(card => {
     const nombre = card.querySelector(".cons-producto-nombre").value.trim() || "Producto";
     const precio = Math.max(0, Number(card.querySelector(".cons-producto-precio").value) || 0);
     const valor = Math.max(0, Number(card.querySelector(".cons-producto-valor").value) || 0);
+    const cantidadRecibida = Math.max(0, Number(card.querySelector(".cons-producto-cantidad").value) || 0);
+    updateConsignacionProductoTotal(card);
     const vendidas = [...card.querySelectorAll(".cons-bazar-vendidas")].reduce((total, input) => total + Math.max(0, Number(input.value) || 0), 0);
     const restantes = [...card.querySelectorAll(".cons-bazar-entregadas")].reduce((total, input, index) =>
       total + Math.max(0, Number(input.value) - (Number(card.querySelectorAll(".cons-bazar-vendidas")[index].value) || 0) - (Number(card.querySelectorAll(".cons-bazar-devueltas")[index].value) || 0)), 0);
-    const importe = precio * vendidas;
+    const ventasCaja = [...card.querySelectorAll(".cons-bazar-row")].reduce((ventas, row) => {
+      const productoId = card.dataset.productoId;
+      const bazarId = row.querySelector(".cons-bazar-id").value;
+      const consignacion = AppState.consignaciones.find(item => item.id === val("cons-id"));
+      const producto = consignacion?.productos?.find(item => item.id === productoId);
+      return ventas.concat(producto?.asignaciones?.find(asignacion => (asignacion.bazarId || "") === bazarId)?.ventas || []);
+    }, []);
+    const unidadesRegistradas = ventasCaja.reduce((total, venta) => total + (Number(venta.cantidad) || 0), 0);
+    const importe = Math.max(0, vendidas - unidadesRegistradas) * precio +
+      ventasCaja.reduce((total, venta) => total + (Number(venta.total) || 0), 0);
     totalVenta += importe;
     comision += importe * pct / 100;
-    pagoDueno += importe * (1 - pct / 100);
     margen += vendidas * (precio - valor);
-    card.querySelector(".cons-producto-summary").textContent = `${vendidas} vendida(s) · ${restantes} en bazares · ventas ${fmt(importe)}`;
+    card.querySelector(".cons-producto-summary").textContent = `${card.querySelector(".cons-producto-unico-toggle").checked ? "Pieza única" : `${cantidadRecibida} unidades`} · ${vendidas} vendida(s) · ${restantes} en bazares · ventas ${fmt(importe)}`;
   });
+  const entregaDueno = pct === 0 ? totalVenta : totalVenta - comision;
   preview.innerHTML = `
     <div><span>Venta registrada</span><strong>${fmt(totalVenta)}</strong></div>
     <div class="consignment-studio-share"><span>Comisión LUCXSTUDIO (${pct}%)</span><strong>${fmt(comision)}</strong></div>
-    <div><span>Entrega al dueño</span><strong>${fmt(pagoDueno)}</strong></div>
+    <div><span>${pct === 0 ? "Entrega íntegra al dueño (comisión 0%)" : "Entrega al dueño"}</span><strong>${fmt(entregaDueno)}</strong></div>
     <div><span>Margen de referencia (venta − valor del dueño)</span><strong>${fmt(margen)}</strong></div>`;
 }
 function openModalConsignacion(id) {
   setVal("cons-id", id || "");
   document.getElementById("modal-consignacion-title").textContent = id ? "Editar consignación" : "Nueva consignación";
   document.getElementById("cons-productos-list").innerHTML = "";
+  renderConsignacionSocios("");
   if (id) {
     const c = AppState.consignaciones.find(x => x.id === id);
     document.getElementById("cons-pct-label").textContent = c.productos?.length
       ? "% Comisión para LUCXSTUDIO (sobre venta)"
       : "% Comisión del consignatario (histórica)";
     setVal("cons-nombre", c.nombre); setVal("cons-fecha", c.fecha || ""); setVal("cons-pct", c.pctComision ?? 30);
+    renderConsignacionSocios(c.socioId || "");
     setVal("cons-notas", c.notas || "");
     (c.productos || []).forEach(producto => addConsignacionProducto(producto));
   } else {
     document.getElementById("cons-pct-label").textContent = "% Comisión para LUCXSTUDIO (sobre venta)";
     setVal("cons-nombre", ""); setVal("cons-fecha", new Date().toISOString().slice(0, 10));
     setVal("cons-pct", 30); setVal("cons-notas", "");
+    setVal("cons-socio", "");
     addConsignacionProducto();
   }
   updateConsignacionProductosPreview();
   openModal("modal-consignacion");
 }
 function saveConsignacion() {
-  const nombre = val("cons-nombre").trim();
+  const socioId = val("cons-socio");
+  const socio = AppState.socios.find(item => item.id === socioId);
+  const nombre = (socio ? socio.nombre : val("cons-nombre")).trim();
   if (!nombre) return showToast("Indica a quién le das la consignación.", "error");
   const resultadoProductos = productosConsignacionDesdeFormulario();
   const id = val("cons-id");
@@ -4439,8 +4600,21 @@ function saveConsignacion() {
   const esEdicionLegacySinProductos = !!existing && !(existing.productos || []).length
     && !document.querySelector(".cons-producto-card");
   if (resultadoProductos.error && !esEdicionLegacySinProductos) return showToast(resultadoProductos.error, "error");
+  if (existing && !resultadoProductos.error) {
+    const ventasRegistradas = (existing.productos || []).flatMap(producto =>
+      (producto.asignaciones || [])
+        .filter(asignacion => (asignacion.ventas || []).length)
+        .map(asignacion => ({ productoId: producto.id, bazarId: asignacion.bazarId || "" })));
+    const asignacionesNuevas = resultadoProductos.productos.flatMap(producto =>
+      (producto.asignaciones || []).map(asignacion => ({ productoId: producto.id, bazarId: asignacion.bazarId || "" })));
+    if (ventasRegistradas.some(venta => !asignacionesNuevas.some(asignacion =>
+      asignacion.productoId === venta.productoId && asignacion.bazarId === venta.bazarId))) {
+      return showToast("No puedes quitar un producto o ubicación que ya tiene ventas cobradas en caja.", "error");
+    }
+  }
   const data = {
     nombre, fecha: val("cons-fecha"),
+    socioId: socio?.id || "",
     pctComision: Math.max(0, Math.min(100, parseFloat(num("cons-pct")) || 0)),
     notas: val("cons-notas"),
     productos: resultadoProductos.error ? (existing.productos || []) : resultadoProductos.productos
@@ -4450,7 +4624,7 @@ function saveConsignacion() {
   } else {
     AppState.consignaciones.push(Object.assign({ id: uid() }, data));
   }
-  saveState(); closeModal("modal-consignacion"); refreshAllSelects(); renderConsignaciones();
+  saveState(); closeModal("modal-consignacion"); refreshAllSelects(); renderConsignaciones(); renderSocios();
   showToast("Consignación guardada.");
 }
 // Al borrar la consignación, las playeras que seguían con ella vuelven a quedar libres
@@ -4461,7 +4635,7 @@ async function deleteConsignacion(id) {
     if (p.consignacionId === id) { p.consignacionId = ""; p.consignacionEstado = ""; }
   });
   AppState.consignaciones = AppState.consignaciones.filter(x => x.id !== id);
-  saveState(); refreshAllSelects(); renderConsignaciones(); renderPlayeras();
+  saveState(); refreshAllSelects(); renderConsignaciones(); renderPlayeras(); renderSocios();
 }
 function renderConsignaciones() {
   const grid = document.getElementById("consignaciones-grid");
@@ -4469,34 +4643,76 @@ function renderConsignaciones() {
   document.getElementById("consignaciones-empty-hint").style.display = AppState.consignaciones.length ? "none" : "block";
   grid.innerHTML = AppState.consignaciones.map(c => {
     const productos = c.productos || [];
-    const resumen = resumenProductosConsignacion(productos, Number(c.pctComision) || 0);
+    const pctComision = Math.max(0, Math.min(100, Number(c.pctComision) || 0));
+    const resumen = resumenProductosConsignacion(productos, pctComision);
     const stats = productos.length ? null : statsConsignacion(c);
-    const detalleProductosHtml = productos.map(producto => {
-      const resumenProducto = resumenProductosConsignacion([producto], Number(c.pctComision) || 0);
-      return `<div class="card-row"><span>${escapeHtml(producto.nombre)} · ×${producto.cantidadRecibida} · Venta ${fmt(producto.precioVenta)} · Dueño ${fmt(producto.valorDueno)}</span><span>${resumenProducto.piezasEnBazares} en bazares</span></div>`;
+    const socio = AppState.socios.find(item => item.id === c.socioId);
+    const productosHtml = productos.map(producto => {
+      const recibidas = Math.max(0, Number(producto.cantidadRecibida) || 0);
+      const precioUnitario = Math.max(0, Number(producto.precioVenta) || 0);
+      const asignaciones = producto.asignaciones || [];
+      const resumenProducto = resumenProductosConsignacion([producto], pctComision);
+      const totalAsignado = asignaciones.reduce((total, asignacion) => total + (Number(asignacion.cantidadEntregada) || 0), 0);
+      const cajaGeneral = asignaciones.find(asignacion => !asignacion.bazarId);
+      const cantidadGeneral = cajaGeneral
+        ? Math.max(0, (Number(cajaGeneral.cantidadEntregada) || 0) - (Number(cajaGeneral.cantidadVendida) || 0) - (Number(cajaGeneral.cantidadDevuelta) || 0))
+        : Math.max(0, recibidas - totalAsignado);
+      const ubicaciones = [
+        ...(cantidadGeneral || cajaGeneral ? [{
+          nombre: "Caja general", entregadas: cajaGeneral?.cantidadEntregada || cantidadGeneral,
+          vendidas: cajaGeneral?.cantidadVendida || 0, devueltas: cajaGeneral?.cantidadDevuelta || 0,
+          restantes: cantidadGeneral
+        }] : []),
+        ...asignaciones.filter(asignacion => asignacion.bazarId).map(asignacion => {
+          const bazar = AppState.bazares.find(item => item.id === asignacion.bazarId);
+          return {
+            nombre: bazar?.nombre || "Bazar eliminado",
+            entregadas: Number(asignacion.cantidadEntregada) || 0,
+            vendidas: Number(asignacion.cantidadVendida) || 0,
+            devueltas: Number(asignacion.cantidadDevuelta) || 0,
+            restantes: Math.max(0, (Number(asignacion.cantidadEntregada) || 0) - (Number(asignacion.cantidadVendida) || 0) - (Number(asignacion.cantidadDevuelta) || 0))
+          };
+        })
+      ];
+      const stockTotal = Math.max(0, recibidas - resumenProducto.piezasVendidas - resumenProducto.piezasDevueltas);
+      const valorTotal = recibidas * precioUnitario;
+      const ubicacionesHtml = ubicaciones.length ? ubicaciones.map(ubicacion => `
+        <div class="cons-inventory-location">
+          <strong>📍 ${escapeHtml(ubicacion.nombre)}</strong>
+          <span>${ubicacion.restantes} disponible(s)</span>
+          <small>${ubicacion.entregadas} asignada(s) · ${ubicacion.vendidas} vendida(s) · ${ubicacion.devueltas} devuelta(s)</small>
+        </div>`).join("") : `<p class="card-meta">Sin unidades disponibles.</p>`;
+      return `<article class="cons-inventory-card">
+        <div class="cons-inventory-top">
+          <div><h3>${escapeHtml(producto.nombre)}</h3><span>${producto.esPiezaUnica || recibidas === 1 ? "Pieza única" : `${recibidas} unidades`}</span></div>
+          <span class="card-badge ${stockTotal ? "badge-media" : "badge-agotado"}">${stockTotal} disponible(s)</span>
+        </div>
+        <div class="cons-inventory-values">
+          <div><span>Precio unitario</span><strong>${fmt(precioUnitario)}</strong></div>
+          <div><span>Valor total (${recibidas} × ${fmt(precioUnitario)})</span><strong>${fmt(valorTotal)}</strong></div>
+          <div><span>Valor unitario del dueño</span><strong>${fmt(producto.valorDueno)}</strong></div>
+        </div>
+        <div class="cons-inventory-locations">${ubicacionesHtml}</div>
+      </article>`;
     }).join("");
-    const bazaresHtml = resumen.porBazar.map(bazar => `
-      <div class="card-row">
-        <span>${escapeHtml(bazar.nombre)}</span>
-        <span>${bazar.vendidas} vendida(s) · ${bazar.devueltas} devuelta(s) · ${bazar.restantes} restante(s)</span>
-      </div>${bazar.restantes ? `<div class="card-meta cons-alerta-bazar">⚠️ Quedan ${bazar.restantes} unidad(es) de esta consignación en ${escapeHtml(bazar.nombre)}.</div>` : ""}`).join("");
+    const entregaDueno = pctComision === 0 ? resumen.totalVendido : resumen.totalVendido - resumen.comisionLucx;
     return `
-    <div class="card">
+    <article class="card consignment-card">
       <div class="card-top">
-        <span class="card-title">🤝 ${escapeHtml(c.nombre)}</span>
-        <span class="card-badge badge-media">${c.pctComision}% ${productos.length ? "para LUCXSTUDIO" : "consignatario (histórico)"}</span>
+        <div><span class="card-title">🤝 ${escapeHtml(socio?.nombre || c.nombre)}</span>
+        ${socio ? `<div class="card-meta">Socio vinculado</div>` : ""}</div>
+        <span class="card-badge badge-media">${pctComision}% comisión estudio</span>
       </div>
       ${c.fecha ? `<div class="card-meta">📅 Desde ${escapeHtml(c.fecha)}</div>` : ""}
       ${productos.length ? `
       <div class="card-row"><span>Productos / unidades recibidas</span><span>${productos.length} / ${resumen.piezasRecibidas}</span></div>
-      ${detalleProductosHtml}
+      <div class="cons-inventory-list">${productosHtml}</div>
       <div class="card-row"><span>Vendidas / devueltas / en bazares</span><span>${resumen.piezasVendidas} / ${resumen.piezasDevueltas} / ${resumen.piezasEnBazares}</span></div>
       ${resumen.piezasSinAsignar ? `<div class="card-meta">📦 ${resumen.piezasSinAsignar} unidad(es) aún sin asignar a bazar</div>` : ""}
       <div class="card-row"><span>Total vendido</span><span>${fmt(resumen.totalVendido)}</span></div>
       <div class="card-row"><span>Comisión LUCXSTUDIO</span><span>${fmt(resumen.comisionLucx)}</span></div>
-      <div class="card-row"><span>Para entregar al dueño</span><span>${fmt(resumen.pagoDueno)}</span></div>
+      <div class="card-row"><span>${pctComision === 0 ? "Entrega íntegra al dueño" : "Para entregar al dueño"}</span><span>${fmt(entregaDueno)}</span></div>
       <div class="card-row"><span>Margen de referencia</span><span>${fmt(resumen.margenReferencia)}</span></div>
-      ${bazaresHtml ? `<div class="card-meta">📍 Seguimiento por bazar</div>${bazaresHtml}` : `<div class="card-meta">Esta consignación aún no tiene productos asignados a bazares.</div>`}
       ` : `
       <div class="card-row"><span>Piezas entregadas</span><span>${stats.piezasEntregadas}</span></div>
       <div class="card-row"><span>Vendidas</span><span>${stats.piezasVendidas}</span></div>
@@ -4508,10 +4724,10 @@ function renderConsignaciones() {
       <div class="card-row"><span>Ganancia para el estudio</span><span style="color:var(--color-success);">${fmt(stats.parteEstudioTotal)}</span></div>`}
       ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
       <div class="card-actions">
-        <button onclick="openModalConsignacion('${c.id}')">✏️ Editar</button>
-        <button class="danger" onclick="deleteConsignacion('${c.id}')">🗑️ Eliminar</button>
+        <button type="button" onclick="openModalConsignacion('${escapeHtml(c.id)}')">✏️ Editar</button>
+        <button type="button" class="danger" onclick="deleteConsignacion('${escapeHtml(c.id)}')">🗑️ Eliminar</button>
       </div>
-    </div>`;
+    </article>`;
   }).join("");
 }
 // Modal para ligar UNA playera del inventario a una consignación existente (o quitarla).
@@ -5435,6 +5651,7 @@ export function renderAll(opciones) {
   renderComprasPendientes();
   renderBazares();
   renderConsignaciones();
+  renderSocios();
   renderCaja();
   renderInteres();
   renderAjustes();
@@ -5466,12 +5683,12 @@ Object.assign(window, {
   deleteMerma, deleteConsignacion,
   deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
-  onAbStatusChange, onAscConsignacionChange, updateConsignacionPreview, updateConsignacionProductosPreview, addConsignacionProducto, addConsignacionBazarAsignacion, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
+  onAbStatusChange, onAscConsignacionChange, onConsSocioChange, onConsignacionPiezaUnicaChange, updateConsignacionPreview, updateConsignacionProductosPreview, addConsignacionProducto, addConsignacionBazarAsignacion, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
   onPrendaClienteChange, onQuoteArtistChange, onQuoteDtfEspecialChange, onQuoteItemProductChange,
   onQuoteMetodoPagoChange, onQuoteClienteSelectChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,
   openPreviewCotizacion, openPreviewCotizacionGuardada, confirmarExportarPDF, confirmarExportarWhatsApp,
-  openModalArtista, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalAsignarConsignacion, openModalBazar,
+  openModalArtista, openModalSocio, saveSocio, deleteSocio, assignConsignacionToSocio, unassignConsignacionFromSocio, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalAsignarConsignacion, openModalBazar,
   openModalBazarDesdeAsignacion, openModalCliente, openModalClienteDetalle, openModalClienteDetalleLegacy, openModalClienteEtiqueta,
   openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalMerma, openModalMermaDesdePlayera,
   openModalIngresoExtra, openModalInventarioColores, openModalInventarioResumen, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,

@@ -852,7 +852,7 @@
         <div class="section-header" style="justify-content:space-between;">
           <div>
             <h2 class="section-title">Consignaciones</h2>
-            <p class="section-sub">Productos externos que te entregan para vender. Registra precios, asigna unidades a varios bazares y consulta ventas, comisión y sobrantes.</p>
+            <p class="section-sub">Inventario de socios y productos recibidos. Revisa existencias por bazar, precios y ventas cobradas.</p>
           </div>
           <button class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button>
         </div>
@@ -860,6 +860,18 @@
         <div class="empty-state" id="consignaciones-empty-hint"><div class="empty-ico">🤝</div><strong>Aún no hay consignaciones</strong><span>Úsalas cuando le das playeras a alguien más para que las venda.</span><button type="button" class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button></div>
       </section>
       <!-- ======================= /CONSIGNACIONES ======================= -->
+
+      <section id="page-socios" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Socios</h2>
+            <p class="section-sub">Administra las personas o marcas y vincula sus consignaciones para tener su inventario y pagos organizados.</p>
+          </div>
+          <button type="button" class="btn-primary" onclick="openModalSocio()">+ Nuevo socio</button>
+        </div>
+        <div id="socios-grid" class="cards-grid"></div>
+        <div class="empty-state" id="socios-empty-hint"><div class="empty-ico">🤝</div><strong>Aún no hay socios</strong><span>Registra un socio para asignarle sus consignaciones.</span><button type="button" class="btn-primary" onclick="openModalSocio()">+ Nuevo socio</button></div>
+      </section>
 
 
       <!-- ======================= CAJA (registradora) ======================= -->
@@ -2273,7 +2285,7 @@
 
 <!-- MODAL: BAZAR / LUGAR DE VENTA -->
 <div class="modal-overlay" id="modal-consignacion">
-  <div class="modal-box modal-box-sm">
+  <div class="modal-box consignacion-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-consignacion-title">
     <div class="modal-header">
       <h2 class="modal-title" id="modal-consignacion-title">Nueva consignación</h2>
       <button class="modal-close" data-modal="modal-consignacion">✕</button>
@@ -2284,11 +2296,16 @@
         <label class="form-label">Dueño del producto (persona / tienda)</label>
         <input type="text" id="cons-nombre" class="form-input" placeholder="Ej. Marca o proveedor externo">
       </div>
+      <div class="form-group">
+        <label class="form-label" for="cons-socio">Socio</label>
+        <select id="cons-socio" class="form-select" onchange="onConsSocioChange()"></select>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Fecha de entrega</label>
           <input type="date" id="cons-fecha" class="form-input">
         </div>
+
         <div class="form-group">
           <label class="form-label" id="cons-pct-label">% Comisión para LUCXSTUDIO (sobre venta)</label>
           <input type="number" id="cons-pct" class="form-input" min="0" max="100" step="1" value="30" oninput="updateConsignacionProductosPreview()">
@@ -2313,6 +2330,34 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-consignacion">Cancelar</button>
       <button class="btn-primary" onclick="saveConsignacion()">Guardar consignación</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-socio">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-socio-title">Nuevo socio</h2>
+      <button class="modal-close" data-modal="modal-socio" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="socio-id">
+      <div class="form-group">
+        <label class="form-label" for="socio-nombre">Nombre del socio o marca</label>
+        <input type="text" id="socio-nombre" class="form-input" placeholder="Ej. Tienda o persona">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="socio-contacto">Contacto</label>
+        <input type="text" id="socio-contacto" class="form-input" placeholder="Teléfono, correo o red social">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="socio-notas">Notas</label>
+        <textarea id="socio-notas" class="form-textarea" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal="modal-socio">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="saveSocio()">Guardar socio</button>
     </div>
   </div>
 </div>

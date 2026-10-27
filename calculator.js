@@ -254,6 +254,8 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCa
   const consignacionesAsignadas = consignaciones.asignaciones.filter(filtroConsignacion || (() => true));
   const ventaConsignaciones = consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.totalVendido, 0);
   totalVendido += ventaConsignaciones;
+  ventasTarjeta += consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.ventasTarjeta, 0);
+  comisionTerminal += consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.comisionTerminal, 0);
   const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
   const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo;
   const tieneConteo = efectivoContadoRaw !== null && efectivoContadoRaw !== undefined && efectivoContadoRaw !== "";
@@ -359,13 +361,19 @@ export function resumenConsignacionesExternas() {
         const entregadas = Math.max(0, Number(asignacion.cantidadEntregada) || 0);
         const devueltas = Math.max(0, Number(asignacion.cantidadDevuelta) || 0);
         const precioVenta = Math.max(0, Number(producto.precioVenta) || 0);
-        const totalVendido = cantidadVendida * precioVenta;
-        const comisionLucx = totalVendido * pct / 100;
+        const ventas = asignacion.ventas || [];
+        const unidadesVendidasEnCaja = ventas.reduce((total, venta) => total + (Number(venta.cantidad) || 0), 0);
+        const totalVendido = Math.max(0, cantidadVendida - unidadesVendidasEnCaja) * precioVenta +
+          ventas.reduce((total, venta) => total + (Number(venta.total) || 0), 0);
+        const comisionLucx = pct === 0 ? 0 : totalVendido * pct / 100;
+        const ventasTarjeta = ventas.reduce((total, venta) => total + (Number(venta.montoTarjeta) || 0), 0);
+        const comisionTerminal = ventas.reduce((total, venta) => total + (Number(venta.comisionTerminal) || 0), 0);
         asignaciones.push({
           consignacionId: consignacion.id, bazarId: asignacion.bazarId || "",
           cantidadEntregada: entregadas, cantidadVendida, cantidadDevuelta: devueltas,
           cantidadRestante: Math.max(0, entregadas - cantidadVendida - devueltas),
-          totalVendido, comisionLucx
+          totalVendido, comisionLucx, ventasTarjeta, comisionTerminal, ventas,
+          productoId: producto.id, nombreProducto: producto.nombre, consignacionNombre: consignacion.nombre
         });
       });
     });

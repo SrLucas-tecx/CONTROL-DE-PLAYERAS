@@ -63,7 +63,7 @@ function descargarBlob(blob, nombre) {
 const COLECCIONES = [
   ["cotizaciones", "Cotizaciones"], ["playeras", "Playeras (incluye vendidas)"], ["stickers", "Stickers"],
   ["ventasStickers", "Ventas de stickers"], ["clientes", "Clientes"], ["bazares", "Bazares"],
-  ["gastos", "Gastos"], ["mermas", "Mermas"], ["consignaciones", "Consignaciones"],
+  ["gastos", "Gastos"], ["mermas", "Mermas"], ["consignaciones", "Consignaciones"], ["socios", "Socios"],
   ["comprasPendientes", "Compras pendientes"], ["consultas", "Consultas de interés"]
 ];
 const conteo = (estado, k) => (estado && Array.isArray(estado[k]) ? estado[k].length : 0);

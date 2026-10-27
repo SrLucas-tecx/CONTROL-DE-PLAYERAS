@@ -54,6 +54,7 @@ export function defaultState() {
     cotizaciones: [],
     graficas: [],
     proveedores: [],
+    socios: [],
     clientes: [],
     clienteEtiquetas: [
       { id: "ce1", nombre: "Cliente VIP", color: "#c56bdb" },

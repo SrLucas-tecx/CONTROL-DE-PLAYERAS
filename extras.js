@@ -43,6 +43,26 @@ const stickersVendibles = () => AppState.stickers.filter(s => (s.stock || 0) > 0
 // Devuelve { key, tipo, obj, nombre, meta, precio, stock, hex } de una clave "p:ID" / "s:ID".
 function producto(key) {
   const [t, id] = String(key).split(":");
+  if (t === "c") {
+    const [, consignacionId, productoId, ubicacionId] = String(key).split(":");
+    const consignacion = AppState.consignaciones.find(item => item.id === consignacionId);
+    const item = consignacion?.productos?.find(producto => producto.id === productoId);
+    if (!consignacion || !item) return null;
+    const bazarId = ubicacionId === "general" ? "" : ubicacionId;
+    const asignaciones = item.asignaciones || [];
+    const asignacion = asignaciones.find(actual => (actual.bazarId || "") === bazarId);
+    const asignado = asignaciones.reduce((total, actual) => total + (Number(actual.cantidadEntregada) || 0), 0);
+    const stock = asignacion
+      ? Math.max(0, (Number(asignacion.cantidadEntregada) || 0) - (Number(asignacion.cantidadVendida) || 0) - (Number(asignacion.cantidadDevuelta) || 0))
+      : bazarId ? 0 : Math.max(0, (Number(item.cantidadRecibida) || 0) - asignado);
+    if (!stock) return null;
+    const bazar = bazarId ? AppState.bazares.find(actual => actual.id === bazarId) : null;
+    return {
+      key, tipo: "consignacion", obj: { consignacion, producto: item, asignacion, bazarId },
+      nombre: item.nombre, meta: `${consignacion.nombre}${bazar ? ` · ${bazar.nombre}` : " · Caja general"}`,
+      precio: Number(item.precioVenta) || 0, stock, hex: ""
+    };
+  }
   if (t === "p") {
     const p = AppState.playeras.find(x => x.id === id);
     return p && { key, tipo: "playera", obj: p, nombre: p.nombre, meta: `Talla ${p.talla || "—"} · ${colorNombre(p.colorId)}`, precio: p.precioVenta || 0, stock: p.stock || 0, hex: colorHex(p.colorId) };
@@ -58,6 +78,7 @@ const textoBusqueda = pr => norm(`${pr.nombre} ${pr.meta} ${pr.tipo === "playera
    · Playera: se crea una copia "Vendida" con la cantidad vendida y se
      descuenta del stock original (la copia guarda origenId).
    · Sticker: se agrega un registro a ventasStickers y se descuenta stock.
+   · Consignación: se registra la venta y el pago en la asignación del bazar.
    lineas = [{ key, cantidad, precio }]
 --------------------------------------------------------------- */
 function registrarVentas(lineas, metodo, bazarId, aviso) {
@@ -73,6 +94,22 @@ function registrarVentas(lineas, metodo, bazarId, aviso) {
     const total = precio * cantidad;
     const montoTarjeta = metodo === "Tarjeta" ? total : 0;
     const comision = comisionTerminalMonto(montoTarjeta, AppState.settings.comisionTerminalPct);
+    if (pr.tipo === "consignacion") {
+      const { producto: item, bazarId } = pr.obj;
+      let asignacion = pr.obj.asignacion;
+      if (!asignacion) {
+        const cantidadAsignada = (item.asignaciones || []).reduce((total, actual) => total + (Number(actual.cantidadEntregada) || 0), 0);
+        asignacion = { bazarId, cantidadEntregada: Math.max(0, (Number(item.cantidadRecibida) || 0) - cantidadAsignada), cantidadVendida: 0, cantidadDevuelta: 0, ventas: [] };
+        item.asignaciones = [...(item.asignaciones || []), asignacion];
+      }
+      asignacion.cantidadVendida = (Number(asignacion.cantidadVendida) || 0) + cantidad;
+      asignacion.ventas = [...(asignacion.ventas || []), {
+        id: uid(), cantidad, precioVenta: precio, total, metodoPago: metodo,
+        montoTarjeta, comisionTerminal: comision, fecha: hoyLocal()
+      }];
+      registradas++;
+      return;
+    }
     if (pr.tipo === "playera") {
       const p = pr.obj;
       const venta = JSON.parse(JSON.stringify(p));
@@ -112,7 +149,20 @@ function registrarVentas(lineas, metodo, bazarId, aviso) {
 function anularVenta(tipo, id) {
   const copiaEstado = window.tomarCopiaEstado();
   let aviso = "Venta anulada — las piezas regresaron al stock.";
-  if (tipo === "playera") {
+  if (tipo === "consignacion") {
+    let encontrada = false;
+    (AppState.consignaciones || []).forEach(consignacion => (consignacion.productos || []).forEach(item =>
+      (item.asignaciones || []).forEach(asignacion => {
+        const ventas = asignacion.ventas || [];
+        const venta = ventas.find(actual => actual.id === id);
+        if (!venta) return;
+        asignacion.cantidadVendida = Math.max(0, (Number(asignacion.cantidadVendida) || 0) - (Number(venta.cantidad) || 0));
+        asignacion.ventas = ventas.filter(actual => actual.id !== id);
+        encontrada = true;
+      })));
+    if (!encontrada) return;
+    aviso = "Venta consignada anulada — las unidades volvieron a estar disponibles.";
+  } else if (tipo === "playera") {
     const v = AppState.playeras.find(x => x.id === id);
     if (!v) return;
     // Ventas hechas antes de que existiera origenId: se busca la pieza igual que no sea una venta.
@@ -312,6 +362,7 @@ function crearModoBazar() {
     <div class="mb-tabs">
       <button type="button" class="mb-tab active" data-tab="playeras">👕 Playeras</button>
       <button type="button" class="mb-tab" data-tab="stickers">✂️ Stickers</button>
+      <button type="button" class="mb-tab" data-tab="consignacion">🤝 Consignación</button>
       <label class="mb-chk" id="mb-apartadas-wrap"><input type="checkbox" id="mb-apartadas"> Ver apartadas <span id="mb-apartadas-n"></span></label>
     </div>
     <div class="mb-search"><input type="search" id="mb-buscar" class="form-input" placeholder="Buscar diseño, talla o color..." autocomplete="off"></div>
@@ -332,7 +383,7 @@ function crearModoBazar() {
 
   $("mb-salir").addEventListener("click", cerrarModoBazar);
   $("mb-buscar").addEventListener("input", renderGridMB);
-  $("mb-bazar").addEventListener("change", renderHoyMB);
+  $("mb-bazar").addEventListener("change", renderMB);
   $("mb-hoy-btn").addEventListener("click", detalleHoyMB);
   o.querySelector(".mb-tabs").addEventListener("click", e => {
     const t = e.target.closest("[data-tab]");
@@ -426,11 +477,22 @@ function renderGridMB() {
   const grid = $("mb-grid");
   const t = norm($("mb-buscar").value).trim();
   const esSticker = mb.tab === "stickers";
-  const lista = esSticker ? stickersVendibles().map(s => producto("s:" + s.id)) : playerasVendibles().map(p => producto("p:" + p.id));
+  const bazarId = $("mb-bazar").value;
+  const lista = esSticker
+    ? stickersVendibles().map(s => producto("s:" + s.id))
+    : mb.tab === "consignacion"
+      ? AppState.consignaciones.flatMap(consignacion => (consignacion.productos || []).map(item =>
+        producto(`c:${consignacion.id}:${item.id}:${bazarId || "general"}`)).filter(Boolean))
+      : playerasVendibles().map(p => producto("p:" + p.id));
   const items = lista.filter(pr => !t || textoBusqueda(pr).includes(t));
   grid.innerHTML = "";
   if (!items.length) {
-    grid.appendChild(el("p", "empty-hint", (esSticker ? AppState.stickers.length : AppState.playeras.length) ? "Nada con stock coincide." : (esSticker ? "Aún no tienes stickers en el inventario." : "Aún no tienes playeras en el inventario.")));
+    const emptyText = mb.tab === "consignacion"
+      ? "No hay productos consignados disponibles en esta ubicación."
+      : esSticker
+        ? (AppState.stickers.length ? "Nada con stock coincide." : "Aún no tienes stickers en el inventario.")
+        : (AppState.playeras.length ? "Nada con stock coincide." : "Aún no tienes playeras en el inventario.");
+    grid.appendChild(el("p", "empty-hint", emptyText));
   }
   items.forEach(pr => {
     const enTicket = mb.ticket[pr.key] || 0;
@@ -441,9 +503,7 @@ function renderGridMB() {
       const punto = el("span", "mb-dot");
       punto.style.background = pr.hex;
       tile.appendChild(punto);
-    } else {
-      tile.appendChild(el("span", "mb-glyph", "✂️"));
-    }
+    } else tile.appendChild(el("span", "mb-glyph", pr.tipo === "sticker" ? "✂️" : "🤝"));
     tile.appendChild(el("span", "mb-tile-name", pr.nombre));
     tile.appendChild(el("span", "mb-tile-meta", pr.meta));
     tile.appendChild(el("span", "mb-tile-price", fmt(pr.precio)));
@@ -599,11 +659,13 @@ function renderTicketMB() {
     const chip = el("span", "mb-chip");
     const menos = el("button", "", "−"); menos.type = "button"; menos.dataset.key = pr.key; menos.dataset.delta = "-1"; menos.setAttribute("aria-label", "Quitar una");
     const mas = el("button", "", "+"); mas.type = "button"; mas.dataset.key = pr.key; mas.dataset.delta = "1"; mas.setAttribute("aria-label", "Agregar una");
-    const desc = el("button", "mb-chip-desc" + (conDesc ? " on" : ""), "🏷️"); desc.type = "button"; desc.dataset.desc = pr.key; desc.setAttribute("aria-label", "Descuento"); desc.title = "Descuento";
     chip.appendChild(menos);
     chip.appendChild(el("span", "mb-chip-text", `${cantidad} × ${pr.tipo === "sticker" ? "✂️ " : ""}${pr.nombre}${conDesc ? ` · ${fmt(final)} c/u` : ""}`));
     chip.appendChild(mas);
-    chip.appendChild(desc);
+    if (pr.tipo !== "consignacion") {
+      const desc = el("button", "mb-chip-desc" + (conDesc ? " on" : ""), "🏷️"); desc.type = "button"; desc.dataset.desc = pr.key; desc.setAttribute("aria-label", "Descuento"); desc.title = "Descuento";
+      chip.appendChild(desc);
+    }
     cont.appendChild(chip);
   });
   $("mb-total").textContent = fmt(total);
@@ -616,14 +678,30 @@ function ventasDeHoy(bazarId) {
   const pasa = r => bazarId ? bazarIdsDe(r).includes(bazarId) : bazarIdsDe(r).length === 0;
   const playeras = AppState.playeras.filter(p => p.ventaRapida && p.fechaVenta === hoy && p.bazarEstado === "Vendida" && pasa(p));
   const stickers = (AppState.ventasStickers || []).filter(v => v.fecha === hoy && pasa(v));
+  const consignaciones = [];
+  (AppState.consignaciones || []).forEach(consignacion => (consignacion.productos || []).forEach(item =>
+    (item.asignaciones || []).forEach(asignacion => {
+      if ((bazarId ? asignacion.bazarId !== bazarId : !!asignacion.bazarId)) return;
+      (asignacion.ventas || []).filter(venta => venta.fecha === hoy).forEach(venta => consignaciones.push({
+        tipo: "consignacion", id: venta.id, consignacionId: consignacion.id, productoId: item.id,
+        nombre: item.nombre, cantidad: venta.cantidad || 0, precio: venta.precioVenta || item.precioVenta || 0,
+        total: venta.total || 0, metodoPago: venta.metodoPago || "Efectivo",
+        montoTarjeta: venta.montoTarjeta || 0, comisionTerminal: venta.comisionTerminal || 0,
+        bazarId: asignacion.bazarId || ""
+      }));
+    })));
   const cots = AppState.cotizaciones.filter(c => !c.ventaNula && c.fecha === hoy && pasa(c));
-  const rapidas = playeras.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0) + stickers.reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0);
-  const tarjetaRapidas = playeras.reduce((s, p) => s + (p.montoTarjeta || 0), 0) + stickers.reduce((s, v) => s + (v.montoTarjeta || 0), 0);
+  const rapidas = playeras.reduce((s, p) => s + (p.precioVenta || 0) * (p.stock || 0), 0) +
+    stickers.reduce((s, v) => s + (v.precioVenta || 0) * (v.cantidad || 0), 0) +
+    consignaciones.reduce((s, v) => s + v.total, 0);
+  const tarjetaRapidas = playeras.reduce((s, p) => s + (p.montoTarjeta || 0), 0) +
+    stickers.reduce((s, v) => s + (v.montoTarjeta || 0), 0) +
+    consignaciones.reduce((s, v) => s + v.montoTarjeta, 0);
   const cotizaciones = cots.reduce((s, c) => s + (c.totalVenta || 0), 0);
   const tarjetaCots = cots.reduce((s, c) => s + (c.montoTarjeta || 0), 0);
   const total = rapidas + cotizaciones;
   const tarjeta = Math.min(total, tarjetaRapidas + tarjetaCots);
-  return { playeras, stickers, cots, rapidas, cotizaciones, total, tarjeta, efectivo: Math.max(0, total - tarjeta) };
+  return { playeras, stickers, consignaciones, cots, rapidas, cotizaciones, total, tarjeta, efectivo: Math.max(0, total - tarjeta) };
 }
 function renderHoyMB() {
   $("mb-hoy").textContent = fmt(ventasDeHoy($("mb-bazar").value).total);
@@ -634,7 +712,8 @@ function detalleHoyMB() {
   const nombreBazar = bazarId ? ((AppState.bazares.find(b => b.id === bazarId) || {}).nombre || "Bazar") : "Sin bazar (caja general)";
   const lineas = [
     ...d.playeras.map(p => ({ tipo: "playera", id: p.id, texto: `${p.stock} × ${p.nombre}`, monto: (p.precioVenta || 0) * (p.stock || 0) })),
-    ...d.stickers.map(v => ({ tipo: "sticker", id: v.id, texto: `${v.cantidad} × ✂️ ${v.nombre}`, monto: (v.precioVenta || 0) * (v.cantidad || 0) }))
+    ...d.stickers.map(v => ({ tipo: "sticker", id: v.id, texto: `${v.cantidad} × ✂️ ${v.nombre}`, monto: (v.precioVenta || 0) * (v.cantidad || 0) })),
+    ...d.consignaciones.map(v => ({ tipo: "consignacion", id: v.id, texto: `${v.cantidad} × 🤝 ${v.nombre}`, monto: v.total }))
   ];
   const secciones = [
     { title: "Resumen", rows: [
@@ -712,7 +791,17 @@ function ventasSueltas() {
     cantidad: v.cantidad || 0, precio: v.precioVenta || 0, lista: v.precioLista != null ? v.precioLista : (v.precioVenta || 0),
     metodo: v.metodoPago || "Efectivo", comision: v.comisionTerminal || 0, bazarIds: bazarIdsDe(v)
   }));
-  return [...playeras, ...stickers];
+  const consignaciones = (AppState.consignaciones || []).flatMap(consignacion =>
+    (consignacion.productos || []).flatMap(item =>
+      (item.asignaciones || []).flatMap(asignacion =>
+        (asignacion.ventas || []).map(venta => ({
+          tipo: "consignacion", id: venta.id, fecha: venta.fecha || "", nombre: item.nombre,
+          meta: consignacion.nombre, cantidad: venta.cantidad || 0, precio: venta.precioVenta || item.precioVenta || 0,
+          lista: venta.precioVenta || item.precioVenta || 0, total: venta.total || 0,
+          metodo: venta.metodoPago || "Efectivo", comision: venta.comisionTerminal || 0,
+          bazarIds: asignacion.bazarId ? [asignacion.bazarId] : []
+        })))));
+  return [...playeras, ...stickers, ...consignaciones];
 }
 function etiquetaDia(fecha) {
   if (!fecha) return "Sin fecha";
@@ -749,7 +838,7 @@ function renderVentasRapidas() {
     (!t || norm(`${v.nombre} ${v.meta}`).includes(t))
   );
 
-  const monto = v => v.precio * v.cantidad;
+  const monto = v => v.tipo === "consignacion" ? v.total : v.precio * v.cantidad;
   const total = ventas.reduce((s, v) => s + monto(v), 0);
   const tarjeta = ventas.filter(v => v.metodo === "Tarjeta").reduce((s, v) => s + monto(v), 0);
   const comision = ventas.reduce((s, v) => s + v.comision, 0);
@@ -778,7 +867,8 @@ function renderVentasRapidas() {
     items.forEach(v => {
       const fila = el("div", "vs-row");
       const main = el("div", "vs-main");
-      main.appendChild(el("span", "vs-name", `${v.tipo === "sticker" ? "✂️" : "👕"} ${v.nombre}`));
+      const icono = v.tipo === "sticker" ? "✂️" : v.tipo === "consignacion" ? "🤝" : "👕";
+      main.appendChild(el("span", "vs-name", `${icono} ${v.nombre}`));
       const b = v.bazarIds.length ? AppState.bazares.find(x => x.id === v.bazarIds[0]) : null;
       main.appendChild(el("span", "vs-meta", `${v.meta} · ${b ? "🏪 " + b.nombre : "Caja general"}`));
       fila.appendChild(main);
