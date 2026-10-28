@@ -4,6 +4,14 @@
    ============================================================ */
 
 export const STORAGE_KEY = "LUCXSTUDIO_APP_STATE";
+export const GUIA_TALLAS_DEFAULTS = [
+  { talla: "CHI", ancho: 45.7, largo: 70.5 },
+  { talla: "MED", ancho: 50.8, largo: 73 },
+  { talla: "GDE", ancho: 55.9, largo: 75.6 },
+  { talla: "EXG", ancho: 61, largo: 78.1 },
+  { talla: "2EG", ancho: 66, largo: 80.6 },
+  { talla: "3EG", ancho: 69.9, largo: 83.2 }
+];
 
 /* ---------------------------------------------------------------
    ESTADO INICIAL
@@ -22,6 +30,7 @@ export function defaultState() {
       recargoUrgentePct: 20,
       comisionTerminalPct: 3.5,
       umbralLlenadoPct: 30,
+      guiaTallas: GUIA_TALLAS_DEFAULTS.map(talla => ({ ...talla })),
       moneda: "MXN"
     },
     colores: [

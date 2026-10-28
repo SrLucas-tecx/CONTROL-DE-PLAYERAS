@@ -194,6 +194,7 @@ const PAGE_TITLES = {
   "ventas-rapidas": "Ventas rápidas",
   cotizador: "Cotizador rápido",
   cotizaciones: "Cotizaciones guardadas",
+  "guia-tallas": "Guía de tallas",
   produccion: "Producción (semáforo)",
   clientes: "Clientes",
   artes: "Historial de artes",
@@ -859,23 +860,30 @@ function renderGastoLigarCotizaciones(seleccionadas) {
     const modo = link ? link.modo : "reemplaza";
     return `
     <div class="gasto-ligar-item gasto-cotizacion-item">
-      <input type="checkbox" id="gasto-cot-${escapeHtml(cotizacion.id)}" class="gasto-cotizacion-cb" value="${escapeHtml(cotizacion.id)}" ${link ? "checked" : ""}>
-      <label class="gasto-cotizacion-label" for="gasto-cot-${escapeHtml(cotizacion.id)}">🧾 ${escapeHtml(cotizacion.folio || "Cotización")} · ${escapeHtml(cotizacion.cliente || "Cliente sin nombre")} · ${fmt(cotizacion.totalVenta || 0)}</label>
-      <select class="form-select gasto-cotizacion-destino" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Asignar gasto para ${escapeHtml(cotizacion.folio || "cotización")}" onchange="toggleGastoCotizacionEstampados(this)">
-        <option value="" ${!link?.destino ? "selected" : ""}>Elegir parte…</option>
-        <option value="estampado" ${link?.destino === "estampado" ? "selected" : ""}>Estampado</option>
-        <option value="prenda" ${link?.destino === "prenda" ? "selected" : ""}>Prenda</option>
-      </select>
-      <button type="button" class="btn-secondary gasto-cotizacion-estampados-btn" data-cotizacion-id="${escapeHtml(cotizacion.id)}"
-        onclick="abrirPopupGastoCotizacionEstampados(this)" ${link?.destino === "estampado" && estampadosDisponibles ? "" : "hidden"}
-        ${estampadosDisponibles ? "" : "disabled"}>${estampadosDisponibles ? `Elegir estampados o stickers (${cantidadSeleccionada})` : "Sin estampados ni stickers"}</button>
+      <div class="gasto-cotizacion-head">
+        <input type="checkbox" id="gasto-cot-${escapeHtml(cotizacion.id)}" class="gasto-cotizacion-cb" value="${escapeHtml(cotizacion.id)}" ${link ? "checked" : ""}>
+        <label class="gasto-cotizacion-label" for="gasto-cot-${escapeHtml(cotizacion.id)}">
+          <strong>🧾 ${escapeHtml(cotizacion.folio || "Cotización")}</strong>
+          <span>${escapeHtml(cotizacion.cliente || "Cliente sin nombre")} · ${fmt(cotizacion.totalVenta || 0)}</span>
+        </label>
+      </div>
+      <div class="gasto-cotizacion-controls">
+        <select class="form-select gasto-cotizacion-destino" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Asignar gasto para ${escapeHtml(cotizacion.folio || "cotización")}" onchange="toggleGastoCotizacionEstampados(this)">
+          <option value="" ${!link?.destino ? "selected" : ""}>Elegir parte…</option>
+          <option value="estampado" ${link?.destino === "estampado" ? "selected" : ""}>Estampado / sticker</option>
+          <option value="prenda" ${link?.destino === "prenda" ? "selected" : ""}>Playera</option>
+        </select>
+        <button type="button" class="btn-secondary gasto-cotizacion-modo-btn" data-cotizacion-id="${escapeHtml(cotizacion.id)}"
+          onclick="abrirPopupGastoCotizacionModo(this)">${modo === "suma" ? "Suma como extra" : "Reemplaza estimado"}</button>
+        <button type="button" class="btn-secondary gasto-cotizacion-estampados-btn" data-cotizacion-id="${escapeHtml(cotizacion.id)}"
+          onclick="abrirPopupGastoCotizacionEstampados(this)" ${link?.destino === "estampado" && estampadosDisponibles ? "" : "hidden"}
+          ${estampadosDisponibles ? "" : "disabled"}>${estampadosDisponibles ? `Elegir estampados o stickers (${cantidadSeleccionada})` : "Sin estampados ni stickers"}</button>
+        <select class="form-select gasto-cotizacion-modo" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Cómo aplicar el gasto en ${escapeHtml(cotizacion.folio || "cotización")}" hidden>
+          <option value="reemplaza" ${(link ? link.modo : "reemplaza") === "reemplaza" ? "selected" : ""}>Reemplaza el estimado</option>
+          <option value="suma" ${link && link.modo === "suma" ? "selected" : ""}>Suma como extra</option>
+        </select>
+      </div>
       <div class="gasto-cotizacion-estampados-ocultos" hidden>${opcionesHtml}</div>
-      <select class="form-select gasto-cotizacion-modo" data-cotizacion-id="${escapeHtml(cotizacion.id)}" aria-label="Cómo aplicar el gasto en ${escapeHtml(cotizacion.folio || "cotización")}" hidden>
-        <option value="reemplaza" ${(link ? link.modo : "reemplaza") === "reemplaza" ? "selected" : ""}>Reemplaza el estimado</option>
-        <option value="suma" ${link && link.modo === "suma" ? "selected" : ""}>Suma como extra</option>
-      </select>
-      <button type="button" class="btn-secondary gasto-cotizacion-modo-btn" data-cotizacion-id="${escapeHtml(cotizacion.id)}"
-        onclick="abrirPopupGastoCotizacionModo(this)">${modo === "suma" ? "Suma como extra" : "Reemplaza el estimado"}</button>
     </div>`;
   }).join("") || `<p class="empty-hint">Aún no hay cotizaciones guardadas para ligar a este gasto.</p>`;
 }
@@ -3110,6 +3118,10 @@ async function deleteSticker(id) {
 function quoteStickerFromInventory(id) {
   const sticker = AppState.stickers.find(item => item.id === id);
   if (!sticker) return;
+  if (!val("quote-editing-id") && !quoteItems.length && !quoteStickerItems.length) {
+    setVal("q-tipo-cotizacion", "stickers");
+    updateQuoteTypeUI();
+  }
   quoteStickerItems.push({
     rowId: uid(), stickerId: sticker.id, nombre: sticker.nombre, tamano: sticker.tamano,
     anchoCm: sticker.anchoCm || 0, largoCm: sticker.largoCm || 0,
@@ -3187,6 +3199,28 @@ let quoteServiciosExtra = [];
 let quoteTagsOperativos = [];
 let editingQuoteItemRowId = null;
 
+function setQuoteType(tipo) {
+  if (tipo === "stickers" && quoteItems.length) {
+    setVal("q-tipo-cotizacion", "prendas");
+    showToast("Quita las playeras antes de cambiar a una cotización solo de stickers.", "error");
+    return;
+  }
+  setVal("q-tipo-cotizacion", tipo === "stickers" ? "stickers" : "prendas");
+  updateQuoteTypeUI();
+}
+function updateQuoteTypeUI() {
+  const soloStickers = val("q-tipo-cotizacion") === "stickers";
+  const tipoSelect = document.getElementById("q-tipo-cotizacion");
+  if (!tipoSelect) return;
+  tipoSelect.disabled = !!val("quote-editing-id");
+  document.getElementById("q-add-prenda-btn").style.display = soloStickers ? "none" : "";
+  document.getElementById("quote-items-title").textContent = soloStickers ? "Stickers de la cotización" : "Artículos de la cotización";
+  document.getElementById("quote-items-list").style.display = soloStickers ? "none" : "";
+  document.getElementById("quote-add-space").style.display = soloStickers ? "none" : "";
+  const stickersFold = document.getElementById("quote-stickers-fold");
+  if (stickersFold && (soloStickers || quoteStickerItems.length)) stickersFold.open = true;
+}
+
 function toggleQuoteTagOperativo(tagId, isChecked) {
   if (isChecked) {
     if (!quoteTagsOperativos.includes(tagId)) quoteTagsOperativos.push(tagId);
@@ -3211,6 +3245,10 @@ function blankQuoteItem() {
     prendaCliente: false, dtfEspecial: false, dtfTipoId: "", dtfMetrosUsados: 0 };
 }
 function addQuoteItem() {
+  if (val("q-tipo-cotizacion") === "stickers") {
+    showToast("Esta cotización solo permite agregar stickers.", "error");
+    return;
+  }
   const nuevo = blankQuoteItem();
   quoteItems.push(nuevo);
   renderQuoteItems();
@@ -3701,6 +3739,7 @@ function renderQuoteItems() {
   updateQuoteSummary();
   refrescarModalPrendaSiAbierto();
   refrescarModalStickerSiAbierto();
+  updateQuoteTypeUI();
 }
 function computeQuoteTotals() {
   let ventaBruta = 0, totalCosto = 0;
@@ -3916,6 +3955,7 @@ function resetQuoteForm() {
   quoteServiciosExtra = [];
   quoteTagsOperativos = [];
   setVal("quote-editing-id", ""); setVal("q-cliente", ""); setVal("q-cliente-tel", ""); setVal("q-cliente-id", ""); setVal("q-cliente-select", ""); setVal("q-vendedor", "");
+  setVal("q-tipo-cotizacion", "prendas");
   setVal("q-fecha", new Date().toISOString().slice(0,10));
   setVal("q-fecha-entrega-prevista", "");
   setVal("q-fecha-entrega-real", "");
@@ -3934,6 +3974,9 @@ function resetQuoteForm() {
 }
 function saveQuote() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker.", "error");
+  if (val("q-tipo-cotizacion") === "stickers" && (quoteItems.length || !quoteStickerItems.length)) {
+    return showToast("Una cotización solo de stickers debe tener stickers y no puede incluir playeras.", "error");
+  }
   const impresionSinTipo = gangSheetTipos().length > 0 && [...quoteItems, ...quoteStickerItems].some(item =>
     item.dtfEspecial && item.dtfMetrosUsados !== undefined && item.dtfMetrosUsados !== null && !item.dtfTipoId);
   if (impresionSinTipo) return showToast("Selecciona un tipo de DTF especial para cada artículo antes de guardar la cotización.", "error");
@@ -3950,6 +3993,7 @@ function saveQuote() {
     artistaId: val("q-artista"),
     comisionPctPersonalizado: val("q-artista") === "__custom__" ? num("q-comision-pct") : null,
     tipoVenta: val("q-tipo-venta") || "Menudeo",
+    tipoCotizacion: val("q-tipo-cotizacion") === "stickers" ? "stickers" : "prendas",
     bazarId: editingId ? ((AppState.cotizaciones.find(c => c.id === editingId) || {}).bazarId || "") : "",
     bazarIds: editingId ? bazarIdsDe(AppState.cotizaciones.find(c => c.id === editingId) || {}) : [],
     ventaNula: checked("q-venta-nula"),
@@ -4147,6 +4191,7 @@ function renderCotizacionesGuardadas() {
       <div class="card-meta">${escapeHtml(c.cliente)} · ${c.fecha} · ${c.items.length + (c.stickers || []).length} artículo(s) · 🚦 ${escapeHtml(c.estadoProduccion || "Por hacer")}</div>
       ${(c.fechaEntregaPrevista || c.fechaEntregaReal) ? `<div class="card-meta">📦 Entrega prevista: ${escapeHtml(fechaLegible(c.fechaEntregaPrevista))}${c.fechaEntregaReal ? ` · ✅ Real: ${escapeHtml(fechaLegible(c.fechaEntregaReal))}` : ""}</div>` : ""}
       <div class="card-tags">
+        ${c.tipoCotizacion === "stickers" ? `<span class="card-badge badge-media">✂️ Solo stickers</span>` : ""}
         <span class="card-badge ${c.tipoVenta==='Mayoreo'?'badge-media':'badge-baja'}">${c.tipoVenta==='Mayoreo'?'📦 Mayoreo':'🛍️ Menudeo'}</span>
         ${bazarIdsDe(c).length ? `<span class="card-badge badge-alta">🏪 ${escapeHtml(nombresBazares(c))}</span>` : ""}
         ${c.urgente ? `<span class="card-badge badge-agotado">🚀 Urgente</span>` : ""}
@@ -4256,7 +4301,7 @@ function editCotizacion() {
   });
   quoteServiciosExtra = JSON.parse(JSON.stringify(c.serviciosExtra || []));
   quoteTagsOperativos = JSON.parse(JSON.stringify(c.tagsOperativos || []));
-  setVal("quote-editing-id", c.id); setVal("q-cliente", c.cliente); setVal("q-cliente-tel", c.clienteTelefono || ""); setVal("q-cliente-id", c.clienteId || ""); setVal("q-cliente-select", c.clienteId || ""); setVal("q-fecha", c.fecha);
+  setVal("quote-editing-id", c.id); setVal("q-tipo-cotizacion", c.tipoCotizacion === "stickers" ? "stickers" : "prendas"); setVal("q-cliente", c.cliente); setVal("q-cliente-tel", c.clienteTelefono || ""); setVal("q-cliente-id", c.clienteId || ""); setVal("q-cliente-select", c.clienteId || ""); setVal("q-fecha", c.fecha);
   setVal("q-fecha-entrega-prevista", c.fechaEntregaPrevista || ""); setVal("q-fecha-entrega-real", c.fechaEntregaReal || "");
   setVal("q-vendedor", c.vendedor); setVal("q-artista", c.artistaId || "");
   setVal("q-comision-pct", c.comisionPctPersonalizado || 0); setVal("q-notas", c.notas || "");
@@ -4311,7 +4356,8 @@ function renderProduccionKanban() {
   const board = document.getElementById("produccion-board");
   if (!board) return;
   const cotizaciones = AppState.cotizaciones.filter(c => !c.ventaNula);
-  board.innerHTML = ETAPAS_PRODUCCION.map(etapa => {
+  const etapasActivas = ETAPAS_PRODUCCION.filter(etapa => etapa !== "Entregado");
+  board.innerHTML = etapasActivas.map(etapa => {
     const enEtapa = cotizaciones.filter(c => (c.estadoProduccion || "Por hacer") === etapa);
     const cards = enEtapa.map(c => {
       const semaforo = semaforoCotizacion(c);
@@ -4338,6 +4384,31 @@ function renderProduccionKanban() {
         <div class="kanban-column-body">${cards}</div>
       </div>`;
   }).join("");
+  const entregados = cotizaciones
+    .filter(c => (c.estadoProduccion || "Por hacer") === "Entregado")
+    .sort((a, b) => String(b.fechaEntregaReal || b.fecha || "").localeCompare(String(a.fechaEntregaReal || a.fecha || "")));
+  const historyList = document.getElementById("produccion-history-list");
+  const historyEmpty = document.getElementById("produccion-history-empty");
+  const historySummary = document.getElementById("produccion-history-summary");
+  if (historySummary) historySummary.textContent = `📦 Historial de pedidos entregados (${entregados.length})`;
+  if (historyEmpty) historyEmpty.style.display = entregados.length ? "none" : "block";
+  if (historyList) {
+    historyList.innerHTML = entregados.map(c => `
+      <div class="card">
+        <div class="card-top">
+          <span class="card-title">${escapeHtml(c.folio)}</span>
+          <span class="card-badge badge-alta">Entregado</span>
+        </div>
+        <div class="card-meta">${escapeHtml(c.cliente)} · ${escapeHtml(c.fecha || "—")}</div>
+        <div class="card-meta">✅ Entrega real: ${escapeHtml(fechaLegible(c.fechaEntregaReal) || "—")}</div>
+        ${c.tipoCotizacion === "stickers" ? `<div class="card-tags"><span class="card-badge badge-media">✂️ Solo stickers</span></div>` : ""}
+        <div class="card-row"><span>Total</span><span>${fmt(c.totalVenta)}</span></div>
+        <div class="card-actions">
+          <button onclick="viewCotizacion('${c.id}')">👁️ Ver pedido</button>
+          <button onclick="updateCotizacionProduccion('${c.id}', 'Por hacer')">↩️ Reabrir en Por hacer</button>
+        </div>
+      </div>`).join("");
+  }
 }
 
 /* =================================================================
@@ -5707,6 +5778,7 @@ Object.assign(window, {
   toggleGraficaInventarioOptions, onQuoteStickerDtfEspecialChange, onStickerDtfEspecialChange, onStickerDtfTipoChange, onStickerDimensionChange, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras, toggleGastoCotizacionEstampados, updateGastoCotizacionEstampados,
   abrirPopupGastoCotizacionEstampados, abrirPopupGastoCotizacionModo, guardarPopupGastoCotizacionEstampados, guardarPopupGastoCotizacionModo,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,
+  setQuoteType,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
   viewCotizacion, recalcularCostosCotizacionesPorGastos, verCostosReales

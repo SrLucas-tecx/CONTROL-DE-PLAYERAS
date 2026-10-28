@@ -10,7 +10,9 @@ import "./inicio.js"; // Rediseño Sprint 4: panel de inicio
 import "./respaldo.js"; // Respaldo entre dispositivos y descarga de caja
 import "./pdf.js";    // Generador del PDF de la cotización
 import "./extras.js"; // Rediseño Sprint 6: venta rápida, modo bazar, buscador Ctrl+K y color de acento
+import { iniciarGuiaTallas } from "./guia-tallas.js"; // Guía de medidas de playeras y PDF para clientes
 
 applySavedTheme();
 loadState();
 renderAll();
+iniciarGuiaTallas();
