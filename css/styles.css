@@ -3,6 +3,8 @@
    Paleta: Negro carbón · Rojo señal · Grises neutros
    ============================================================ */
 
+@import "tailwindcss";
+
 :root {
   --color-bg:           #121214;
   --color-surface:      #1b1b1e;
@@ -214,8 +216,8 @@ ul{list-style:none;}
   font-size:var(--fs-sm);color:var(--color-text);
 }
 .inventory-search{flex:1;min-width:220px;max-width:420px;}
-.inventory-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:var(--space-3);margin:var(--space-4) 0;}
-.inventory-summary-card{display:flex;align-self:start;flex-direction:column;gap:var(--space-2);padding:var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);}
+.inventory-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:var(--space-3);margin:var(--space-4) 0;}
+.inventory-summary-card{display:flex;min-width:0;flex-direction:column;gap:var(--space-2);padding:var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);}
 .inventory-summary-card>span{font-size:var(--fs-sm);font-weight:700;color:var(--color-text-muted);}
 .inventory-summary-cost>strong{font-size:var(--fs-xl);color:var(--color-text);}
 .inventory-summary-card>strong{font-size:var(--fs-xl);color:var(--color-text);}
@@ -228,8 +230,12 @@ ul{list-style:none;}
 .inventory-cost-mode{display:flex;flex-wrap:wrap;gap:4px;}
 .inventory-cost-mode button{padding:5px 9px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface-alt);color:var(--color-text-muted);font-size:var(--fs-xs);font-weight:700;cursor:pointer;}
 .inventory-cost-mode button.active{border-color:var(--color-accent);background:var(--color-accent-soft);color:var(--color-text);}
-.inventory-summary-card .btn-secondary{align-self:flex-start;font-size:var(--fs-xs);}
-.inventory-summary-modal{width:min(100%,1080px);}
+.inventory-summary-card .btn-secondary{align-self:stretch;width:100%;font-size:var(--fs-xs);line-height:1.35;text-align:center;white-space:normal;}
+.inventory-summary-modal{width:min(100%,1080px);min-height:0;}
+.inventory-summary-modal .modal-header{padding:16px 20px 12px;}
+.inventory-summary-modal .modal-title{font-size:clamp(1.25rem,2.5vw,1.65rem);letter-spacing:-.02em;line-height:1.2;}
+.inventory-summary-modal .modal-body{padding:14px 20px 8px;}
+.inventory-summary-modal .modal-footer{padding:12px 20px 16px;}
 .inventory-summary-modal .inventory-summary{margin:0;grid-template-columns:repeat(3,minmax(0,1fr));}
 .inventory-color-sizes{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-4);}
 .inventory-color-size-group{padding:var(--space-3);background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);}
@@ -240,7 +246,7 @@ ul{list-style:none;}
 .inventory-size-row{padding-top:var(--space-2);font-size:var(--fs-sm);}
 @media(max-width:1100px){.inventory-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:700px){.inventory-summary{grid-template-columns:1fr;}}
-@media(max-width:760px){.inventory-summary-modal .inventory-summary{grid-template-columns:1fr;}}
+@media(max-width:760px){#modal-inventario-resumen{padding:0 var(--space-3);}.inventory-summary-modal .inventory-summary{grid-template-columns:1fr;}}
 
 /* ============ FORMS ============ */
 .form-row{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);}

@@ -61,7 +61,7 @@ function cargarCss() {
   const link = document.createElement("link");
   link.id = "redesign-css";
   link.rel = "stylesheet";
-  link.href = "redesign.css";
+  link.href = "dist/redesign.css";
   document.head.appendChild(link);
 }
 

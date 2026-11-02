@@ -382,8 +382,8 @@ function imprimirPdf(html) {
 async function descargarPdf() {
   const tallas = getTallas(prendaActual);
   const [logo, letras] = await Promise.all([
-    imagenDataUrl("LOGO-crop.png", 180),
-    imagenDataUrl("Letras-crop.png", 600)
+    imagenDataUrl("assets/images/LOGO-crop.png", 180),
+    imagenDataUrl("assets/images/Letras-crop.png", 600)
   ]);
   const html = construirPdf(tallas, logo, letras);
 

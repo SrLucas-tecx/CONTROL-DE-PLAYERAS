@@ -60,6 +60,7 @@ export function defaultState() {
       { id: "a2", nombre: "Obake", modo: "venta", pctArtista: 30, pctEstudio: 70, notas: "" }
     ],
     bazares: [],
+    turnosCaja: [],
     cotizaciones: [],
     graficas: [],
     proveedores: [],

@@ -8,7 +8,7 @@
   "theme_color": "#e3363d",
   "icons": [
     {
-      "src": "OJITOS-crop.png",
+      "src": "assets/images/OJITOS-crop.png",
       "sizes": "any",
       "type": "image/png",
       "purpose": "any maskable"

@@ -1,7 +1,7 @@
 /* ============================================================
    LUCXSTUDIO — pdf.js
    Generador del PDF de la cotización (se descarga o se imprime).
-   Usa los logos que ya están en el proyecto: LOGO-crop.png,
+   Usa los logos que ya están en el proyecto: assets/images/LOGO-crop.png,
    Letras-crop.png (letras blancas) y OJITOS-crop.png.
    ============================================================ */
 import { fmt, escapeHtml, colorNombre, resumenPagoCotizacion, etiquetaMetodoPago } from "./calculator.js";
@@ -184,7 +184,7 @@ function abrirImpresion(html, titulo) {
 --------------------------------------------------------------- */
 export async function generarPdfCotizacion(q) {
   const [logo, letras, ojitos] = await Promise.all([
-    imagenChica("LOGO-crop.png", 260), imagenChica("Letras-crop.png", 560), imagenChica("OJITOS-crop.png", 260)
+    imagenChica("assets/images/LOGO-crop.png", 260), imagenChica("assets/images/Letras-crop.png", 560), imagenChica("assets/images/OJITOS-crop.png", 260)
   ]);
   const html = construirHoja(q, { logo, letras, ojitos });
   const slug = String(q.cliente || "cliente").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

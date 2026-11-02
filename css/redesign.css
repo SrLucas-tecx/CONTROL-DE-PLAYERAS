@@ -3,7 +3,6 @@
    Se carga DESPUÉS de styles.css (lo inyecta nav.js).
    Solo sobreescribe lo necesario; no hay que tocar styles.css.
    ============================================================ */
-
 /* ============ MENÚ LATERAL: 6 SECCIONES ============ */
 .sidebar-nav{padding:var(--space-2) var(--space-3);display:flex;flex-direction:column;gap:var(--space-1);}
 .sidebar-nav .nav-item{
@@ -477,6 +476,7 @@ body.modo-bazar-activo{overflow:hidden;}
 .mb-top select{max-width:220px;}
 .mb-hoy{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;font-size:var(--fs-xs);color:var(--color-text-muted);}
 .mb-hoy b{font-family:var(--font-display);font-size:var(--fs-lg);color:var(--color-text);}
+.mb-top #mb-caja-state.active{border-color:var(--color-success);color:var(--color-success);}
 .mb-search{padding:var(--space-3) var(--space-4) 0;}
 .mb-grid{
   flex:1;overflow-y:auto;padding:var(--space-4);
@@ -514,6 +514,7 @@ body.modo-bazar-activo{overflow:hidden;}
 .mb-chip-text{padding:0 var(--space-2);font-size:var(--fs-sm);font-weight:700;}
 .mb-ticket-pay{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;}
 .mb-ticket-pay .pay-toggle{min-width:260px;flex:1;}
+.mb-ticket-pay .pay-toggle{grid-template-columns:repeat(3,minmax(0,1fr));}
 .mb-total{display:flex;flex-direction:column;align-items:flex-end;font-size:var(--fs-xs);color:var(--color-text-muted);}
 .mb-total b{font-family:var(--font-display);font-size:var(--fs-xl);color:var(--color-text);}
 .mb-cobrar{min-height:52px;padding:0 var(--space-8);font-size:var(--fs-md);}
@@ -523,6 +524,30 @@ body.modo-bazar-activo{overflow:hidden;}
   .mb-ticket-pay .pay-toggle{min-width:100%;}
   .mb-total{align-items:flex-start;}
   .mb-cobrar{flex:1;padding:0 var(--space-4);}
+}
+.mb-dialog-backdrop{
+  display:none;position:fixed;inset:0;z-index:140;align-items:center;justify-content:center;
+  padding:var(--space-4);background:rgba(8,8,10,.72);backdrop-filter:blur(3px);
+}
+.mb-dialog-backdrop.open{display:flex;}
+.mb-dialog{
+  width:min(100%,480px);max-height:calc(100vh - 2rem);overflow:auto;
+  padding:var(--space-6);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  background:var(--color-surface);box-shadow:var(--shadow-lg);
+}
+.mb-dialog h2{font-family:var(--font-display);font-size:var(--fs-lg);margin-bottom:var(--space-4);}
+.mb-dialog-copy{color:var(--color-text-muted);font-size:var(--fs-sm);line-height:1.5;margin:var(--space-3) 0;}
+.mb-dialog-total{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);color:var(--color-text-muted);}
+.mb-dialog-total b{font-family:var(--font-display);font-size:var(--fs-2xl);color:var(--color-text);}
+.mb-dialog-summary{display:grid;grid-template-columns:1fr auto;gap:var(--space-2);margin:var(--space-4) 0;padding:var(--space-4);background:var(--color-surface-alt);border-radius:var(--radius-md);}
+.mb-dialog-summary span{font-size:var(--fs-sm);color:var(--color-text-muted);}
+.mb-dialog-actions{display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-5);}
+.mb-dialog-actions button{min-height:44px;}
+.mb-cobro-metodos{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:var(--space-4);}
+.mb-dialog button:disabled{opacity:.5;cursor:not-allowed;}
+@media (max-width:560px){
+  .mb-dialog{padding:var(--space-4);}
+  .mb-dialog-actions button{flex:1;}
 }
 
 /* ---- Buscador global ---- */
@@ -807,3 +832,73 @@ body.light .settings-savebar{background:rgba(244,243,242,.92);}
 }
 .quote-cost-main{display:flex;flex-direction:column;gap:2px;}
 .quote-cost-main b{font-family:var(--font-display);font-size:var(--fs-xl);}
+
+/* ---- Modo bazar: cobro claro y cómodo en celular ---- */
+@media (max-width:760px){
+  .mb-overlay{height:100vh;height:100dvh;min-height:0;}
+  .mb-top{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"title today" "location location" "register exit";
+    gap:var(--space-2);padding:var(--space-3);
+  }
+  .mb-titulo{grid-area:title;align-self:center;font-size:var(--fs-base);}
+  .mb-top select{grid-area:location;width:100%;max-width:none;min-width:0;min-height:46px;font-size:16px;}
+  .mb-hoy{grid-area:today;align-self:center;margin:0;padding:var(--space-1) var(--space-2);}
+  .mb-hoy b{font-size:var(--fs-md);}
+  .mb-top #mb-caja-state{grid-area:register;min-width:0;min-height:44px;padding-inline:var(--space-2);font-size:var(--fs-xs);}
+  .mb-top #mb-salir{grid-area:exit;min-width:76px;min-height:44px;padding-inline:var(--space-3);}
+  .mb-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);padding:var(--space-3) var(--space-3) 0;}
+  .mb-tab{min-width:0;min-height:46px;padding:var(--space-2);font-size:var(--fs-xs);line-height:1.2;white-space:normal;}
+  .mb-chk{grid-column:1/-1;min-height:38px;margin:0;}
+  .mb-search{padding:var(--space-3) var(--space-3) 0;}
+  .mb-search .form-input{min-height:46px;font-size:16px;}
+  .mb-grid{
+    min-height:0;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:var(--space-2);padding:var(--space-3);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  .mb-tile{min-width:0;min-height:132px;padding:var(--space-3);border-radius:var(--radius-md);}
+  .mb-tile-name{font-size:var(--fs-sm);overflow-wrap:anywhere;}
+  .mb-tile-meta,.mb-tile-stock{font-size:var(--fs-xs);line-height:1.4;}
+  .mb-tile-price{font-size:clamp(1.35rem,6vw,1.7rem);overflow-wrap:anywhere;}
+  .mb-ticket{
+    flex-shrink:0;gap:var(--space-2);padding:var(--space-2) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom,0px));
+    max-height:44dvh;overflow-y:auto;overscroll-behavior:contain;
+  }
+  .mb-ticket-items{max-height:72px;min-height:28px;overflow-y:auto;}
+  .mb-ticket-pay{
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr);
+    grid-template-areas:"payment payment payment" "total clear charge";
+    align-items:stretch;gap:var(--space-2);
+  }
+  .mb-ticket-pay .pay-toggle{grid-area:payment;grid-template-columns:repeat(3,minmax(0,1fr));min-width:0;width:100%;gap:var(--space-1);}
+  .mb-ticket-pay .pay-toggle button{min-width:0;min-height:44px;padding:var(--space-1);font-size:var(--fs-xs);line-height:1.2;white-space:normal;}
+  .mb-total{grid-area:total;align-self:center;align-items:flex-start;min-width:0;}
+  .mb-total b{font-size:clamp(1.25rem,6vw,1.7rem);white-space:nowrap;}
+  .mb-ticket-pay #mb-limpiar{grid-area:clear;min-width:0;min-height:46px;padding:var(--space-2);font-size:var(--fs-xs);}
+  .mb-ticket-pay .mb-cobrar{grid-area:charge;min-width:0;min-height:46px;padding:var(--space-2);font-size:var(--fs-sm);}
+  .mb-dialog-backdrop{align-items:flex-end;padding:var(--space-2);}
+  .mb-dialog{width:100%;max-height:90dvh;padding:var(--space-4);border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
+  .mb-dialog input{min-height:46px;font-size:16px;}
+  .mb-dialog-total b{font-size:var(--fs-xl);}
+  .mb-cobro-metodos{grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-1);}
+  .mb-cobro-metodos button{min-width:0;min-height:44px;padding:var(--space-1);font-size:var(--fs-xs);line-height:1.2;}
+  .mb-dialog-actions button{min-width:0;min-height:46px;}
+}
+@media (max-width:360px){
+  .mb-top{padding:var(--space-2);}
+  .mb-top #mb-caja-state{font-size:.68rem;}
+  .mb-tabs{padding-inline:var(--space-2);gap:var(--space-1);}
+  .mb-tab{font-size:.68rem;}
+  .mb-grid{padding:var(--space-2);}
+  .mb-tile{padding:var(--space-2);}
+  .mb-ticket{padding-inline:var(--space-2);}
+  .mb-ticket-pay{gap:var(--space-1);}
+}
+@media (max-height:600px) and (max-width:760px){
+  .mb-top{gap:var(--space-1);padding:var(--space-2) var(--space-3);}
+  .mb-tabs{padding-top:var(--space-2);}
+  .mb-search{padding-top:var(--space-2);}
+  .mb-ticket{max-height:48dvh;}
+  .mb-ticket-items{max-height:52px;}
+}
