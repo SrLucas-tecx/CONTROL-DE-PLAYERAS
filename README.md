@@ -34,3 +34,16 @@ actualiza el inventario después de confirmar. Al terminar el turno, cierra la
 caja capturando el efectivo contado para comparar el corte. Los pagos con
 tarjeta se registran en la aplicación, pero no se procesan con una terminal
 bancaria.
+
+## Respaldos JSON
+
+La aplicación guarda los cambios en el almacenamiento del navegador. Para crear
+un archivo transferible, abre **Respaldo de datos** y selecciona **Descargar
+todo (JSON)**. El respaldo completo incluye los datos guardados de todas las
+secciones, como clientes, cotizaciones, inventario, finanzas, bazares y ajustes.
+También puedes descargar secciones individuales, incluida la de clientes y
+finanzas. Para restaurar o transferir datos, importa el archivo JSON desde el
+menú de respaldo y elige combinar o reemplazar cuando se solicite.
+
+Descarga periódicamente el respaldo completo y conserva una copia fuera de este
+dispositivo; el archivo descargado no se actualiza automáticamente.

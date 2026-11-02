@@ -164,7 +164,8 @@ export const ARTIST_MODE_LABEL = {
 export const SECTION_LABELS = {
   cotizaciones: "Cotizaciones",
   inventario: "Inventario",
-  catalogo: "Catalogo",
+  catalogo: "Catálogo",
+  clientes: "Clientes",
   finanzas: "Gastos y compras pendientes",
   bazares: "Bazares",
   reportes: "Reportes",
