@@ -9,7 +9,7 @@
 import { AppState, importData, saveState } from "./storage.js";
 import { showToast } from "./ui.js";
 
-const URL_POR_DEFECTO = "https://script.google.com/macros/s/AKfycbzcWxTNSP9jr2vHd14OoXr_Q_vaAp1-xBsUqaNSiRR9wtQt_4vqNdD363k7BWR2-zT9/exec";
+const URL_POR_DEFECTO = "https://script.google.com/macros/s/AKfycbwQXPSYkhxRT0xbzIo8Hvlz2t_gBweqHCORF8ATnyTli3gws6KOQF4YFX-KkFxJ__Fd/exec";
 
 const $ = id => document.getElementById(id);
 const K = {
@@ -63,10 +63,12 @@ function pintar() {
   pendEl.className = "sh-valor" + (conf ? (pend ? " alerta" : " ok") : "");
 
   const aviso = $("sh-subir-aviso");
-  aviso.className = "sh-aviso " + (!conf ? "gris" : pend ? "amarillo" : "verde");
+  const conError = conf && conn.nivel === "rojo";
+  aviso.className = "sh-aviso " + (!conf ? "gris" : (conError || pend) ? "amarillo" : "verde");
   aviso.textContent = !conf
     ? "Conecta tu hoja para poder subir cambios."
     : enVuelo ? "⏳ Subiendo cambios..."
+    : conError ? "⚠️ No se pudieron subir los cambios. Mira el estado de la conexión."
     : pend ? "⚠️ Tienes cambios sin subir a Google Sheets."
     : "✅ Todo está subido a Google Sheets.";
 
@@ -78,9 +80,18 @@ function pintar() {
 }
 
 /* ---------------- llamadas a Apps Script ---------------- */
+async function parsear(respuesta) {
+  const texto = await respuesta.text();
+  try { return JSON.parse(texto); }
+  catch (e) {
+    const err = new Error("no-json");
+    err.html = texto.slice(0, 300);   // Apps Script devolvió una página HTML en vez de JSON
+    throw err;
+  }
+}
 async function leer(accion) {
   const r = await fetch(`${ls.get(K.url)}?accion=${accion}&token=${encodeURIComponent(ls.get(K.token) || "")}`);
-  return r.json();
+  return parsear(r);
 }
 async function escribir(force) {
   // Sin cabecera application/json para evitar el preflight de CORS (Apps Script no lo soporta).
@@ -88,7 +99,23 @@ async function escribir(force) {
     method: "POST",
     body: JSON.stringify({ token: ls.get(K.token), baseTs: ls.get(K.ts) || "", force: !!force, datos: AppState })
   });
-  return r.json();
+  return parsear(r);
+}
+// Traduce el error técnico a algo que se pueda entender y arreglar
+function diagnostico(e) {
+  if (e && e.message === "no-json") {
+    return {
+      titulo: "El script de Google falló",
+      detalle: "La hoja respondió una página de error en vez de datos. Abre Apps Script → Ejecuciones y revisa el error de doPost/doGet."
+    };
+  }
+  if (navigator.onLine === false) {
+    return { titulo: "Sin internet", detalle: "Tus cambios se guardan en este dispositivo y se subirán al volver la conexión." };
+  }
+  return {
+    titulo: "No se pudo conectar con la hoja",
+    detalle: "Tienes internet, pero Google no dejó pasar la petición. Revisa que la URL sea la de la implementación vigente (termina en /exec) y que el acceso sea “Cualquier persona”."
+  };
 }
 
 /* ---------------- verificar conexión ---------------- */
@@ -103,7 +130,8 @@ async function verificar() {
     if (m.ok) estado("verde", "Conectado con Google Sheets", "La hoja respondió correctamente.");
     else errorApi(m.error);
   } catch (e) {
-    estado("rojo", "Sin conexión", "No se pudo llegar a Google Sheets. Revisa tu internet o la URL.");
+    const d = diagnostico(e);
+    estado("rojo", d.titulo, d.detalle);
   }
 }
 
@@ -125,10 +153,13 @@ async function empujar(force) {
     } else if (r.error === "conflicto") {
       dialogoConflicto(r.ts);
     } else {
+      ls.set(K.pend, "1");
       errorApi(r.error);
     }
   } catch (e) {
-    estado("rojo", "Sin conexión", "Tus cambios están a salvo en este dispositivo y se subirán cuando vuelva la conexión.");
+    ls.set(K.pend, "1");            // la subida falló: quedan cambios pendientes
+    const d = diagnostico(e);
+    estado("rojo", d.titulo, d.detalle);
   } finally {
     enVuelo = false;
     pintar();
@@ -162,7 +193,8 @@ async function traer() {
     window.ofrecerDeshacer("Datos traídos de Google Sheets.", copia);
     estado("verde", "Conectado con Google Sheets", "Datos traídos de la hoja correctamente.");
   } catch (e) {
-    estado("rojo", "Sin conexión", "No se pudo descargar. Revisa tu internet.");
+    const d = diagnostico(e);
+    estado("rojo", d.titulo, d.detalle);
   }
 }
 
@@ -203,7 +235,8 @@ async function arranque() {
     if (pend || !local) { dialogoConflicto(m.ts); return; }     // cambios locales sin subir, o primera conexión
     await traer();                                              // la hoja es más nueva y aquí no hay nada pendiente
   } catch (e) {
-    estado("rojo", "Sin conexión", "No se pudo llegar a Google Sheets. Revisa tu internet o la URL.");
+    const d = diagnostico(e);
+    estado("rojo", d.titulo, d.detalle);
   }
 }
 
