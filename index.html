@@ -662,6 +662,17 @@
       </section>
       <!-- ======================= /INVENTARIO PLAYERAS ======================= -->
 
+      <section id="page-tipos-ropa" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Tipos de ropa y costos</h2>
+            <p class="section-sub">Configura el costo de compra y el precio de venta sugerido para cada tipo. Se usan al crear prendas o cotizaciones, y puedes cambiarlos en sus formularios.</p>
+          </div>
+          <button type="button" class="btn-primary" onclick="openModalTipoPrenda()">+ Nuevo tipo de ropa</button>
+        </div>
+        <div id="tipos-prenda-grid" class="cards-grid"></div>
+      </section>
+
       <div class="modal-overlay" id="modal-inventario-resumen">
         <div class="modal-box inventory-summary-modal">
           <div class="modal-header">
@@ -759,15 +770,6 @@
 
       <!-- ======================= ETIQUETAS Y COLORES ======================= -->
       <section id="page-etiquetas" class="page-section">
-
-        <div class="section-header" style="justify-content:space-between;">
-          <div>
-            <h2 class="section-title">Tipos de ropa</h2>
-            <p class="section-sub">Administra los tipos de prenda disponibles en inventario y cotizaciones.</p>
-          </div>
-          <button class="btn-primary" onclick="openModalTipoPrenda()">+ Nuevo tipo de ropa</button>
-        </div>
-        <div id="tipos-prenda-grid" class="chips-grid"></div>
 
         <div class="section-header" style="justify-content:space-between;">
           <div>
@@ -1573,7 +1575,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Tipo de prenda</label>
-          <select id="p-tipo" class="form-select">
+          <select id="p-tipo" class="form-select" onchange="onPlayeraTipoChange()">
             <option>Playera</option>
             <option>Playera Oversize</option>
             <option>Manga larga</option>
@@ -1588,6 +1590,7 @@
             <option>Bolsa Sorpresa</option>
 
           </select>
+          <span class="form-hint">Al cambiar el tipo se cargan el costo y el precio sugeridos; puedes modificarlos para esta prenda.</span>
         </div>
       </div>
       <div class="form-row">
@@ -1600,7 +1603,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Color</label>
-          <select id="p-color" class="form-select"></select>
+          <select id="p-color" class="form-select" onchange="onPlayeraColorChange()"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Stock (piezas)</label>
@@ -1892,10 +1895,37 @@
         <label class="form-label">Nombre del tipo de ropa</label>
         <input type="text" id="tp-nombre" class="form-input" placeholder="Ej. Sudadera, Polo...">
       </div>
+      <div class="settings-card" style="margin-bottom:var(--space-3);">
+        <h3 class="settings-panel-title">Ropa blanca</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="tp-costo-blanco">Costo de compra ($)</label>
+            <input type="number" id="tp-costo-blanco" class="form-input" min="0" step="0.01" placeholder="47.50">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tp-precio-blanco">Precio de venta sugerido ($)</label>
+            <input type="number" id="tp-precio-blanco" class="form-input" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+      </div>
+      <div class="settings-card" style="margin-bottom:var(--space-3);">
+        <h3 class="settings-panel-title">Ropa de color (negro u otro color)</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="tp-costo-color">Costo de compra ($)</label>
+            <input type="number" id="tp-costo-color" class="form-input" min="0" step="0.01" placeholder="47.50">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tp-precio-color">Precio de venta sugerido ($)</label>
+            <input type="number" id="tp-precio-color" class="form-input" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+      </div>
+      <p class="form-hint">Al elegir tipo y color se cargarán estos importes, pero podrás editarlos en el formulario. Guardar cambios aquí no altera prendas ni cotizaciones existentes.</p>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-tipo-prenda">Cancelar</button>
-      <button class="btn-primary" onclick="saveTipoPrenda()">Guardar tipo</button>
+      <button class="btn-primary" onclick="saveTipoPrenda()">Guardar tipo y costos</button>
     </div>
   </div>
 </div>
@@ -2790,7 +2820,7 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Tipo de prenda</label>
-          <select id="qp-tipo" class="form-select" onchange="updateQuotePrendaField('tipo', this.value)"></select>
+          <select id="qp-tipo" class="form-select" onchange="onQuotePrendaTipoChange(this.value)"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Talla</label>
@@ -2798,7 +2828,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Color</label>
-          <select id="qp-color" class="form-select" onchange="updateQuotePrendaField('colorId', this.value)"></select>
+          <select id="qp-color" class="form-select" onchange="onQuotePrendaColorChange(this.value)"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Cantidad</label>
@@ -2818,7 +2848,7 @@
         <div class="form-group">
           <label class="form-label">Costo de la playera ($)</label>
           <input type="number" id="qp-costo" class="form-input" min="0" step="0.01" onchange="updateQuotePrendaField('costoPlayera', this.value)">
-          <span class="form-hint">Se carga desde inventario al elegir una playera; puedes ajustarlo para esta cotización.</span>
+          <span class="form-hint">Se carga desde inventario o del tipo de ropa; puedes ajustarlo para esta cotización.</span>
         </div>
       </div>
       <div class="form-row">

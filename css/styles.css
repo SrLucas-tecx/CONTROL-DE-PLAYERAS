@@ -231,14 +231,24 @@ ul{list-style:none;}
 .inventory-cost-mode button{padding:5px 9px;border:1px solid var(--color-border);border-radius:var(--radius-sm);background:var(--color-surface-alt);color:var(--color-text-muted);font-size:var(--fs-xs);font-weight:700;cursor:pointer;}
 .inventory-cost-mode button.active{border-color:var(--color-accent);background:var(--color-accent-soft);color:var(--color-text);}
 .inventory-summary-card .btn-secondary{align-self:stretch;width:100%;font-size:var(--fs-xs);line-height:1.35;text-align:center;white-space:normal;}
-.inventory-summary-modal{width:min(100%,1080px);min-height:0;}
+.inventory-summary-modal{width:min(100%,1240px);min-height:0;}
+.modal-box.inventory-summary-modal{max-width:1240px;}
 .inventory-summary-modal .modal-header{padding:12px 18px 10px;}
 .inventory-summary-modal .modal-title{font-size:clamp(1.25rem,2.5vw,1.65rem);letter-spacing:-.02em;line-height:1.2;}
 .inventory-summary-modal .modal-body{padding:10px 18px 6px;}
 .inventory-summary-modal .modal-footer{padding:8px 18px 10px;}
 .inventory-summary-modal .modal-footer>button{min-height:0;padding:8px 16px;font-size:var(--fs-sm);}
-.inventory-summary-modal .inventory-summary{margin:0;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;}
+.inventory-summary-modal .inventory-summary{margin:0;grid-template-columns:minmax(0,1.5fr) repeat(2,minmax(0,1fr));align-items:start;}
 .inventory-summary-modal .inventory-summary-card{gap:var(--space-2);padding:var(--space-3);}
+.inventory-summary-modal .inventory-summary-cost{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-content:start;column-gap:var(--space-2);}
+.inventory-summary-modal .inventory-summary-cost>span,
+.inventory-summary-modal .inventory-summary-cost>small,
+.inventory-summary-modal .inventory-summary-cost .inventory-summary-status,
+.inventory-summary-modal .inventory-summary-cost>.btn-secondary{grid-column:1/-1;}
+.inventory-summary-modal .inventory-summary-cost>strong{grid-column:1;grid-row:2;align-self:center;}
+.inventory-summary-modal .inventory-summary-cost .inventory-cost-mode{grid-column:2;grid-row:2;align-self:center;flex-wrap:nowrap;}
+.inventory-summary-modal .inventory-summary-cost>small{line-height:1.35;}
+.inventory-summary-modal .inventory-summary-cost>.btn-secondary{align-self:start;min-height:0;padding:8px 10px;font-size:var(--fs-xs);white-space:nowrap;}
 .inventory-color-sizes{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-4);}
 .inventory-color-size-group{padding:var(--space-3);background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);}
 .inventory-color-size-heading,.inventory-size-row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);}
@@ -248,7 +258,19 @@ ul{list-style:none;}
 .inventory-size-row{padding-top:var(--space-2);font-size:var(--fs-sm);}
 @media(max-width:1100px){.inventory-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:700px){.inventory-summary{grid-template-columns:1fr;}}
-@media(max-width:760px){#modal-inventario-resumen{padding:0 var(--space-3);}.inventory-summary-modal .inventory-summary{grid-template-columns:1fr;}}
+@media(min-width:761px) and (max-width:1100px){.inventory-summary-modal .inventory-summary{grid-template-columns:repeat(2,minmax(0,1fr));}.inventory-summary-modal .inventory-summary-cost{grid-column:1/-1;}}
+@media(max-width:760px){
+  #modal-inventario-resumen{align-items:flex-start;padding:8px;}
+  .inventory-summary-modal{width:100%;max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);border-radius:14px;}
+  .inventory-summary-modal .modal-header{padding:12px;}
+  .inventory-summary-modal .modal-title{font-size:var(--fs-lg);}
+  .inventory-summary-modal .modal-body{padding:10px 12px;max-height:calc(100vh - 130px);max-height:calc(100dvh - 130px);}
+  .inventory-summary-modal .modal-footer{padding:8px 12px;}
+  .inventory-summary-modal .inventory-summary{grid-template-columns:minmax(0,1fr);gap:var(--space-2);}
+  .inventory-summary-modal .inventory-summary-cost{display:flex;flex-direction:column;overflow:visible;}
+  .inventory-summary-modal .inventory-summary-cost .inventory-cost-mode{flex-wrap:wrap;}
+  .inventory-summary-modal .inventory-summary-cost>.btn-secondary{align-self:stretch;white-space:normal;}
+}
 
 /* ============ FORMS ============ */
 .form-row{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);}

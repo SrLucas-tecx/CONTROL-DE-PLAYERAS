@@ -45,6 +45,26 @@ function opcionesTiposPrenda(tipoActual = "") {
 function cargarTiposPrenda(select, tipoActual = "") {
   if (select) select.innerHTML = opcionesTiposPrenda(tipoActual);
 }
+function tipoPrendaPorNombre(nombre) {
+  return (AppState.tiposPrenda || []).find(tipo => tipo.nombre === nombre);
+}
+function esColorBlanco(colorId) {
+  const color = (AppState.colores || []).find(item => item.id === colorId || item.nombre === colorId);
+  const nombre = (color ? color.nombre : colorId).normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase();
+  return nombre.includes("blanc") || nombre.includes("white");
+}
+function costoPredeterminadoPrenda(tipo, colorId = "") {
+  if (!tipo) return 47.5;
+  const valorColor = tipo.costoColorDefault ?? tipo.costoDefault;
+  const valorBlanco = tipo.costoBlancoDefault ?? tipo.costoDefault;
+  return Number(esColorBlanco(colorId) ? (valorBlanco ?? valorColor ?? 47.5) : (valorColor ?? 47.5));
+}
+function precioPredeterminadoPrenda(tipo, colorId = "") {
+  if (!tipo) return 0;
+  const valorColor = tipo.precioVentaColorDefault ?? tipo.precioVentaDefault;
+  const valorBlanco = tipo.precioVentaBlancoDefault ?? tipo.precioVentaDefault;
+  return Number(esColorBlanco(colorId) ? (valorBlanco ?? valorColor ?? 0) : (valorColor ?? 0));
+}
 
 const GANG_SHEET_REGULAR = "regular";
 const GANG_SHEET_WHITE = "white";
@@ -365,11 +385,24 @@ function openModalTipoPrenda(id) {
   document.getElementById("modal-tipo-prenda-title").textContent = id ? "Editar tipo de ropa" : "Nuevo tipo de ropa";
   const tipo = id && AppState.tiposPrenda.find(x => x.id === id);
   setVal("tp-nombre", tipo ? tipo.nombre : "");
+  setVal("tp-costo-color", tipo ? costoPredeterminadoPrenda(tipo) : 47.5);
+  setVal("tp-precio-color", tipo ? precioPredeterminadoPrenda(tipo) : 0);
+  setVal("tp-costo-blanco", tipo ? costoPredeterminadoPrenda(tipo, "blanco") : 47.5);
+  setVal("tp-precio-blanco", tipo ? precioPredeterminadoPrenda(tipo, "blanco") : 0);
   openModal("modal-tipo-prenda");
 }
-function saveTipoPrenda() {
+async function saveTipoPrenda() {
   const nombre = val("tp-nombre").trim();
   if (!nombre) return showToast("Escribe el nombre del tipo de ropa.", "error");
+  const valores = {
+    costoColorDefault: Number.parseFloat(val("tp-costo-color")),
+    precioVentaColorDefault: Number.parseFloat(val("tp-precio-color")),
+    costoBlancoDefault: Number.parseFloat(val("tp-costo-blanco")),
+    precioVentaBlancoDefault: Number.parseFloat(val("tp-precio-blanco"))
+  };
+  if (Object.values(valores).some(valor => !Number.isFinite(valor) || valor < 0)) {
+    return showToast("Completa los cuatro importes con valores de 0 o mayores.", "error");
+  }
   const id = val("tp-id");
   if (AppState.tiposPrenda.some(tipo => tipo.nombre.toLocaleLowerCase() === nombre.toLocaleLowerCase() && tipo.id !== id)) {
     return showToast("Ya existe un tipo de ropa con ese nombre.", "error");
@@ -377,28 +410,66 @@ function saveTipoPrenda() {
   if (id) {
     const tipo = AppState.tiposPrenda.find(x => x.id === id);
     if (!tipo) return showToast("No se encontró el tipo de ropa.", "error");
-    tipo.nombre = nombre;
+    const cambio = tipo.nombre !== nombre
+      || costoPredeterminadoPrenda(tipo) !== valores.costoColorDefault
+      || precioPredeterminadoPrenda(tipo) !== valores.precioVentaColorDefault
+      || costoPredeterminadoPrenda(tipo, "blanco") !== valores.costoBlancoDefault
+      || precioPredeterminadoPrenda(tipo, "blanco") !== valores.precioVentaBlancoDefault;
+    if (cambio && !(await pedirConfirmacion(
+      "Se cambiarán los valores sugeridos para nuevas prendas y cotizaciones. Las que ya están registradas conservarán sus costos y precios.",
+      { titulo: "¿Guardar cambios del tipo?", confirmLabel: "Guardar cambios", danger: false, deshacer: false }
+    ))) return;
+    Object.assign(tipo, {
+      nombre,
+      costoDefault: valores.costoColorDefault,
+      precioVentaDefault: valores.precioVentaColorDefault,
+      ...valores
+    });
   } else {
-    AppState.tiposPrenda.push({ id: uid(), nombre });
+    AppState.tiposPrenda.push({
+      id: uid(), nombre,
+      costoDefault: valores.costoColorDefault,
+      precioVentaDefault: valores.precioVentaColorDefault,
+      ...valores
+    });
   }
   saveState(); closeModal("modal-tipo-prenda"); renderTiposPrenda(); refreshAllSelects();
-  showToast("Tipo de ropa guardado.");
+  showToast("Tipo y costos predeterminados guardados.");
 }
 async function deleteTipoPrenda(id) {
   const tipo = AppState.tiposPrenda.find(x => x.id === id);
   if (!tipo) return;
-  if (!(await pedirConfirmacion(`¿Quitar "${tipo.nombre}" de los tipos disponibles? Los registros existentes no se modificarán.`, { aviso: "Tipo de ropa eliminado." }))) return;
+  if (!(await pedirConfirmacion(
+    `¿Quitar "${tipo.nombre}" de los tipos disponibles? No aparecerá al crear nuevas prendas, pero los registros existentes conservarán sus datos.`,
+    { titulo: "¿Quitar este tipo de ropa?", confirmLabel: "Quitar tipo", aviso: "Tipo de ropa eliminado." }
+  ))) return;
   AppState.tiposPrenda = AppState.tiposPrenda.filter(x => x.id !== id);
   saveState(); renderTiposPrenda(); refreshAllSelects();
 }
 function renderTiposPrenda() {
   const grid = document.getElementById("tipos-prenda-grid");
   grid.innerHTML = AppState.tiposPrenda.map(tipo => `
-    <div class="chip-item">
-      ${escapeHtml(tipo.nombre)}
-      <button onclick="openModalTipoPrenda('${tipo.id}')" title="Editar">✏️</button>
-      <button onclick="deleteTipoPrenda('${tipo.id}')" title="Eliminar">✕</button>
+    <div class="card">
+      <div class="card-top"><span class="card-title">${escapeHtml(tipo.nombre)}</span></div>
+      <div class="card-meta"><strong>Color (negro u otro)</strong> · Compra ${fmt(costoPredeterminadoPrenda(tipo))} · Venta ${fmt(precioPredeterminadoPrenda(tipo))}</div>
+      <div class="card-meta"><strong>Blanco</strong> · Compra ${fmt(costoPredeterminadoPrenda(tipo, "blanco"))} · Venta ${fmt(precioPredeterminadoPrenda(tipo, "blanco"))}</div>
+      <div class="card-actions">
+        <button type="button" onclick="openModalTipoPrenda('${escapeHtml(tipo.id)}')">✏️ Editar costos</button>
+        <button type="button" class="danger" onclick="deleteTipoPrenda('${escapeHtml(tipo.id)}')">🗑️ Quitar</button>
+      </div>
     </div>`).join("") || `<p class="empty-hint">Aún no hay tipos de ropa. Agrega uno para usarlo en inventario y cotizaciones.</p>`;
+}
+
+function onPlayeraTipoChange() {
+  const tipo = tipoPrendaPorNombre(val("p-tipo"));
+  if (!tipo) return;
+  setVal("p-costo-playera", checked("p-prenda-cliente") ? 0 : costoPredeterminadoPrenda(tipo, val("p-color")));
+  setVal("p-precio-venta", precioPredeterminadoPrenda(tipo, val("p-color")));
+  updatePlayeraPreview();
+  showToast("Se cargaron los costos sugeridos para el color seleccionado; puedes ajustarlos.");
+}
+function onPlayeraColorChange() {
+  onPlayeraTipoChange();
 }
 
 /* =================================================================
@@ -2407,12 +2478,13 @@ function openModalPlayera(id) {
     setVal("p-cliente", p.clienteId || "");
   } else {
     ["p-nombre","p-notas"].forEach(f => setVal(f, ""));
-    setVal("p-tipo", AppState.tiposPrenda[0]?.nombre || ""); setVal("p-talla", ""); setVal("p-stock", 1);
-    setVal("p-costo-playera", 47.5);
+    const tipoDefault = tipoPrendaPorNombre(AppState.tiposPrenda[0]?.nombre) || AppState.tiposPrenda[0];
+    setVal("p-tipo", tipoDefault?.nombre || ""); setVal("p-talla", ""); setVal("p-stock", 1);
+    setVal("p-costo-playera", costoPredeterminadoPrenda(tipoDefault, val("p-color")));
     setChecked("p-tiene-etiqueta", true);
     setChecked("p-prenda-cliente", false); setChecked("p-dtf-especial", false);
     setVal("p-stock-minimo", AppState.settings.stockMinimoDefault || 0);
-    setVal("p-precio-venta", ""); setVal("p-precio-mayoreo", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En proceso");
+    setVal("p-precio-venta", precioPredeterminadoPrenda(tipoDefault, val("p-color"))); setVal("p-precio-mayoreo", ""); setVal("p-prioridad", "Media"); setVal("p-estado", "En proceso");
     setVal("p-estado-venta", "Disponible"); setVal("p-metodo-pago", "Efectivo");
     playeraEstampadosDraft = [{ id: uid(), anchoCm: 0, largoCm: 0 }];
     setVal("p-num-estampados", 1);
@@ -3293,10 +3365,11 @@ function renderQuoteTagsOperativos() {
 }
 
 function blankQuoteItem() {
-  return { rowId: uid(), playeraId: "", nombre: "", tipo: "Playera", talla: "", colorId: "", cantidad: 1,
+  const tipo = tipoPrendaPorNombre("Playera") || AppState.tiposPrenda[0];
+  return { rowId: uid(), playeraId: "", nombre: "", tipo: tipo?.nombre || "", talla: "", colorId: "", cantidad: 1,
     estampados: [{ id: uid(), anchoCm: 0, largoCm: 0 }],
     modoCosteo: "area", gangSheetMetros: 0, gangSheetBlancoSolido: false,
-    costoPlayera: 0, precioVenta: 0, costoEstampadoManual: null,
+    costoPlayera: costoPredeterminadoPrenda(tipo), precioVenta: precioPredeterminadoPrenda(tipo), costoEstampadoManual: null,
     prendaCliente: false, dtfEspecial: false, dtfTipoId: "", dtfMetrosUsados: 0 };
 }
 function addQuoteItem() {
@@ -3376,6 +3449,32 @@ function onQuotePrendaProductoChange(playeraId) {
 function updateQuotePrendaField(field, value) {
   if (!editingQuotePrendaRowId) return;
   updateQuoteItemField(editingQuotePrendaRowId, field, value);
+}
+function onQuotePrendaTipoChange(nombre) {
+  const item = itemPrendaEnEdicion();
+  if (!item) return;
+  item.tipo = nombre;
+  const tipo = tipoPrendaPorNombre(nombre);
+  if (tipo) {
+    item.costoPlayera = item.prendaCliente ? 0 : costoPredeterminadoPrenda(tipo, item.colorId);
+    item.precioVenta = precioPredeterminadoPrenda(tipo, item.colorId);
+  }
+  renderQuoteItems();
+  llenarModalPrenda(item);
+  showToast("Se cargaron los costos sugeridos para el color seleccionado; puedes ajustarlos.");
+}
+function onQuotePrendaColorChange(colorId) {
+  const item = itemPrendaEnEdicion();
+  if (!item) return;
+  item.colorId = colorId;
+  const tipo = tipoPrendaPorNombre(item.tipo);
+  if (tipo) {
+    item.costoPlayera = item.prendaCliente ? 0 : costoPredeterminadoPrenda(tipo, colorId);
+    item.precioVenta = precioPredeterminadoPrenda(tipo, colorId);
+  }
+  renderQuoteItems();
+  llenarModalPrenda(item);
+  showToast("Se cargaron los costos sugeridos para el color seleccionado; puedes ajustarlos.");
 }
 function onQuotePrendaClienteChange(isChecked) {
   if (!editingQuotePrendaRowId) return;
@@ -5811,7 +5910,7 @@ Object.assign(window, {
   deleteCliente, deleteClienteEtiqueta, guardarClienteLegacy,
   duplicateCotizacion, editActiveBazar, editCotizacion, exportQuotePDF, exportQuoteWhatsApp, exportQuoteWhatsAppGuardada, goToBazarDetalle,
   onAbStatusChange, onAscConsignacionChange, onConsSocioChange, onConsignacionPiezaUnicaChange, updateConsignacionPreview, updateConsignacionProductosPreview, addConsignacionProducto, addConsignacionBazarAsignacion, onArtistModeChange, onHeaderBazarChange, onMermaPlayeraChange, onPlayeraArtistChange, onPlayeraDtfEspecialChange, onPlayeraDtfTipoChange, onPlayeraDtfMetrosChange, onPlayeraNumEstampadosChange, onPlayeraTieneEtiquetaChange,
-  onPrendaClienteChange, onQuoteArtistChange, onQuoteDtfEspecialChange, onQuoteItemProductChange,
+  onPlayeraColorChange, onPlayeraTipoChange, onPrendaClienteChange, onQuoteArtistChange, onQuoteDtfEspecialChange, onQuoteItemProductChange, onQuotePrendaColorChange, onQuotePrendaTipoChange,
   onQuoteMetodoPagoChange, onQuoteClienteSelectChange,
   onQuoteTipoVentaChange, onQuoteVentaNulaChange,
   openPreviewCotizacion, openPreviewCotizacionGuardada, confirmarExportarPDF, confirmarExportarWhatsApp,

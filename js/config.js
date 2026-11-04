@@ -44,7 +44,9 @@ export function defaultState() {
       { id: "e2", nombre: "Oversize", color: "#8b8b93" },
       { id: "e3", nombre: "Bolsa sorpresa", color: "#e0a23a" }
     ],
-    tiposPrenda: TIPOS_PRENDA_DEFAULT.map((nombre, index) => ({ id: `tp${index + 1}`, nombre })),
+    tiposPrenda: TIPOS_PRENDA_DEFAULT.map((nombre, index) => ({
+      id: `tp${index + 1}`, nombre, costoDefault: 47.5, precioVentaDefault: 0
+    })),
     tallaEtiquetas: [
       { id: "te1", talla: "CH", color: "Negro", cantidad: 0 },
       { id: "te2", talla: "MD", color: "Negro", cantidad: 0 },
