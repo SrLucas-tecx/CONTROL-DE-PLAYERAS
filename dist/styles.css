@@ -751,7 +751,7 @@ ul {
   min-height: 0;
 }
 .inventory-summary-modal .modal-header {
-  padding: 16px 20px 12px;
+  padding: 12px 18px 10px;
 }
 .inventory-summary-modal .modal-title {
   font-size: clamp(1.25rem,2.5vw,1.65rem);
@@ -759,14 +759,24 @@ ul {
   line-height: 1.2;
 }
 .inventory-summary-modal .modal-body {
-  padding: 14px 20px 8px;
+  padding: 10px 18px 6px;
 }
 .inventory-summary-modal .modal-footer {
-  padding: 12px 20px 16px;
+  padding: 8px 18px 10px;
+}
+.inventory-summary-modal .modal-footer>button {
+  min-height: 0;
+  padding: 8px 16px;
+  font-size: var(--fs-sm);
 }
 .inventory-summary-modal .inventory-summary {
   margin: 0;
   grid-template-columns: repeat(3,minmax(0,1fr));
+  align-items: start;
+}
+.inventory-summary-modal .inventory-summary-card {
+  gap: var(--space-2);
+  padding: var(--space-3);
 }
 .inventory-color-sizes {
   display: flex;

@@ -232,11 +232,13 @@ ul{list-style:none;}
 .inventory-cost-mode button.active{border-color:var(--color-accent);background:var(--color-accent-soft);color:var(--color-text);}
 .inventory-summary-card .btn-secondary{align-self:stretch;width:100%;font-size:var(--fs-xs);line-height:1.35;text-align:center;white-space:normal;}
 .inventory-summary-modal{width:min(100%,1080px);min-height:0;}
-.inventory-summary-modal .modal-header{padding:16px 20px 12px;}
+.inventory-summary-modal .modal-header{padding:12px 18px 10px;}
 .inventory-summary-modal .modal-title{font-size:clamp(1.25rem,2.5vw,1.65rem);letter-spacing:-.02em;line-height:1.2;}
-.inventory-summary-modal .modal-body{padding:14px 20px 8px;}
-.inventory-summary-modal .modal-footer{padding:12px 20px 16px;}
-.inventory-summary-modal .inventory-summary{margin:0;grid-template-columns:repeat(3,minmax(0,1fr));}
+.inventory-summary-modal .modal-body{padding:10px 18px 6px;}
+.inventory-summary-modal .modal-footer{padding:8px 18px 10px;}
+.inventory-summary-modal .modal-footer>button{min-height:0;padding:8px 16px;font-size:var(--fs-sm);}
+.inventory-summary-modal .inventory-summary{margin:0;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;}
+.inventory-summary-modal .inventory-summary-card{gap:var(--space-2);padding:var(--space-3);}
 .inventory-color-sizes{display:flex;flex-direction:column;gap:var(--space-3);margin-top:var(--space-4);}
 .inventory-color-size-group{padding:var(--space-3);background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);}
 .inventory-color-size-heading,.inventory-size-row{display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);}
