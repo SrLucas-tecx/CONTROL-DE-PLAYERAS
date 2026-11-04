@@ -14,7 +14,7 @@ const URL_POR_DEFECTO = "https://script.google.com/macros/s/AKfycbwQXPSYkhxRT0xb
 const $ = id => document.getElementById(id);
 const K = {
   url: "LUCXSTUDIO_SHEETS_URL", token: "LUCXSTUDIO_SHEETS_TOKEN",
-  on: "LUCXSTUDIO_SHEETS_ON", ts: "LUCXSTUDIO_SHEETS_TS", pend: "LUCXSTUDIO_SHEETS_PEND"
+  on: "LUCXSTUDIO_SHEETS_ON", ts: "LUCXSTUDIO_SHEETS_TS", pend: "LUCXSTUDIO_SHEETS_PEND", hash: "LUCXSTUDIO_SHEETS_HASH"
 };
 const ls = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -79,29 +79,63 @@ function pintar() {
   $("sh-desconectar").disabled = !conf;
 }
 
+/* ---------------- sincronización v2: por secciones, comprimida ----------------
+   · Solo se suben las secciones (playeras, cotizaciones, ...) que cambiaron.
+   · Cada sección viaja en gzip+base64 (≈ 85 % menos).
+   · La hoja guarda UNA fila por sección y la sobrescribe: nunca crece con el tiempo.
+   · Cada 30 s (y al volver a la pestaña) se revisa si otro dispositivo cambió algo.
+------------------------------------------------------------------------- */
+const NO_SYNC = new Set(["ultimaModificacion"]);
+function hashTexto(t) {
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36) + "." + t.length.toString(36);
+}
+const hashesSync = () => { try { return JSON.parse(ls.get(K.hash) || "{}"); } catch (e) { return {}; } };
+const guardarHashesSync = h => ls.set(K.hash, JSON.stringify(h));
+function serializarLocal() {
+  const ser = {}, hash = {};
+  Object.keys(AppState).filter(k => !NO_SYNC.has(k)).forEach(k => {
+    ser[k] = JSON.stringify(AppState[k] === undefined ? null : AppState[k]);
+    hash[k] = hashTexto(ser[k]);
+  });
+  return { ser, hash };
+}
+async function comprimir(texto) {
+  if (typeof CompressionStream === "undefined") return "raw:" + texto;
+  const flujo = new Blob([texto]).stream().pipeThrough(new CompressionStream("gzip"));
+  const bytes = new Uint8Array(await new Response(flujo).arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return "gz:" + btoa(bin);
+}
+async function descomprimir(payload) {
+  if (payload.startsWith("raw:")) return payload.slice(4);
+  const bin = atob(payload.slice(3));
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  const flujo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Response(flujo).text();
+}
+
 /* ---------------- llamadas a Apps Script ---------------- */
 async function parsear(respuesta) {
   const texto = await respuesta.text();
   try { return JSON.parse(texto); }
   catch (e) {
     const err = new Error("no-json");
-    err.html = texto.slice(0, 300);   // Apps Script devolvió una página HTML en vez de JSON
+    err.html = texto.slice(0, 300);
     throw err;
   }
 }
-async function leer(accion) {
-  const r = await fetch(`${ls.get(K.url)}?accion=${accion}&token=${encodeURIComponent(ls.get(K.token) || "")}`);
+async function llamar(accion, extra) {
+  const r = await fetch(`${ls.get(K.url)}?accion=${accion}&token=${encodeURIComponent(ls.get(K.token) || "")}${extra || ""}`);
   return parsear(r);
 }
-async function escribir(force) {
+async function enviar(cuerpo) {
   // Sin cabecera application/json para evitar el preflight de CORS (Apps Script no lo soporta).
-  const r = await fetch(ls.get(K.url), {
-    method: "POST",
-    body: JSON.stringify({ token: ls.get(K.token), baseTs: ls.get(K.ts) || "", force: !!force, datos: AppState })
-  });
+  const r = await fetch(ls.get(K.url), { method: "POST", body: JSON.stringify(Object.assign({ token: ls.get(K.token) }, cuerpo)) });
   return parsear(r);
 }
-// Traduce el error técnico a algo que se pueda entender y arreglar
 function diagnostico(e) {
   if (e && e.message === "no-json") {
     return {
@@ -117,8 +151,13 @@ function diagnostico(e) {
     detalle: "Tienes internet, pero Google no dejó pasar la petición. Revisa que la URL sea la de la implementación vigente (termina en /exec) y que el acceso sea “Cualquier persona”."
   };
 }
+function manejarError(e) {
+  if (e && e.codigo) return errorApi(e.codigo);
+  const d = diagnostico(e);
+  estado("rojo", d.titulo, d.detalle);
+}
+const AVISO_SCRIPT = ["Script desactualizado", "Pega el nuevo Code.gs en Apps Script y publica una versión nueva de la implementación."];
 
-/* ---------------- verificar conexión ---------------- */
 async function verificar() {
   if (!configurado()) {
     estado("gris", "Sin conectar", "Pega la URL y el token abajo para activar el respaldo en Google Sheets.");
@@ -126,44 +165,133 @@ async function verificar() {
   }
   estado("gris", "Verificando conexión...", "", true);
   try {
-    const m = await leer("meta");
-    if (m.ok) estado("verde", "Conectado con Google Sheets", "La hoja respondió correctamente.");
-    else errorApi(m.error);
-  } catch (e) {
-    const d = diagnostico(e);
-    estado("rojo", d.titulo, d.detalle);
-  }
+    const m = await llamar("meta");
+    if (!m.ok) errorApi(m.error);
+    else if (!m.hashes) estado("rojo", ...AVISO_SCRIPT);
+    else estado("verde", "Conectado con Google Sheets", "La hoja respondió correctamente.");
+  } catch (e) { manejarError(e); }
 }
 
-/* ---------------- subir ---------------- */
-async function empujar(force) {
+/* ---------------- subir / traer ---------------- */
+async function subir(claves, ser, hash, baseTs, force) {
+  const cambios = {}, hs = {};
+  for (const k of claves) { cambios[k] = await comprimir(ser[k]); hs[k] = hash[k]; }
+  return enviar({ baseTs, force: !!force, cambios, hashes: hs });
+}
+// Baja secciones de la hoja. completo=true reemplaza todo; si no, mezcla solo esas secciones.
+async function traerDeHoja(claves, completo) {
+  const r = await llamar("pull", claves && claves.length ? "&claves=" + encodeURIComponent(claves.join(",")) : "");
+  if (!r.ok) throw Object.assign(new Error("api"), { codigo: r.error });
+  const nuevos = {};
+  for (const k of Object.keys(r.datos || {})) nuevos[k] = JSON.parse(await descomprimir(r.datos[k]));
+  if (!Object.keys(nuevos).length) return null;
+  const copia = window.tomarCopiaEstado();
+  aplicando = true;
+  try { importData(completo ? nuevos : Object.assign({}, AppState, nuevos)); saveState(); } finally { aplicando = false; }
+  const { hash } = serializarLocal();
+  const sync = completo ? {} : hashesSync();
+  Object.keys(nuevos).forEach(k => { sync[k] = hash[k]; });
+  guardarHashesSync(sync);
+  ls.set(K.ts, r.ts);
+  ls.set(K.pend, "0");
+  return copia;
+}
+async function traer() {                       // botón "Traer de la hoja": reemplaza todo
+  enConflicto = false;
+  if (!configurado()) return;
+  estado("gris", "Descargando de Google Sheets...", "", true);
+  try {
+    const copia = await traerDeHoja(null, true);
+    if (!copia) { estado("verde", "Conectado con Google Sheets", "La hoja todavía está vacía."); return; }
+    window.refrescarVistaActual();
+    window.ofrecerDeshacer("Datos traídos de Google Sheets.", copia);
+    estado("verde", "Conectado con Google Sheets", "Datos traídos de la hoja correctamente.");
+  } catch (e) { manejarError(e); }
+}
+async function subirTodo() {                   // "Subir lo mío": sobrescribe la hoja
   if (!configurado()) return false;
+  enConflicto = false;
   if (enVuelo) { pendientePush = true; return false; }
   enVuelo = true;
   estado("amarillo", "Subiendo cambios...", "Enviando tus datos a Google Sheets.", true);
-  let exito = false;
   try {
-    const r = await escribir(force);
-    if (r.ok) {
-      ls.set(K.ts, r.ts);
-      if (!pendientePush) ls.set(K.pend, "0");
-      enConflicto = false;
-      exito = true;
-      estado("verde", "Conectado con Google Sheets", "Cambios subidos correctamente.");
-    } else if (r.error === "conflicto") {
-      dialogoConflicto(r.ts);
+    const { ser, hash } = serializarLocal();
+    const r = await subir(Object.keys(ser), ser, hash, "", true);
+    if (!r.ok) { errorApi(r.error); return false; }
+    guardarHashesSync(hash); ls.set(K.ts, r.ts); ls.set(K.pend, "0");
+    estado("verde", "Conectado con Google Sheets", "Cambios subidos correctamente.");
+    return true;
+  } catch (e) { ls.set(K.pend, "1"); manejarError(e); return false; }
+  finally { enVuelo = false; pintar(); }
+}
+
+/* ---------------- sincronización automática ---------------- */
+async function sincronizar(visible) {
+  if (!configurado() || aplicando || enConflicto) return false;
+  if (enVuelo) { pendientePush = true; return false; }
+  enVuelo = true;
+  if (visible) estado("amarillo", "Sincronizando...", "Comparando con Google Sheets.", true);
+  let exito = false, subidas = 0, bajadas = 0;
+  try {
+    for (let intento = 0; intento < 3 && !exito; intento++) {
+      const m = await llamar("meta");
+      if (!m.ok) { errorApi(m.error); return false; }
+      if (!m.hashes) { estado("rojo", ...AVISO_SCRIPT); return false; }
+      const { ser, hash } = serializarLocal();
+      const remoto = m.hashes;
+
+      if (!m.ts) {                                   // hoja vacía: primera subida
+        const r = await subir(Object.keys(ser), ser, hash, "", true);
+        if (!r.ok) { errorApi(r.error); return false; }
+        guardarHashesSync(hash); ls.set(K.ts, r.ts);
+        subidas = Object.keys(ser).length; exito = true; break;
+      }
+      let sync = hashesSync();
+      if (!Object.keys(sync).length) {               // primera conexión de este dispositivo
+        if (Object.keys(remoto).some(k => remoto[k] !== hash[k])) { dialogoConflicto(m.ts); return false; }
+        Object.keys(remoto).forEach(k => { sync[k] = remoto[k]; });
+      }
+      const remotoCambio = Object.keys(remoto).filter(k => remoto[k] !== sync[k]);
+      const localCambio = Object.keys(hash).filter(k => hash[k] !== sync[k]);
+      const choque = remotoCambio.filter(k => localCambio.includes(k) && remoto[k] !== hash[k]);
+      if (choque.length) { dialogoConflicto(m.ts); return false; }
+
+      const soloRemoto = remotoCambio.filter(k => !localCambio.includes(k));
+      let baseTs = m.ts;
+      if (soloRemoto.length) {
+        await traerDeHoja(soloRemoto, false);
+        bajadas = soloRemoto.length; baseTs = ls.get(K.ts) || m.ts;
+      }
+      sync = hashesSync();
+      remotoCambio.filter(k => localCambio.includes(k)).forEach(k => { sync[k] = hash[k]; });   // ya iguales
+      const aSubir = localCambio.filter(k => remoto[k] !== hash[k]);
+      if (aSubir.length) {
+        const r = await subir(aSubir, ser, hash, baseTs, false);
+        if (r.error === "conflicto") continue;       // alguien subió justo ahora: se reintenta
+        if (!r.ok) { errorApi(r.error); return false; }
+        aSubir.forEach(k => { sync[k] = hash[k]; });
+        ls.set(K.ts, r.ts); subidas = aSubir.length;
+      } else {
+        ls.set(K.ts, baseTs);
+      }
+      guardarHashesSync(sync); exito = true;
+    }
+    if (exito) {
+      ls.set(K.pend, "0");
+      estado("verde", "Conectado con Google Sheets",
+        subidas || bajadas ? `Sincronizado: ${subidas} sección(es) subida(s), ${bajadas} bajada(s).` : "Todo al día.");
+      if (bajadas) { window.refrescarVistaActual(); showToast("Se actualizaron datos desde otro dispositivo."); }
     } else {
-      ls.set(K.pend, "1");
-      errorApi(r.error);
+      estado("amarillo", "La hoja cambió mientras subías", "Se reintentará automáticamente en unos segundos.");
+      pendientePush = true;
     }
   } catch (e) {
-    ls.set(K.pend, "1");            // la subida falló: quedan cambios pendientes
-    const d = diagnostico(e);
-    estado("rojo", d.titulo, d.detalle);
+    ls.set(K.pend, "1");
+    manejarError(e);
   } finally {
     enVuelo = false;
     pintar();
-    if (pendientePush) { pendientePush = false; programarPush(); }
+    if (pendientePush) { pendientePush = false; if (!enConflicto) programarPush(); }
   }
   return exito;
 }
@@ -172,31 +300,10 @@ function programarPush() {
   ls.set(K.pend, "1");
   pintar();
   clearTimeout(temporizador);
-  temporizador = setTimeout(() => empujar(false), 2500);
+  temporizador = setTimeout(() => sincronizar(false), 2500);
 }
-
-/* ---------------- traer ---------------- */
-async function traer() {
-  enConflicto = false;
-  if (!configurado()) return;
-  estado("gris", "Descargando de Google Sheets...", "", true);
-  try {
-    const r = await leer("pull");
-    if (!r.ok) { errorApi(r.error); return; }
-    if (!r.datos) { estado("verde", "Conectado con Google Sheets", "La hoja todavía está vacía."); return; }
-    const copia = window.tomarCopiaEstado();
-    aplicando = true;
-    try { importData(r.datos); saveState(); } finally { aplicando = false; }
-    ls.set(K.ts, r.ts);
-    ls.set(K.pend, "0");
-    window.refrescarVistaActual();
-    window.ofrecerDeshacer("Datos traídos de Google Sheets.", copia);
-    estado("verde", "Conectado con Google Sheets", "Datos traídos de la hoja correctamente.");
-  } catch (e) {
-    const d = diagnostico(e);
-    estado("rojo", d.titulo, d.detalle);
-  }
-}
+const empujar = force => (force ? subirTodo() : sincronizar(true));
+const arranque = () => sincronizar(false);
 
 /* ---------------- conflicto ---------------- */
 function dialogoConflicto(tsHoja) {
@@ -204,40 +311,17 @@ function dialogoConflicto(tsHoja) {
   estado("amarillo", "La hoja tiene otra versión", "Elige cuál usar: traer la de la hoja o subir la de este dispositivo.");
   window.openQuickDetail({
     icon: "☁️", title: "La hoja tiene otra versión",
-    subtitle: "Puede que hayas usado la app en otro dispositivo",
+    subtitle: "Se editó lo mismo en dos dispositivos, o es la primera conexión",
     sections: [{
       rows: [["Última subida a la hoja", fechaTxt(tsHoja)], ["Último cambio en este dispositivo", fechaTxt(AppState.ultimaModificacion)]],
       text: "Traer la hoja reemplaza lo de este dispositivo (podrás deshacer). Subir lo mío sobrescribe lo que hay en la hoja."
     }],
     actions: [
       { label: "⬇️ Traer lo de la hoja", variant: "primary", onClick: () => traer() },
-      { label: "⬆️ Subir lo mío", variant: "danger", onClick: () => { enConflicto = false; empujar(true); } },
+      { label: "⬆️ Subir lo mío", variant: "danger", onClick: () => subirTodo() },
       { label: "Decidir después" }
     ]
   });
-}
-
-/* ---------------- arranque ---------------- */
-async function arranque() {
-  if (!configurado()) { pintar(); return; }
-  estado("gris", "Verificando conexión...", "", true);
-  try {
-    const m = await leer("meta");
-    if (!m.ok) { errorApi(m.error); return; }
-    const local = ls.get(K.ts) || "";
-    const pend = ls.get(K.pend) === "1";
-    if (!m.ts) { await empujar(true); return; }                 // hoja vacía: primera subida
-    if (m.ts === local) {
-      if (pend) await empujar(false);
-      else estado("verde", "Conectado con Google Sheets", "Todo al día.");
-      return;
-    }
-    if (pend || !local) { dialogoConflicto(m.ts); return; }     // cambios locales sin subir, o primera conexión
-    await traer();                                              // la hoja es más nueva y aquí no hay nada pendiente
-  } catch (e) {
-    const d = diagnostico(e);
-    estado("rojo", d.titulo, d.detalle);
-  }
 }
 
 /* ---------------- estilos de la sección ---------------- */
@@ -373,7 +457,7 @@ function crearSecciones() {
     if (ok) traer();
   });
   $("sh-desconectar").addEventListener("click", () => {
-    [K.url, K.token, K.on, K.ts, K.pend].forEach(ls.del);
+    [K.url, K.token, K.on, K.ts, K.pend, K.hash].forEach(ls.del);
     $("sh-url").value = URL_POR_DEFECTO; $("sh-token").value = "";
     enConflicto = false;
     estado("gris", "Sin conectar", "Pega la URL y el token abajo para activar el respaldo en Google Sheets.");
@@ -397,6 +481,9 @@ function iniciar() {
 
   if (configurado()) estado("gris", "Verificando conexión...", "", true);
   setTimeout(arranque, 3000);
+  // "Tiempo real": revisa la hoja cada 30 s mientras la pestaña está a la vista y al volver a ella.
+  setInterval(() => { if (document.visibilityState === "visible" && navigator.onLine !== false) sincronizar(false); }, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sincronizar(false); });
 }
 iniciar();
 

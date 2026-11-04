@@ -31,6 +31,8 @@ export function loadState() {
   } catch (e) {
     console.error("Error cargando estado:", e);
   }
+  // Las copias por sección duplicaban todo el almacenamiento; ya se generan al exportar.
+  try { Object.keys(SECTION_LABELS).forEach(s => localStorage.removeItem(`${STORAGE_KEY}_section_${s}`)); } catch (e) { /* sin almacenamiento */ }
   migrarDatosAntiguos();
 }
 
@@ -67,9 +69,8 @@ export function saveState() {
   try {
     AppState.ultimaModificacion = new Date().toISOString();   // sirve para comparar respaldos entre dispositivos
     localStorage.setItem(STORAGE_KEY, JSON.stringify(AppState));
-    Object.keys(SECTION_LABELS).forEach(section => {
-      localStorage.setItem(`${STORAGE_KEY}_section_${section}`, JSON.stringify(getSectionData(section)));
-    });
+    // Aviso para sheets.js (antes nadie lo emitía y los cambios no se subían solos)
+    document.dispatchEvent(new Event("lucx:guardado"));
   } catch (e) {
     console.error("Error guardando estado:", e);
     if (toastHandler) toastHandler("No se pudo guardar (almacenamiento lleno).", "error");

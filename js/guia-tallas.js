@@ -137,6 +137,50 @@ const PRENDAS_DATOS = {
         <circle cx="152" cy="138" r="11" fill="#0b3674"/><text x="152" y="142" fill="#fff" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">2</text>
       </svg>`
   },
+  tirantes: {
+    nombre: "Playera de Tirantes",
+    subtitulo: "Corte de tirantes con cuello amplio",
+    tallas: [
+      { talla: "CHI", ancho: 45.7, largo: 69.2 },
+      { talla: "MED", ancho: 50.8, largo: 73.0 },
+      { talla: "GDE", ancho: 55.9, largo: 75.6 },
+      { talla: "EXG", ancho: 61.0, largo: 78.1 },
+      { talla: "2EG", ancho: 66.0, largo: 80.6 },
+      { talla: "3EG", ancho: 66.0, largo: 83.2 }
+    ],
+    svg: `
+      <svg viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg" width="240" height="240">
+        <defs><marker id="g-arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8Z" fill="#e3363d"/></marker></defs>
+        <path d="M82 25 L108 25 Q110 92 140 92 Q170 92 172 25 L198 25 Q196 85 218 120 Q234 138 234 150 L228 250 Q140 258 52 250 L46 150 Q46 138 62 120 Q84 85 82 25 Z" fill="#fff" stroke="#18181b" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M114 28 Q116 82 140 82 Q164 82 166 28" fill="none" stroke="#18181b" stroke-width="2.5"/>
+        <path d="M50 140 H230" stroke="#e3363d" stroke-width="3.5" marker-start="url(#g-arrow)" marker-end="url(#g-arrow)"/>
+        <path d="M185 27 V248" stroke="#e3363d" stroke-width="3.5" marker-start="url(#g-arrow)" marker-end="url(#g-arrow)"/>
+        <circle cx="70" cy="126" r="11" fill="#0b3674"/><text x="70" y="130" fill="#fff" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">1</text>
+        <circle cx="168" cy="125" r="11" fill="#0b3674"/><text x="168" y="129" fill="#fff" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">2</text>
+      </svg>`
+  },
+  sin_mangas: {
+    nombre: "Playera Sin Mangas",
+    subtitulo: "Corte sin mangas, hombro abierto",
+    tallas: [
+      { talla: "CHI", ancho: 45.7, largo: 68.6 },
+      { talla: "MED", ancho: 50.8, largo: 71.1 },
+      { talla: "GDE", ancho: 55.9, largo: 73.7 },
+      { talla: "EXG", ancho: 61.0, largo: 76.2 },
+      { talla: "2EG", ancho: 64.8, largo: 78.7 },
+      { talla: "3EG", ancho: 64.8, largo: 80.0 }
+    ],
+    svg: `
+      <svg viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg" width="240" height="240">
+        <defs><marker id="g-arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8Z" fill="#e3363d"/></marker></defs>
+        <path d="M95 30 Q140 58 185 30 L232 48 Q216 90 224 125 L218 250 Q140 258 62 250 L56 125 Q64 90 48 48 Z" fill="#fff" stroke="#18181b" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M95 30 Q140 62 185 30 M98 34 Q140 54 182 34" fill="none" stroke="#18181b" stroke-width="2.5"/>
+        <path d="M58 125 H222" stroke="#e3363d" stroke-width="3.5" marker-start="url(#g-arrow)" marker-end="url(#g-arrow)"/>
+        <path d="M185 32 V248" stroke="#e3363d" stroke-width="3.5" marker-start="url(#g-arrow)" marker-end="url(#g-arrow)"/>
+        <circle cx="74" cy="112" r="11" fill="#0b3674"/><text x="74" y="116" fill="#fff" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">1</text>
+        <circle cx="172" cy="85" r="11" fill="#0b3674"/><text x="172" y="89" fill="#fff" font-family="Arial,sans-serif" font-size="13" font-weight="700" text-anchor="middle">2</text>
+      </svg>`
+  },
   sudadera_crew: {
     nombre: "Sudadera Cuello Redondo",
     subtitulo: "Sudadera tipo Crewneck sin capucha",
@@ -285,8 +329,8 @@ function filasTablaPdf(tallas) {
     </tr>`).join("");
 }
 
-function construirPdf(tallas, logo, letras) {
-  const infoPrenda = PRENDAS_DATOS[prendaActual];
+function construirPdf(tallas, logo, letras, clave = prendaActual) {
+  const infoPrenda = PRENDAS_DATOS[clave];
   const wordmark = letras
     ? `<img src="${letras}" alt="LUCXSTUDIO" style="display:block;width:220px;height:auto;max-height:42px;object-fit:contain;object-position:left center;">`
     : `<div style="font-size:25px;font-weight:900;letter-spacing:1px;color:#fff;">LUCXSTUDIO</div>`;
@@ -452,7 +496,7 @@ function crearSelectorPrendas() {
   selector.className = "form-select";
   selector.style.cssText = "width:auto;font-weight:700;padding:6px 12px;margin-right:10px;";
   
-  Object.keys(PRENDAS_DATOS).forEach(key => {
+  clavesOrdenadas().forEach(key => {
     const opt = document.createElement("option");
     opt.value = key;
     opt.textContent = PRENDAS_DATOS[key].nombre;
@@ -468,11 +512,75 @@ function crearSelectorPrendas() {
   contenedorAcciones.insertBefore(selector, contenedorAcciones.firstChild);
 }
 
+// Orden alfabético por nombre visible (selector y catálogo)
+function clavesOrdenadas() {
+  return Object.keys(PRENDAS_DATOS).sort((a, b) =>
+    PRENDAS_DATOS[a].nombre.localeCompare(PRENDAS_DATOS[b].nombre, "es", { sensitivity: "base" }));
+}
+
+// Catálogo para enviar: una página por prenda (alfabético), con las medidas que tengas editadas.
+async function descargarCatalogo() {
+  showToast("Generando catálogo…");
+  const [logo, letras] = await Promise.all([
+    imagenDataUrl("assets/images/LOGO-crop.png", 180),
+    imagenDataUrl("assets/images/Letras-crop.png", 600)
+  ]);
+  const paginas = clavesOrdenadas().map(clave => construirPdf(getTallas(clave), logo, letras, clave));
+  const nombre = "catalogo_tallas_lucxstudio.pdf";
+
+  if (typeof html2pdf === "undefined") {
+    showToast("No cargó el generador de PDF; se abrirá la impresión.", "success");
+    imprimirPdf(paginas.join('<div style="page-break-after:always;height:0"></div>'));
+    return;
+  }
+
+  const contenedor = document.createElement("div");
+  contenedor.style.cssText = "position:fixed;left:0;top:0;width:1080px;z-index:-9999;background:#fff;";
+  contenedor.innerHTML = paginas.join("");
+  document.body.appendChild(contenedor);
+  const hojas = [...contenedor.children];
+  await new Promise(resolve => setTimeout(resolve, 300));
+
+  const opciones = {
+    margin: [5, 5, 5, 5], filename: nombre,
+    image: { type: "jpeg", quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0, x: 0, y: 0, width: 1080, height: 720, windowWidth: 1080, windowHeight: 720, logging: false },
+    jsPDF: { unit: "mm", format: "a4", orientation: "landscape" }
+  };
+  try {
+    let trabajo = html2pdf().set(opciones).from(hojas[0]).toPdf();
+    for (let i = 1; i < hojas.length; i++) {
+      trabajo = trabajo.get("pdf").then(pdf => { pdf.addPage(); }).from(hojas[i]).toContainer().toCanvas().toPdf();
+    }
+    await trabajo.save();
+    showToast("Catálogo descargado.");
+  } catch (error) {
+    console.error("Error generando el catálogo:", error);
+    showToast("No se pudo generar el catálogo; se abrirá la impresión.", "error");
+    imprimirPdf(paginas.join('<div style="page-break-after:always;height:0"></div>'));
+  } finally {
+    contenedor.remove();
+  }
+}
+
+function crearBotonCatalogo() {
+  const acciones = document.querySelector(".guia-tallas-actions");
+  if (!acciones || document.getElementById("guia-tallas-catalogo")) return;
+  const boton = document.createElement("button");
+  boton.id = "guia-tallas-catalogo";
+  boton.type = "button";
+  boton.className = "btn-secondary";
+  boton.textContent = "📚 Catálogo completo (PDF)";
+  boton.addEventListener("click", descargarCatalogo);
+  acciones.appendChild(boton);
+}
+
 export function iniciarGuiaTallas() {
   const pagina = document.getElementById("page-guia-tallas");
   if (!pagina) return;
 
   crearSelectorPrendas();
+  crearBotonCatalogo();
   renderTallas();
 
   pagina.addEventListener("change", event => {

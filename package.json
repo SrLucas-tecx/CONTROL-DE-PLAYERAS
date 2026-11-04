@@ -4,6 +4,6 @@
     "tailwindcss": "^4.3.3"
   },
   "scripts": {
-    "build:css": "tailwindcss -i css/styles.css -o dist/styles.css && tailwindcss -i css/redesign.css -o dist/redesign.css"
+    "build:css": "tailwindcss -i css/styles.css -o dist/styles.css && tailwindcss -i css/redesign-bundle.css -o dist/redesign.css"
   }
 }

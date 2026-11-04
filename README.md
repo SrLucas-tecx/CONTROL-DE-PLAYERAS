@@ -21,9 +21,10 @@ npm install
 npm run build:css
 ```
 
-La compilación toma `css/styles.css` y `css/redesign.css` y genera
-`dist/styles.css` y `dist/redesign.css`, que son los archivos que carga la
-aplicación. Ejecuta `npm run build:css` después de cambiar los CSS fuente.
+La compilación toma `css/styles.css` y `css/redesign-bundle.css`, que importa
+`css/redesign.css` seguido de `css/layout-fix.css`, y genera `dist/styles.css`
+y `dist/redesign.css`, que son los archivos que carga la aplicación. Ejecuta
+`npm run build:css` después de cambiar los CSS fuente.
 
 ## Caja del Modo Bazar
 

@@ -1,0 +1,39 @@
+/* ============================================================
+   LAYOUT FIX — pegar AL FINAL de css/redesign.css y compilar
+   (npm run build:css). Alinea formularios, tarjetas de números,
+   Ajustes y los pop-ups con muchos botones.
+   ============================================================ */
+
+/* ---- Formularios: el input queda alineado aunque la etiqueta ocupe 2 líneas ---- */
+.form-label{line-height:1.25;}
+.form-row{align-items:stretch;}
+.form-row > .form-group{display:flex;flex-direction:column;}
+.form-row > .form-group > .form-label{margin-top:auto;}
+
+/* ---- Tarjetas de números (bazar, caja, estadísticas): nada de "$1,400.\n00" ---- */
+.sticker-count-card{container-type:inline-size;justify-content:flex-start;}
+.sticker-count-value,
+.sticker-count-net .sticker-count-value{
+  white-space:nowrap;word-break:normal;font-variant-numeric:tabular-nums;
+  font-size:clamp(1.2rem,12cqw,2.2rem);
+}
+.sticker-count-sub{margin-top:auto;padding-top:var(--space-2);}
+.sticker-count-row{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));align-items:stretch;}
+#page-bazar-detalle .sticker-count-row{grid-template-columns:repeat(4,minmax(0,1fr));}
+@media (max-width:1000px){#page-bazar-detalle .sticker-count-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:560px){#page-bazar-detalle .sticker-count-row{grid-template-columns:minmax(0,1fr);}}
+
+/* ---- Ajustes: campos alineados y columnas del mismo alto ---- */
+#page-ajustes .settings-grid{align-items:stretch;}
+#page-ajustes .settings-column > .settings-panel:last-child{flex:1;}
+#page-ajustes .settings-fields{align-items:end;}
+#page-ajustes .settings-fields .form-group{display:flex;flex-direction:column;justify-content:flex-end;}
+.settings-type-details:not([open]){padding:var(--space-2) var(--space-3);}
+.settings-type-table{min-width:520px;}
+.settings-type-table th,.settings-type-table td{padding:var(--space-2) var(--space-3);}
+.settings-type-table td:nth-child(2){min-width:130px;}
+.settings-type-table td:nth-child(4){min-width:90px;}
+
+/* ---- Pop-ups de detalle: botones en cuadrícula, no en filas desparejas ---- */
+.qd-box .modal-footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:var(--space-2);}
+.qd-box .modal-footer > button{width:100%;min-width:0;white-space:normal;line-height:1.2;}
