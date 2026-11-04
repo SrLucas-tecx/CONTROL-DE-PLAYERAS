@@ -44,6 +44,7 @@ export function defaultState() {
       { id: "e2", nombre: "Oversize", color: "#8b8b93" },
       { id: "e3", nombre: "Bolsa sorpresa", color: "#e0a23a" }
     ],
+    tiposPrenda: TIPOS_PRENDA_DEFAULT.map((nombre, index) => ({ id: `tp${index + 1}`, nombre })),
     tallaEtiquetas: [
       { id: "te1", talla: "CH", color: "Negro", cantidad: 0 },
       { id: "te2", talla: "MD", color: "Negro", cantidad: 0 },
@@ -98,7 +99,7 @@ export function defaultState() {
 /* ---------------------------------------------------------------
    TIPOS DE PRENDA (compartido entre inventario y cotizador)
 --------------------------------------------------------------- */
-export const TIPOS_PRENDA = [
+export const TIPOS_PRENDA_DEFAULT = [
   "Playera", "Playera Oversize", "Manga larga", "Sudadera", "Cuello V Mujer",
   "Cuello V Hombre", "Sudadera sin capucha", "Playera de tirantes",
   "Playera sin mangas", "Corte de Relog", "Niños", "Bolsa Sorpresa"

@@ -2,7 +2,7 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, TIPOS_PRENDA, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
+import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
@@ -36,6 +36,15 @@ function val(id) { const el = document.getElementById(id); return el ? el.value 
 function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
 function checked(id) { const el = document.getElementById(id); return el ? el.checked : false; }
 function setChecked(id, v) { const el = document.getElementById(id); if (el) el.checked = !!v; }
+
+function opcionesTiposPrenda(tipoActual = "") {
+  const tipos = [...(AppState.tiposPrenda || [])];
+  if (tipoActual && !tipos.some(tipo => tipo.nombre === tipoActual)) tipos.push({ nombre: tipoActual });
+  return tipos.map(tipo => `<option value="${escapeHtml(tipo.nombre)}">${escapeHtml(tipo.nombre)}</option>`).join("");
+}
+function cargarTiposPrenda(select, tipoActual = "") {
+  if (select) select.innerHTML = opcionesTiposPrenda(tipoActual);
+}
 
 const GANG_SHEET_REGULAR = "regular";
 const GANG_SHEET_WHITE = "white";
@@ -346,6 +355,50 @@ export async function confirmResetAll() {
     renderAll();
     showToast("Datos reiniciados.");
   }
+}
+
+/* =================================================================
+   TIPOS DE ROPA
+================================================================= */
+function openModalTipoPrenda(id) {
+  setVal("tp-id", id || "");
+  document.getElementById("modal-tipo-prenda-title").textContent = id ? "Editar tipo de ropa" : "Nuevo tipo de ropa";
+  const tipo = id && AppState.tiposPrenda.find(x => x.id === id);
+  setVal("tp-nombre", tipo ? tipo.nombre : "");
+  openModal("modal-tipo-prenda");
+}
+function saveTipoPrenda() {
+  const nombre = val("tp-nombre").trim();
+  if (!nombre) return showToast("Escribe el nombre del tipo de ropa.", "error");
+  const id = val("tp-id");
+  if (AppState.tiposPrenda.some(tipo => tipo.nombre.toLocaleLowerCase() === nombre.toLocaleLowerCase() && tipo.id !== id)) {
+    return showToast("Ya existe un tipo de ropa con ese nombre.", "error");
+  }
+  if (id) {
+    const tipo = AppState.tiposPrenda.find(x => x.id === id);
+    if (!tipo) return showToast("No se encontró el tipo de ropa.", "error");
+    tipo.nombre = nombre;
+  } else {
+    AppState.tiposPrenda.push({ id: uid(), nombre });
+  }
+  saveState(); closeModal("modal-tipo-prenda"); renderTiposPrenda(); refreshAllSelects();
+  showToast("Tipo de ropa guardado.");
+}
+async function deleteTipoPrenda(id) {
+  const tipo = AppState.tiposPrenda.find(x => x.id === id);
+  if (!tipo) return;
+  if (!(await pedirConfirmacion(`¿Quitar "${tipo.nombre}" de los tipos disponibles? Los registros existentes no se modificarán.`, { aviso: "Tipo de ropa eliminado." }))) return;
+  AppState.tiposPrenda = AppState.tiposPrenda.filter(x => x.id !== id);
+  saveState(); renderTiposPrenda(); refreshAllSelects();
+}
+function renderTiposPrenda() {
+  const grid = document.getElementById("tipos-prenda-grid");
+  grid.innerHTML = AppState.tiposPrenda.map(tipo => `
+    <div class="chip-item">
+      ${escapeHtml(tipo.nombre)}
+      <button onclick="openModalTipoPrenda('${tipo.id}')" title="Editar">✏️</button>
+      <button onclick="deleteTipoPrenda('${tipo.id}')" title="Eliminar">✕</button>
+    </div>`).join("") || `<p class="empty-hint">Aún no hay tipos de ropa. Agrega uno para usarlo en inventario y cotizaciones.</p>`;
 }
 
 /* =================================================================
@@ -2181,6 +2234,7 @@ function renderBazares() {
    INVENTARIO DE PLAYERAS
 ================================================================= */
 function refreshAllSelects() {
+  cargarTiposPrenda(document.getElementById("p-tipo"));
   [document.getElementById("p-dtf-tipo"), document.getElementById("s-dtf-tipo"),
     document.getElementById("qe-dtf-tipo"), document.getElementById("qs-dtf-tipo")].forEach(select => {
     if (!select) return;
@@ -2331,6 +2385,7 @@ function openModalPlayera(id) {
   playeraMetrosManuales = false;
   if (id) {
     const p = AppState.playeras.find(x => x.id === id);
+    cargarTiposPrenda(document.getElementById("p-tipo"), p.tipo);
     setVal("p-nombre", p.nombre); setVal("p-tipo", p.tipo); setVal("p-talla", p.talla);
     setVal("p-color", p.colorId); setVal("p-stock", p.stock);
     setVal("p-costo-playera", p.costoPlayera);
@@ -2352,7 +2407,7 @@ function openModalPlayera(id) {
     setVal("p-cliente", p.clienteId || "");
   } else {
     ["p-nombre","p-notas"].forEach(f => setVal(f, ""));
-    setVal("p-tipo", "Playera"); setVal("p-talla", ""); setVal("p-stock", 1);
+    setVal("p-tipo", AppState.tiposPrenda[0]?.nombre || ""); setVal("p-talla", ""); setVal("p-stock", 1);
     setVal("p-costo-playera", 47.5);
     setChecked("p-tiene-etiqueta", true);
     setChecked("p-prenda-cliente", false); setChecked("p-dtf-especial", false);
@@ -3271,7 +3326,7 @@ function openModalQuotePrenda(rowId) {
   const playerasOrdenadas = [...playerasDisponibles()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
   document.getElementById("qp-producto").innerHTML = `<option value="">— Manual / personalizado —</option>` +
     playerasOrdenadas.map(p => `<option value="${p.id}">${escapeHtml(p.nombre)} · ${escapeHtml(p.talla) || "—"} · ${escapeHtml(colorNombre(p.colorId))}</option>`).join("");
-  document.getElementById("qp-tipo").innerHTML = TIPOS_PRENDA.map(t => `<option value="${t}">${t}</option>`).join("");
+  cargarTiposPrenda(document.getElementById("qp-tipo"), item.tipo);
   document.getElementById("qp-color").innerHTML = `<option value="">—</option>` +
     AppState.colores.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
   llenarModalPrenda(item);
@@ -5712,6 +5767,7 @@ function renderGraficasPersonalizadas() {
 export function renderAll(opciones) {
   refreshAllSelects();
   renderColores();
+  renderTiposPrenda();
   renderEtiquetas();
   renderEtiquetasOperativas();
   renderTallaEtiquetas();
@@ -5761,7 +5817,7 @@ Object.assign(window, {
   openPreviewCotizacion, openPreviewCotizacionGuardada, confirmarExportarPDF, confirmarExportarWhatsApp,
   openModalArtista, openModalSocio, saveSocio, deleteSocio, assignConsignacionToSocio, unassignConsignacionFromSocio, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalAsignarConsignacion, openModalBazar,
   openModalBazarDesdeAsignacion, openModalCliente, openModalClienteDetalle, openModalClienteDetalleLegacy, openModalClienteEtiqueta,
-  openModalColor, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalMerma, openModalMermaDesdePlayera,
+  openModalColor, openModalTipoPrenda, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalMerma, openModalMermaDesdePlayera,
   openModalIngresoExtra, openModalInventarioColores, openModalInventarioResumen, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
   openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
   addBazarExpense, removeBazarExpense, updateBazarCostTotal, updateEfectivoContadoBazar, updateMermaCostoPreview,
@@ -5772,9 +5828,10 @@ Object.assign(window, {
   removeQuoteItem, removeQuoteSticker, renderCotizacionesGuardadas, renderPlayeras, renderQuoteItems,
   resetQuoteForm, saveArtista, saveAsignarBazar, saveBazar, saveCliente, saveClienteEtiqueta, saveColor, saveEtiqueta, saveEtiquetaOp,
   saveGrafica, saveIngresoExtra, savePlayera, saveProveedor, saveQuote, saveServicioExtra,
-  saveSettings, saveSticker, saveGasto, saveCompra,
+  saveSettings, saveSticker, saveGasto, saveCompra, saveTipoPrenda,
   saveTallaEtiqueta, setClienteEtiquetaFiltro, setPlayeraTagFilter, setStickerSizeFilter, switchPage,
   addGangSheetTipo,
+  deleteTipoPrenda,
   toggleGraficaInventarioOptions, onQuoteStickerDtfEspecialChange, onStickerDtfEspecialChange, onStickerDtfTipoChange, onStickerDimensionChange, toggleQuoteItemFlag, toggleQuoteTagOperativo, toggleGastoLigarPlayeras, toggleGastoCotizacionEstampados, updateGastoCotizacionEstampados,
   abrirPopupGastoCotizacionEstampados, abrirPopupGastoCotizacionModo, guardarPopupGastoCotizacionEstampados, guardarPopupGastoCotizacionModo,
   updateCotizacionEstado, updateCotizacionProduccion, updateCotizacionProduccionDesdeModal,

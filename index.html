@@ -762,6 +762,15 @@
 
         <div class="section-header" style="justify-content:space-between;">
           <div>
+            <h2 class="section-title">Tipos de ropa</h2>
+            <p class="section-sub">Administra los tipos de prenda disponibles en inventario y cotizaciones.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalTipoPrenda()">+ Nuevo tipo de ropa</button>
+        </div>
+        <div id="tipos-prenda-grid" class="chips-grid"></div>
+
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
             <h2 class="section-title">Colores de playeras</h2>
             <p class="section-sub">Paleta de colores disponible para tu inventario y cotizaciones.</p>
           </div>
@@ -1866,6 +1875,27 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-color">Cancelar</button>
       <button class="btn-primary" onclick="saveColor()">Guardar color</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: TIPO DE ROPA -->
+<div class="modal-overlay" id="modal-tipo-prenda">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-tipo-prenda-title">Nuevo tipo de ropa</h2>
+      <button class="modal-close" data-modal="modal-tipo-prenda">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tp-id">
+      <div class="form-group">
+        <label class="form-label">Nombre del tipo de ropa</label>
+        <input type="text" id="tp-nombre" class="form-input" placeholder="Ej. Sudadera, Polo...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-tipo-prenda">Cancelar</button>
+      <button class="btn-primary" onclick="saveTipoPrenda()">Guardar tipo</button>
     </div>
   </div>
 </div>

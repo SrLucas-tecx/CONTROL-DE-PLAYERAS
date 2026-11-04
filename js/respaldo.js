@@ -63,7 +63,7 @@ function descargarBlob(blob, nombre) {
 const COLECCIONES = [
   ["cotizaciones", "Cotizaciones"], ["playeras", "Playeras (incluye vendidas)"], ["stickers", "Stickers"],
   ["ventasStickers", "Ventas de stickers"], ["clientes", "Clientes"], ["colores", "Colores"],
-  ["etiquetas", "Etiquetas"], ["tallaEtiquetas", "Etiquetas de tallas"], ["artistas", "Artistas"],
+  ["etiquetas", "Etiquetas"], ["tiposPrenda", "Tipos de ropa"], ["tallaEtiquetas", "Etiquetas de tallas"], ["artistas", "Artistas"],
   ["proveedores", "Proveedores"], ["etiquetasOperativas", "Etiquetas operativas"], ["bazares", "Bazares"],
   ["gastos", "Gastos"], ["mermas", "Mermas"], ["consignaciones", "Consignaciones"], ["socios", "Socios"],
   ["comprasPendientes", "Compras pendientes"], ["turnosCaja", "Turnos de caja"], ["graficas", "Gráficas"],
