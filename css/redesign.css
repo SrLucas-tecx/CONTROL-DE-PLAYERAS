@@ -758,6 +758,44 @@ button.mb-hoy:hover{background:var(--color-accent-soft);}
   display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 7px;
   border-radius:var(--radius-full);background:var(--color-gray-soft);color:var(--color-text);font-size:var(--fs-xs);font-weight:800;
 }
+.block-inventory-card{min-width:0;width:100%;overflow:hidden;}
+.block-inventory-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);min-width:0;margin-bottom:8px;}
+.block-inventory-card-header>div:first-child{min-width:0;overflow-wrap:anywhere;}
+.block-inventory-card-header .section-title{overflow-wrap:anywhere;}
+.block-inventory-actions{flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;}
+.block-inventory-goal{max-width:320px;margin-top:var(--space-3);}
+.block-inventory-picker{display:grid;grid-template-columns:minmax(0,2fr) minmax(120px,1fr) auto;gap:var(--space-3);align-items:end;margin-top:var(--space-3);}
+.block-inventory-note{display:block;margin-top:var(--space-2);}
+.block-inventory-items,.block-inventory-lines{display:flex;flex-direction:column;gap:var(--space-2);margin-top:var(--space-3);}
+.block-inventory-progress{margin-top:var(--space-3);}
+.block-inventory-progress-label{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px var(--space-3);font-size:var(--fs-sm);margin-bottom:var(--space-2);}
+.block-inventory-progress-label span{color:var(--color-text-muted);text-align:right;overflow-wrap:anywhere;}
+.block-inventory-progress-track{height:10px;overflow:hidden;border-radius:var(--radius-full);background:var(--color-gray-soft);}
+.block-inventory-progress-track span{display:block;height:100%;border-radius:inherit;transition:width .2s ease,background-color .2s ease;}
+.block-inventory-progress.is-low .block-inventory-progress-track span{background:var(--color-danger);}
+.block-inventory-progress.is-progress .block-inventory-progress-track span{background:var(--color-warning);}
+.block-inventory-progress.is-complete .block-inventory-progress-track span{background:var(--color-success);}
+.block-inventory-line{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface-alt);}
+.block-inventory-line>span{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.block-inventory-line>span:first-child{overflow-wrap:anywhere;}
+.block-inventory-line small{font-size:var(--fs-xs);color:var(--color-text-muted);}
+.block-inventory-line.is-extra-theme{display:none;}
+.block-inventory-card.show-all-themes .block-inventory-line.is-extra-theme{display:flex;}
+.block-inventory-more{align-self:flex-start;margin-top:var(--space-2);padding:4px 0;color:var(--color-accent);font-size:var(--fs-sm);font-weight:700;text-decoration:underline;text-underline-offset:3px;}
+.block-inventory-quantity{display:flex;align-items:center;gap:var(--space-2);flex-shrink:0;}
+.block-inventory-quantity button{min-width:36px;min-height:36px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);font-weight:800;}
+.block-inventory-quantity .block-inventory-remove{padding:0 var(--space-2);font-size:var(--fs-xs);}
+@media(max-width:700px){
+  .block-inventory-picker{grid-template-columns:minmax(0,1fr) minmax(90px,.55fr);}
+  .block-inventory-picker .form-group:first-child{grid-column:1/-1;}
+  .block-inventory-picker>button{grid-column:1/-1;min-height:44px;}
+  .block-inventory-card-header{flex-direction:column;}
+  .block-inventory-actions{width:100%;justify-content:flex-start;}
+  .block-inventory-progress-label{align-items:flex-start;flex-direction:column;}
+  .block-inventory-progress-label span{text-align:left;}
+  .block-inventory-line{align-items:flex-start;flex-direction:column;}
+  .block-inventory-quantity{align-self:flex-end;}
+}
 .inv-tabs button.active .inv-tab-n{background:var(--color-accent);color:#fff;}
 @media(max-width:560px){
   .inv-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}

@@ -56,6 +56,7 @@ export function defaultState() {
       { id: "te6", talla: "G", color: "Blanco", cantidad: 0 }
     ],
     playeras: [],
+    bloquesInventario: [],
     stickers: [],
     ventasStickers: [],
     artistas: [

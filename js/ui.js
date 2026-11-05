@@ -27,6 +27,7 @@ let uiFilters = {
 let resumenCostoInventarioModo = "prendas";
 let activeBazarId = "";
 let assignmentModalContext = null;
+let bloqueItemsEdicion = [];
 
 /* ---------------------------------------------------------------
    HELPERS GENERALES DE DOM
@@ -236,6 +237,7 @@ const PAGE_TITLES = {
   mermas: "Mermas",
   compras: "Próximas compras",
   bazares: "Mis Bazares",
+  "bloques-inventario": "Bloques para bazares",
   consignaciones: "Consignaciones",
   caja: "Caja",
   interes: "Interés por producto",
@@ -253,6 +255,7 @@ export function switchPage(page) {
   if (page === "inicio" && typeof window.renderInicio === "function") window.renderInicio();
   if (page === "ventas-rapidas" && typeof window.renderVentasRapidas === "function") window.renderVentasRapidas();
   if (page === "bazares") renderBazares();
+  if (page === "bloques-inventario") renderBloquesInventario();
   if (page === "caja") renderCaja();
   if (page === "interes") renderInteres();
   if (page === "estadisticas") renderEstadisticas();
@@ -2911,6 +2914,189 @@ function renderPlayeras() {
   grid.classList.toggle("vista-lista", uiFilters.playeraVista === "lista");
   grid.innerHTML = list.map(playeraCardCompacta).join("");
   actualizarBarraFiltrosPlayeras();
+}
+
+/* ---------------------------------------------------------------
+   BLOQUES DE INVENTARIO PARA BAZARES (lista informativa; no mueve stock)
+--------------------------------------------------------------- */
+function nombreParaBloque(p) {
+  return `${p.nombre} · ${p.tipo || "Playera"} · ${p.talla || "Sin talla"} · ${colorNombre(p.colorId)}`;
+}
+function playerasParaBloque() {
+  return playerasDisponibles().filter(p => (p.stock || 0) > 0
+    && !(p.consignacionId && p.consignacionEstado !== "Devuelta"));
+}
+function stockTematicaBloque(etiquetaId) {
+  return playerasParaBloque().filter(p => (p.tags || []).includes(etiquetaId))
+    .reduce((total, p) => total + (Number(p.stock) || 0), 0);
+}
+function tematicasBloque(bloque) {
+  if (Array.isArray(bloque.tematicas)) return bloque.tematicas;
+  const agrupadas = new Map();
+  (bloque.productos || []).forEach(item => {
+    const playera = AppState.playeras.find(p => p.id === item.playeraId);
+    const etiqueta = playera && (playera.tags || [])
+      .map(id => AppState.etiquetas.find(actual => actual.id === id))
+      .find(Boolean);
+    const id = etiqueta ? etiqueta.id : `legacy:${item.playeraId || item.nombre}`;
+    const nombre = etiqueta ? etiqueta.nombre : (playera ? nombreParaBloque(playera) : (item.nombre || "Sin temática"));
+    const anterior = agrupadas.get(id);
+    agrupadas.set(id, { etiquetaId: id, nombre, cantidad: (anterior ? anterior.cantidad : 0) + (Number(item.cantidad) || 0) });
+  });
+  return [...agrupadas.values()];
+}
+function renderBloquesInventario() {
+  const grid = document.getElementById("bloques-inventario-grid");
+  const empty = document.getElementById("bloques-inventario-empty");
+  if (!grid || !empty) return;
+  const bloques = AppState.bloquesInventario || [];
+  empty.style.display = bloques.length ? "none" : "block";
+  grid.innerHTML = bloques.map(bloque => {
+    const bazar = AppState.bazares.find(item => item.id === bloque.bazarId);
+    const tematicas = tematicasBloque(bloque);
+    const total = tematicas.reduce((suma, item) => suma + (Number(item.cantidad) || 0), 0);
+    const meta = Math.max(1, Number(bloque.metaCantidad) || 14);
+    const porcentaje = Math.round(total / meta * 100);
+    const avance = Math.min(100, porcentaje);
+    const nivelAvance = total >= meta ? "is-complete" : total / meta >= 0.5 ? "is-progress" : "is-low";
+    const estadoMeta = total >= meta ? "Meta completa" : total / meta >= 0.75 ? "Casi lleno" : `Faltan ${Math.max(0, meta - total)} para completar`;
+    return `<article class="card block-inventory-card">
+      <div class="block-inventory-card-header">
+        <div>
+          <h3 class="section-title">${escapeHtml(bloque.nombre || "Bloque sin nombre")}</h3>
+          <div class="card-meta">🏪 ${escapeHtml(bazar ? bazar.nombre : (bloque.bazarId ? "Bazar eliminado" : "Sin bazar"))}</div>
+        </div>
+        <div class="bazar-row-actions block-inventory-actions">
+          <button type="button" onclick="openModalBloqueInventario('${bloque.id}')">✏️ Editar</button>
+          <button type="button" class="danger" onclick="eliminarBloqueInventario('${bloque.id}')">🗑️ Eliminar</button>
+        </div>
+      </div>
+      <div class="block-inventory-progress ${nivelAvance}">
+        <div class="block-inventory-progress-label"><strong>${total} / ${meta} playeras</strong><span>${estadoMeta} · ${porcentaje}%</span></div>
+        <div class="block-inventory-progress-track" role="progressbar" aria-label="Avance de playeras planeadas" aria-valuemin="0" aria-valuemax="${meta}" aria-valuenow="${Math.min(total, meta)}">
+          <span style="width:${avance}%;"></span>
+        </div>
+      </div>
+      <div class="block-inventory-lines">${tematicas.length ? tematicas.map((item, index) => {
+        const stock = String(item.etiquetaId || "").startsWith("legacy:") ? null : stockTematicaBloque(item.etiquetaId);
+        const alerta = stock !== null && Number(item.cantidad) > stock;
+        const oculta = index > 0 ? " is-extra-theme" : "";
+        return `<div class="block-inventory-line${oculta}"><span>${escapeHtml(item.nombre)}${stock !== null ? `<small>Stock disponible: ${stock}${alerta ? " · excede el stock actual" : ""}</small>` : `<small>Temática anterior</small>`}</span><strong>× ${Number(item.cantidad) || 0}</strong></div>`;
+      }).join("") : `<span class="card-meta">Sin playeras agregadas.</span>`}</div>
+      ${tematicas.length > 1 ? `<button type="button" class="block-inventory-more" aria-expanded="false" onclick="toggleTematicasBloqueInventario(this)">Ver todo (${tematicas.length})</button>` : ""}
+      <small class="block-inventory-note">Planeación únicamente · no modifica existencias</small>
+    </article>`;
+  }).join("");
+}
+function toggleTematicasBloqueInventario(button) {
+  const card = button.closest(".block-inventory-card");
+  const expanded = card.classList.toggle("show-all-themes");
+  button.setAttribute("aria-expanded", expanded ? "true" : "false");
+  button.textContent = expanded ? "Ver menos" : `Ver todo (${card.querySelectorAll(".block-inventory-line").length})`;
+}
+function llenarSelectTematicasBloque(selectedId = "", bloqueTematicas = []) {
+  const select = document.getElementById("bloque-inventario-tematica");
+  const ayuda = document.getElementById("bloque-inventario-ayuda");
+  const etiquetas = AppState.etiquetas.filter(etiqueta => stockTematicaBloque(etiqueta.id) > 0
+    || bloqueTematicas.some(item => item.etiquetaId === etiqueta.id));
+  select.innerHTML = `<option value="">Selecciona una temática</option>` + etiquetas.map(etiqueta =>
+    `<option value="${escapeHtml(etiqueta.id)}">${escapeHtml(etiqueta.nombre)} · stock: ${stockTematicaBloque(etiqueta.id)}</option>`
+  ).join("");
+  select.value = etiquetas.some(etiqueta => etiqueta.id === selectedId) ? selectedId : "";
+  select.disabled = !etiquetas.length;
+  ayuda.textContent = etiquetas.length
+    ? "Elige etiquetas usadas por playeras con stock. Puedes planear más del stock actual; solo se mostrará una alerta y no se descuentan existencias."
+    : "No hay temáticas disponibles: asigna etiquetas a playeras con stock desde Inventario → Playeras.";
+}
+function renderItemsBloqueInventario() {
+  const container = document.getElementById("bloque-inventario-items");
+  if (!bloqueItemsEdicion.length) {
+    container.innerHTML = `<p class="card-meta">Todavía no agregas temáticas a este bloque.</p>`;
+    return;
+  }
+  container.innerHTML = bloqueItemsEdicion.map((item, index) => {
+    const etiqueta = AppState.etiquetas.find(actual => actual.id === item.etiquetaId);
+    const nombre = etiqueta ? etiqueta.nombre : (item.nombre || "Temática anterior");
+    const stockActual = String(item.etiquetaId || "").startsWith("legacy:") ? null : stockTematicaBloque(item.etiquetaId);
+    return `<div class="block-inventory-line">
+      <span>${escapeHtml(nombre)}${stockActual !== null ? `<small>Stock disponible: ${stockActual}</small>` : `<small>Etiqueta anterior del bloque</small>`}</span>
+      <div class="block-inventory-quantity">
+        <button type="button" aria-label="Restar una playera" onclick="ajustarCantidadBloqueInventario(${index},-1)">−</button>
+        <strong>${Number(item.cantidad) || 0}</strong>
+        <button type="button" aria-label="Agregar una playera" onclick="ajustarCantidadBloqueInventario(${index},1)">+</button>
+        <button type="button" class="block-inventory-remove" onclick="quitarPlayeraBloqueInventario(${index})">Quitar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+function openModalBloqueInventario(id = "") {
+  const bloque = (AppState.bloquesInventario || []).find(item => item.id === id);
+  document.getElementById("bloque-inventario-title").textContent = bloque ? "Editar bloque" : "Nuevo bloque";
+  setVal("bloque-inventario-id", bloque ? bloque.id : "");
+  setVal("bloque-inventario-nombre", bloque ? bloque.nombre : "");
+  const bazarSelect = document.getElementById("bloque-inventario-bazar");
+  bazarSelect.innerHTML = `<option value="">Sin bazar asignado</option>` + AppState.bazares.map(b =>
+    `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`
+  ).join("");
+  bazarSelect.value = bloque && AppState.bazares.some(b => b.id === bloque.bazarId) ? bloque.bazarId : "";
+  bloqueItemsEdicion = bloque ? tematicasBloque(bloque).map(item => ({ ...item })) : [];
+  document.getElementById("bloque-inventario-meta").value = String(Math.max(1, Number(bloque && bloque.metaCantidad) || 14));
+  document.getElementById("bloque-inventario-cantidad").value = "1";
+  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  renderItemsBloqueInventario();
+  document.getElementById("modal-bloque-inventario").classList.add("open");
+}
+function agregarTematicaBloqueInventario() {
+  const etiquetaId = val("bloque-inventario-tematica");
+  const etiqueta = AppState.etiquetas.find(item => item.id === etiquetaId);
+  const cantidad = Number(val("bloque-inventario-cantidad"));
+  if (!etiqueta) return showToast("Selecciona una temática disponible en inventario.", "error");
+  if (!Number.isInteger(cantidad) || cantidad < 1) return showToast("La cantidad debe ser un número entero mayor a cero.", "error");
+  const itemExistente = bloqueItemsEdicion.find(item => item.etiquetaId === etiquetaId);
+  const cantidadActual = itemExistente ? Number(itemExistente.cantidad) || 0 : 0;
+  if (itemExistente) itemExistente.cantidad = cantidadActual + cantidad;
+  else bloqueItemsEdicion.push({ etiquetaId, nombre: etiqueta.nombre, cantidad });
+  document.getElementById("bloque-inventario-cantidad").value = "1";
+  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  renderItemsBloqueInventario();
+}
+function ajustarCantidadBloqueInventario(index, cambio) {
+  const item = bloqueItemsEdicion[index];
+  if (!item) return;
+  const nuevaCantidad = (Number(item.cantidad) || 0) + cambio;
+  if (nuevaCantidad <= 0) bloqueItemsEdicion.splice(index, 1);
+  else item.cantidad = nuevaCantidad;
+  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  renderItemsBloqueInventario();
+}
+function quitarPlayeraBloqueInventario(index) {
+  bloqueItemsEdicion.splice(index, 1);
+  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  renderItemsBloqueInventario();
+}
+function guardarBloqueInventario() {
+  const nombre = val("bloque-inventario-nombre").trim();
+  if (!nombre) return showToast("Escribe un nombre para el bloque.", "error");
+  const metaCantidad = Number(val("bloque-inventario-meta"));
+  if (!Number.isInteger(metaCantidad) || metaCantidad < 1) return showToast("La meta debe ser un número entero mayor a cero.", "error");
+  const id = val("bloque-inventario-id");
+  const tematicas = bloqueItemsEdicion.filter(item => Number.isInteger(Number(item.cantidad)) && Number(item.cantidad) > 0)
+    .map(item => ({ etiquetaId: item.etiquetaId, nombre: item.nombre, cantidad: Number(item.cantidad) }));
+  const datos = { nombre, bazarId: val("bloque-inventario-bazar"), metaCantidad, tematicas };
+  if (!Array.isArray(AppState.bloquesInventario)) AppState.bloquesInventario = [];
+  const existente = AppState.bloquesInventario.find(item => item.id === id);
+  if (existente) Object.assign(existente, datos);
+  else AppState.bloquesInventario.push({ id: uid(), ...datos });
+  saveState();
+  document.getElementById("modal-bloque-inventario").classList.remove("open");
+  renderBloquesInventario();
+  showToast(id ? "Bloque actualizado." : "Bloque creado.");
+}
+async function eliminarBloqueInventario(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este bloque de planeación?", { aviso: "Bloque eliminado." }))) return;
+  AppState.bloquesInventario = (AppState.bloquesInventario || []).filter(item => item.id !== id);
+  saveState();
+  renderBloquesInventario();
 }
 
 /* ---------------------------------------------------------------
@@ -5882,6 +6068,7 @@ export function renderAll(opciones) {
   renderInteres();
   renderAjustes();
   renderPlayeras();
+  renderBloquesInventario();
   renderStickers();
   renderCotizacionesGuardadas();
   if (!(opciones && opciones.conservarCotizador)) resetQuoteForm();
@@ -5901,6 +6088,7 @@ Object.assign(window, {
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
   verDetallePlayera,   cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
+  openModalBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,

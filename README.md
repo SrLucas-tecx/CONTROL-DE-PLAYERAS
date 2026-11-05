@@ -36,6 +36,15 @@ caja capturando el efectivo contado para comparar el corte. Los pagos con
 tarjeta se registran en la aplicación, pero no se procesan con una terminal
 bancaria.
 
+## Bloques de inventario para bazares
+
+En **Inventario → Bloques para bazar** puedes crear listas por temática, asignarlas
+a un bazar, definir una meta de playeras y elegir etiquetas usadas por prendas con
+stock para indicar cuántas planeas llevar de cada una. La vista muestra el avance,
+una barra roja/amarilla/verde según el avance, una temática a la vez con opción
+para ver el resto y el stock actual por temática. Estos bloques son solo registros
+de planeación: no reservan ni descuentan stock y no afectan ventas.
+
 ## Respaldos JSON
 
 La aplicación guarda los cambios en el almacenamiento del navegador. Para crear

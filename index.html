@@ -662,6 +662,23 @@
       </section>
       <!-- ======================= /INVENTARIO PLAYERAS ======================= -->
 
+      <section id="page-bloques-inventario" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Bloques para bazares</h2>
+            <p class="section-sub">Arma una lista por temática con las playeras que planeas llevar. Es solo un registro: no descuenta ni reserva existencias.</p>
+          </div>
+          <button type="button" class="btn-primary" onclick="openModalBloqueInventario()">+ Nuevo bloque</button>
+        </div>
+        <div id="bloques-inventario-grid" class="cards-grid"></div>
+        <div class="empty-state" id="bloques-inventario-empty">
+          <div class="empty-ico">📦</div>
+          <strong>Aún no hay bloques</strong>
+          <span>Crea una lista para un bazar, define cuántas playeras quieres llevar y suma cantidades por temática según las etiquetas del inventario.</span>
+          <button type="button" class="btn-primary" onclick="openModalBloqueInventario()">+ Nuevo bloque</button>
+        </div>
+      </section>
+
       <section id="page-tipos-ropa" class="page-section">
         <div class="section-header" style="justify-content:space-between;">
           <div>
@@ -709,6 +726,49 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn-secondary" data-modal="modal-inventario-resumen">Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="modal-bloque-inventario">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h2 class="modal-title" id="bloque-inventario-title">Nuevo bloque</h2>
+            <button type="button" class="modal-close" data-modal="modal-bloque-inventario">✕</button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="bloque-inventario-id">
+            <div class="modal-form-grid">
+              <div class="form-group">
+                <label for="bloque-inventario-nombre">Nombre del bloque</label>
+                <input class="form-input" id="bloque-inventario-nombre" maxlength="80" placeholder="Ej. Playeras para ANIGAMERS">
+              </div>
+              <div class="form-group">
+                <label for="bloque-inventario-bazar">Bazar</label>
+                <select class="form-input" id="bloque-inventario-bazar"></select>
+              </div>
+            </div>
+            <div class="form-group block-inventory-goal">
+              <label for="bloque-inventario-meta">Meta de playeras para llevar</label>
+              <input class="form-input" id="bloque-inventario-meta" type="number" min="1" step="1" value="14">
+            </div>
+            <div class="block-inventory-picker">
+              <div class="form-group">
+                <label for="bloque-inventario-tematica">Temática de playeras disponibles</label>
+                <select class="form-input" id="bloque-inventario-tematica"></select>
+              </div>
+              <div class="form-group">
+                <label for="bloque-inventario-cantidad">Cantidad de esta temática</label>
+                <input class="form-input" id="bloque-inventario-cantidad" type="number" min="1" step="1" value="1">
+              </div>
+              <button type="button" class="btn-secondary" onclick="agregarTematicaBloqueInventario()">Agregar temática</button>
+            </div>
+            <p class="section-sub block-inventory-note" id="bloque-inventario-ayuda">Elige etiquetas ya asignadas a playeras con stock. La lista no descuenta existencias.</p>
+            <div id="bloque-inventario-items" class="block-inventory-items"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-modal="modal-bloque-inventario">Cancelar</button>
+            <button type="button" class="btn-primary" onclick="guardarBloqueInventario()">Guardar bloque</button>
           </div>
         </div>
       </div>

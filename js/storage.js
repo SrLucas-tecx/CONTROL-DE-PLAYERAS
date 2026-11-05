@@ -80,7 +80,7 @@ export function saveState() {
 export function getSectionData(section) {
   const sections = {
     cotizaciones: { cotizaciones: AppState.cotizaciones },
-    inventario: { playeras: AppState.playeras, stickers: AppState.stickers, ventasStickers: AppState.ventasStickers },
+    inventario: { playeras: AppState.playeras, bloquesInventario: AppState.bloquesInventario, stickers: AppState.stickers, ventasStickers: AppState.ventasStickers },
     catalogo: { colores: AppState.colores, etiquetas: AppState.etiquetas, tiposPrenda: AppState.tiposPrenda, tallaEtiquetas: AppState.tallaEtiquetas, artistas: AppState.artistas, proveedores: AppState.proveedores, etiquetasOperativas: AppState.etiquetasOperativas },
     clientes: { clientes: AppState.clientes, clienteEtiquetas: AppState.clienteEtiquetas },
     finanzas: { gastos: AppState.gastos, comprasPendientes: AppState.comprasPendientes, mermas: AppState.mermas },
