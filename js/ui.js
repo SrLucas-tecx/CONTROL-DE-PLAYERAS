@@ -2,7 +2,7 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
+import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
@@ -289,10 +289,16 @@ document.getElementById("header-bazar-add").addEventListener("click", () => open
 function closeSidebarMobile() {
   document.getElementById("sidebar").classList.remove("open");
   document.getElementById("sidebar-overlay").classList.remove("open");
+  document.getElementById("sidebar-toggle").setAttribute("aria-expanded", "false");
 }
 document.getElementById("sidebar-toggle").addEventListener("click", () => {
-  document.getElementById("sidebar").classList.toggle("open");
-  document.getElementById("sidebar-overlay").classList.toggle("open");
+  const sidebar = document.getElementById("sidebar");
+  const abrir = !sidebar.classList.contains("open");
+  if (abrir) document.querySelector(".sidebar-nav").scrollTop = 0;
+  sidebar.classList.toggle("open", abrir);
+  document.getElementById("sidebar-overlay").classList.toggle("open", abrir);
+  document.getElementById("sidebar-toggle").setAttribute("aria-expanded", String(abrir));
+  document.getElementById("sidebar-toggle").setAttribute("aria-label", abrir ? "Cerrar menú" : "Abrir menú");
 });
 document.getElementById("sidebar-overlay").addEventListener("click", closeSidebarMobile);
 
@@ -532,24 +538,33 @@ function openModalEtiqueta(id) {
   }
   openModal("modal-etiqueta");
 }
+function actualizarVistasEtiquetas() {
+  renderAll({ conservarCotizador: true });
+  const selectTematica = document.getElementById("bloque-inventario-tematica");
+  if (selectTematica) llenarSelectTematicasBloque(selectTematica.value);
+}
 function saveEtiqueta() {
   const nombre = val("et-nombre").trim();
   if (!nombre) return showToast("Ponle un nombre a la etiqueta.", "error");
   const id = val("et-id");
   const data = { nombre, color: val("et-color") };
   if (id) {
-    Object.assign(AppState.etiquetas.find(x => x.id === id), data);
+    const etiqueta = AppState.etiquetas.find(x => x.id === id);
+    if (etiqueta) {
+      delete etiqueta.colorSecundario;
+      Object.assign(etiqueta, data);
+    }
   } else {
     AppState.etiquetas.push(Object.assign({ id: uid() }, data));
   }
-  saveState(); closeModal("modal-etiqueta"); renderEtiquetas(); renderPlayeraTagChips(); renderAll();
+  saveState(); closeModal("modal-etiqueta"); actualizarVistasEtiquetas();
   showToast("Etiqueta guardada.");
 }
 async function deleteEtiqueta(id) {
   if (!(await pedirConfirmacion("¿Eliminar esta etiqueta? Se quitará de todas las playeras.", { aviso: "Etiqueta eliminada." }))) return;
   AppState.etiquetas = AppState.etiquetas.filter(x => x.id !== id);
   AppState.playeras.forEach(p => { p.tags = (p.tags || []).filter(t => t !== id); });
-  saveState(); renderEtiquetas(); renderPlayeraTagChips(); renderPlayeras();
+  saveState(); actualizarVistasEtiquetas();
 }
 function renderEtiquetas() {
   const grid = document.getElementById("etiquetas-grid");
@@ -561,6 +576,21 @@ function renderEtiquetas() {
       <button onclick="deleteEtiqueta('${e.id}')" title="Eliminar">✕</button>
     </div>`).join("") || `<p class="empty-hint">Aún no hay etiquetas.</p>`;
 }
+
+window.addEventListener("storage", event => {
+    if (event.key !== STORAGE_KEY || !event.newValue) return;
+    try {
+      const etiquetas = JSON.parse(event.newValue).etiquetas;
+      if (!Array.isArray(etiquetas) || JSON.stringify(etiquetas) === JSON.stringify(AppState.etiquetas)) return;
+      AppState.etiquetas = etiquetas;
+      if (uiFilters.playeraTag !== "all" && !etiquetas.some(etiqueta => etiqueta.id === uiFilters.playeraTag)) {
+        uiFilters.playeraTag = "all";
+      }
+      actualizarVistasEtiquetas();
+    } catch (error) {
+      console.error("Error actualizando etiquetas desde otra pestaña:", error);
+    }
+});
 
 /* =================================================================
    ETIQUETAS OPERATIVAS (para cotizaciones: Urgente, Retrabajo, etc.)
@@ -2334,7 +2364,7 @@ function refreshAllSelects() {
   const tagsContainer = document.getElementById("p-tags-container");
   tagsContainer.innerHTML = AppState.etiquetas.map(e => `
     <label class="tag-checkbox" style="border-color:${e.color}">
-      <input type="checkbox" value="${e.id}" class="p-tag-cb"> ${escapeHtml(e.nombre)}
+      <input type="checkbox" value="${e.id}" class="p-tag-cb"><span class="tag-color-swatch" style="background:${e.color}"></span>${escapeHtml(e.nombre)}
     </label>`).join("") || `<span class="card-meta">Crea etiquetas en el apartado "Etiquetas y colores".</span>`;
   // Artista select en modal playera (por default SrLucas)
   const pArtista = document.getElementById("p-artista");
@@ -2382,8 +2412,8 @@ function renderPlayeraTagChips() {
   const container = document.getElementById("playera-tag-chips");
   container.innerHTML = AppState.etiquetas.map(e => `
     <button class="filter-chip ${uiFilters.playeraTag === e.id ? "active" : ""}" data-tag="${e.id}"
-      onclick="setPlayeraTagFilter('${e.id}', this)" style="${uiFilters.playeraTag === e.id ? `background:${e.color};border-color:${e.color}` : ""}">
-      ${escapeHtml(e.nombre)}
+      onclick="setPlayeraTagFilter('${e.id}', this)" style="${uiFilters.playeraTag === e.id ? `background:${e.color};border-color:${e.color}` : `border-color:${e.color}`}">
+      <span class="tag-color-swatch" style="background:${e.color}"></span>${escapeHtml(e.nombre)}
     </button>`).join("");
 }
 function setPlayeraTagFilter(tag, btn) {
@@ -2979,9 +3009,11 @@ function renderBloquesInventario() {
       </div>
       <div class="block-inventory-lines">${tematicas.length ? tematicas.map((item, index) => {
         const stock = String(item.etiquetaId || "").startsWith("legacy:") ? null : stockTematicaBloque(item.etiquetaId);
+        const etiqueta = AppState.etiquetas.find(actual => actual.id === item.etiquetaId);
         const alerta = stock !== null && Number(item.cantidad) > stock;
         const oculta = index > 0 ? " is-extra-theme" : "";
-        return `<div class="block-inventory-line${oculta}"><span>${escapeHtml(item.nombre)}${stock !== null ? `<small>Stock disponible: ${stock}${alerta ? " · excede el stock actual" : ""}</small>` : `<small>Temática anterior</small>`}</span><strong>× ${Number(item.cantidad) || 0}</strong></div>`;
+        const detalle = `<button type="button" class="block-inventory-details-toggle" data-etiqueta-id="${escapeHtml(item.etiquetaId || "")}" data-index="${index}" data-bloque-id="${escapeHtml(bloque.id)}" aria-expanded="false" onclick="verDetallesPlayerasTematica(this)">Ver detalles</button><div class="block-inventory-theme-details" hidden></div>`;
+        return `<div class="block-inventory-line${oculta}"><span class="block-inventory-theme-name">${etiqueta ? `<i class="theme-color-swatch" style="background:${etiqueta.color}"></i>` : ""}${escapeHtml(etiqueta ? etiqueta.nombre : item.nombre)}${stock !== null ? `<small>Stock disponible: ${stock}${alerta ? " · excede el stock actual" : ""}</small>` : `<small>Temática anterior</small>`}</span><div class="block-inventory-line-actions"><strong>× ${Number(item.cantidad) || 0}</strong></div>${detalle}</div>`;
       }).join("") : `<span class="card-meta">Sin playeras agregadas.</span>`}</div>
       ${tematicas.length > 1 ? `<button type="button" class="block-inventory-more" aria-expanded="false" onclick="toggleTematicasBloqueInventario(this)">Ver todo (${tematicas.length})</button>` : ""}
       <small class="block-inventory-note">Planeación únicamente · no modifica existencias</small>
@@ -2994,19 +3026,235 @@ function toggleTematicasBloqueInventario(button) {
   button.setAttribute("aria-expanded", expanded ? "true" : "false");
   button.textContent = expanded ? "Ver menos" : `Ver todo (${card.querySelectorAll(".block-inventory-line").length})`;
 }
-function llenarSelectTematicasBloque(selectedId = "", bloqueTematicas = []) {
+function verDetallesPlayerasTematica(button) {
+  const line = button.closest(".block-inventory-line");
+  const details = line && line.querySelector(".block-inventory-theme-details");
+  if (!line || !details) return;
+  const expanded = button.getAttribute("aria-expanded") !== "true";
+  button.setAttribute("aria-expanded", expanded ? "true" : "false");
+  button.textContent = expanded ? "Ocultar detalles" : "Ver detalles";
+  if (!expanded) {
+    details.hidden = true;
+    return;
+  }
+  const index = Number(button.dataset.index);
+  const editando = button.closest("#bloque-inventario-items");
+  const bloque = editando ? null : (AppState.bloquesInventario || []).find(item => item.id === button.dataset.bloqueId);
+  const item = editando
+    ? bloqueItemsEdicion[index]
+    : bloque && tematicasBloque(bloque)[index];
+  const productosConsignados = Array.isArray(item && item.productosConsignados)
+    ? item.productosConsignados
+    : null;
+  const playeras = productosConsignados ? [] : Array.isArray(item && item.playeras)
+    ? item.playeras.map(registro => ({
+      playera: AppState.playeras.find(playera => playera.id === registro.playeraId),
+      cantidad: Number(registro.cantidad) || 0
+    })).filter(registro => registro.playera)
+    : AppState.playeras
+      .filter(playera => (playera.tags || []).includes(button.dataset.etiquetaId))
+      .map(playera => ({ playera, cantidad: Number(playera.stock) || 0 }));
+  const detallesConsignados = (productosConsignados || []).map(registro => {
+    const consignacion = (AppState.consignaciones || []).find(item => item.id === registro.consignacionId);
+    const producto = consignacion && (consignacion.productos || []).find(item => item.id === registro.productoId);
+    const ubicaciones = (registro.ubicaciones || []).map(ubicacion =>
+      `${escapeHtml(ubicacion.nombre)}: ${Number(ubicacion.cantidad) || 0}`
+    ).join(" · ");
+    return `<div class="block-inventory-product">
+      <strong>${escapeHtml(producto ? producto.nombre : registro.nombre || "Producto consignado")}</strong>
+      <span>${escapeHtml(consignacion ? consignacion.nombre : "Consignación")}${ubicaciones ? ` · ${ubicaciones}` : ""} · Cantidad agregada: ${Number(registro.cantidad) || 0}</span>
+    </div>`;
+  }).join("");
+  details.innerHTML = productosConsignados
+    ? detallesConsignados || `<span class="card-meta">Ya no se encuentran los productos consignados que estaban en este bloque.</span>`
+    : playeras.length ? playeras.map(({ playera, cantidad }) => `
+    <div class="block-inventory-product">
+      <strong>${escapeHtml(playera.nombre || "Playera sin nombre")}</strong>
+      <span>${escapeHtml(playera.tipo || "Playera")} · Talla ${escapeHtml(playera.talla || "—")} · ${escapeHtml(colorNombre(playera.colorId))} · Cantidad agregada: ${cantidad}</span>
+    </div>`).join("") : `<span class="card-meta">Todavía no hay playeras asignadas a esta temática. Puedes planearla y agregar las playeras después.</span>`;
+  details.hidden = false;
+}
+let playerasPendientesBloque = [];
+let productosConsignadosPendientesBloque = [];
+function productosExternosConsignacionDisponibles() {
+  return (AppState.consignaciones || []).flatMap(consignacion =>
+    (consignacion.productos || []).map(producto => {
+      const asignaciones = producto.asignaciones || [];
+      const cantidadAsignada = asignaciones.reduce((total, actual) =>
+        total + (Number(actual.cantidadEntregada) || 0), 0);
+      const ubicaciones = asignaciones.map(asignacion => {
+        const bazarId = asignacion.bazarId || "";
+        const bazar = bazarId && AppState.bazares.find(item => item.id === bazarId);
+        return {
+          nombre: bazar ? bazar.nombre : bazarId ? "Bazar eliminado" : "Caja general",
+          cantidad: Math.max(0, (Number(asignacion.cantidadEntregada) || 0)
+            - (Number(asignacion.cantidadVendida) || 0)
+            - (Number(asignacion.cantidadDevuelta) || 0))
+        };
+      }).filter(ubicacion => ubicacion.cantidad > 0);
+      const sinAsignar = Math.max(0, (Number(producto.cantidadRecibida) || 0) - cantidadAsignada);
+      if (sinAsignar > 0) ubicaciones.push({ nombre: "Sin asignar", cantidad: sinAsignar });
+      const cantidad = ubicaciones.reduce((total, ubicacion) => total + ubicacion.cantidad, 0);
+      return cantidad > 0 ? {
+        consignacionId: consignacion.id,
+        productoId: producto.id,
+        nombre: producto.nombre || "Producto sin nombre",
+        consignacionNombre: consignacion.nombre || "Consignación",
+        cantidad,
+        ubicaciones
+      } : null;
+    }).filter(Boolean)
+  );
+}
+function prepararAgregarPlayerasBloqueInventario(tipo) {
+  const esConsignacion = tipo === "consignacion";
+  const playeras = AppState.playeras.filter(playera => {
+    if (playera.ventaRapida || playeraVendidaORegalada(playera) || (Number(playera.stock) || 0) <= 0) return false;
+    const enConsignacion = playera.consignacionId && playera.consignacionEstado === "En consignación";
+    return esConsignacion
+      ? !!enConsignacion
+      : (!playera.consignacionId || playera.consignacionEstado === "Devuelta");
+  }).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" }));
+  const productosConsignados = esConsignacion ? productosExternosConsignacionDisponibles() : [];
+  if (!playeras.length && !productosConsignados.length) {
+    playerasPendientesBloque = [];
+    productosConsignadosPendientesBloque = [];
+    return showToast(esConsignacion
+      ? "No hay unidades disponibles en las consignaciones."
+      : "No hay playeras con unidades disponibles en el inventario.", "error");
+  }
+  playerasPendientesBloque = playeras;
+  productosConsignadosPendientesBloque = productosConsignados;
+  document.getElementById("bloque-playeras-title").textContent = esConsignacion
+    ? "Agregar consignaciones"
+    : "Agregar todas las playeras del inventario";
+  document.getElementById("bloque-playeras-ayuda").textContent = esConsignacion
+    ? "Se agregarán playeras propias y productos externos con unidades disponibles, incluso las que aún no están asignadas a un bazar. Elige una etiqueta para cada playera que tenga varias."
+    : "Se agregarán todas las unidades en stock. Elige una etiqueta para cada playera que tenga varias.";
+  const listaPlayeras = playeras.length ? `<h3 class="section-title">Playeras propias en consignación</h3>${playeras.map(playera => {
+    const etiquetas = [...new Set(playera.tags || [])]
+      .map(id => AppState.etiquetas.find(etiqueta => etiqueta.id === id))
+      .filter(Boolean);
+    const etiquetaSelect = etiquetas.length > 1
+      ? `<select class="form-input block-inventory-bulk-theme" data-playera-id="${escapeHtml(playera.id)}"><option value="">Elige una etiqueta</option>${etiquetas.map(etiqueta => `<option value="${escapeHtml(etiqueta.id)}">${escapeHtml(etiqueta.nombre)}</option>`).join("")}</select>`
+      : `<span class="block-inventory-bulk-tag">${etiquetas.length ? escapeHtml(etiquetas[0].nombre) : "Sin etiqueta"}</span>`;
+    const consignacion = playera.consignacionId
+      ? AppState.consignaciones.find(item => item.id === playera.consignacionId)
+      : null;
+    return `<div class="block-inventory-bulk-item">
+      <span class="block-inventory-bulk-product"><strong>${escapeHtml(playera.nombre || "Playera sin nombre")}</strong><small>${escapeHtml(playera.tipo || "Playera")} · Talla ${escapeHtml(playera.talla || "—")} · ${escapeHtml(colorNombre(playera.colorId))}${consignacion ? ` · ${escapeHtml(consignacion.nombre)}` : ""}</small></span>
+      ${etiquetaSelect}
+      <strong class="block-inventory-bulk-quantity">× ${Number(playera.stock) || 0}</strong>
+    </div>`;
+  }).join("")}` : "";
+  const listaConsignaciones = productosConsignados.length
+    ? `<h3 class="section-title">Productos externos consignados</h3>${productosConsignados.map(producto => `<div class="block-inventory-bulk-item">
+      <span class="block-inventory-bulk-product"><strong>${escapeHtml(producto.nombre)}</strong><small>${escapeHtml(producto.consignacionNombre)} · ${producto.ubicaciones.map(ubicacion => `${escapeHtml(ubicacion.nombre)}: ${ubicacion.cantidad}`).join(" · ")}</small></span>
+      <span class="block-inventory-bulk-tag">Producto consignado</span>
+      <strong class="block-inventory-bulk-quantity">× ${producto.cantidad}</strong>
+    </div>`).join("")}`
+    : "";
+  document.getElementById("bloque-playeras-list").innerHTML = listaPlayeras + listaConsignaciones;
+  document.getElementById("modal-bloque-playeras").classList.add("open");
+}
+function confirmarAgregarPlayerasBloqueInventario() {
+  const seleccionadas = playerasPendientesBloque.map(playera => {
+    const etiquetas = [...new Set(playera.tags || [])]
+      .map(id => AppState.etiquetas.find(etiqueta => etiqueta.id === id))
+      .filter(Boolean);
+    const select = [...document.querySelectorAll(".block-inventory-bulk-theme")]
+      .find(element => element.dataset.playeraId === String(playera.id));
+    const etiquetaId = etiquetas.length > 1 ? (select ? select.value : "") : (etiquetas[0]?.id || "legacy:sin-etiqueta");
+    return { playera, etiquetas, etiquetaId };
+  });
+  if (seleccionadas.some(item => !item.etiquetaId)) {
+    return showToast("Elige una etiqueta para cada playera que tiene varias.", "error");
+  }
+  const grupos = new Map();
+  seleccionadas.forEach(({ playera, etiquetas, etiquetaId }) => {
+    const etiqueta = etiquetas.find(item => item.id === etiquetaId);
+    const id = etiqueta ? etiqueta.id : etiquetaId;
+    const nombre = etiqueta ? etiqueta.nombre : "Sin etiqueta";
+    const cantidad = Math.max(0, Number(playera.stock) || 0);
+    const grupo = grupos.get(id) || { etiquetaId: id, nombre, cantidad: 0, playeras: [] };
+    grupo.cantidad += cantidad;
+    const playeraExistente = grupo.playeras.find(item => item.playeraId === playera.id);
+    if (playeraExistente) playeraExistente.cantidad += cantidad;
+    else grupo.playeras.push({ playeraId: playera.id, cantidad });
+    grupos.set(id, grupo);
+  });
+  productosConsignadosPendientesBloque.forEach(producto => {
+    const etiquetaId = `legacy:consignacion:${producto.consignacionId}:${producto.productoId}`;
+    const existente = bloqueItemsEdicion.find(item => item.etiquetaId === etiquetaId);
+    const registro = {
+      consignacionId: producto.consignacionId,
+      productoId: producto.productoId,
+      nombre: producto.nombre,
+      cantidad: producto.cantidad,
+      ubicaciones: producto.ubicaciones.map(ubicacion => ({ ...ubicacion }))
+    };
+    if (existente) {
+      existente.cantidad = (Number(existente.cantidad) || 0) + producto.cantidad;
+      if (!Array.isArray(existente.productosConsignados)) existente.productosConsignados = [];
+      const actual = existente.productosConsignados.find(item =>
+        item.consignacionId === producto.consignacionId && item.productoId === producto.productoId
+      );
+      if (actual) {
+        actual.cantidad += producto.cantidad;
+        producto.ubicaciones.forEach(ubicacion => {
+          const ubicacionActual = actual.ubicaciones.find(item => item.nombre === ubicacion.nombre);
+          if (ubicacionActual) ubicacionActual.cantidad += ubicacion.cantidad;
+          else actual.ubicaciones.push({ ...ubicacion });
+        });
+      } else {
+        existente.productosConsignados.push(registro);
+      }
+    } else {
+      bloqueItemsEdicion.push({
+        etiquetaId,
+        nombre: `${producto.nombre} · ${producto.consignacionNombre}`,
+        cantidad: producto.cantidad,
+        productosConsignados: [registro]
+      });
+    }
+  });
+  grupos.forEach(grupo => {
+    const existente = bloqueItemsEdicion.find(item => item.etiquetaId === grupo.etiquetaId);
+    if (!existente) {
+      bloqueItemsEdicion.push(grupo);
+      return;
+    }
+    existente.cantidad = (Number(existente.cantidad) || 0) + grupo.cantidad;
+    if (!Array.isArray(existente.playeras)) existente.playeras = [];
+    grupo.playeras.forEach(playera => {
+      const actual = existente.playeras.find(item => item.playeraId === playera.playeraId);
+      if (actual) actual.cantidad += playera.cantidad;
+      else existente.playeras.push(playera);
+    });
+  });
+  playerasPendientesBloque = [];
+  productosConsignadosPendientesBloque = [];
+  document.getElementById("modal-bloque-playeras").classList.remove("open");
+  llenarSelectTematicasBloque();
+  renderItemsBloqueInventario();
+  showToast("Artículos agregados al bloque.");
+}
+function llenarSelectTematicasBloque(selectedId = "") {
   const select = document.getElementById("bloque-inventario-tematica");
   const ayuda = document.getElementById("bloque-inventario-ayuda");
-  const etiquetas = AppState.etiquetas.filter(etiqueta => stockTematicaBloque(etiqueta.id) > 0
-    || bloqueTematicas.some(item => item.etiquetaId === etiqueta.id));
+  const etiquetas = AppState.etiquetas;
   select.innerHTML = `<option value="">Selecciona una temática</option>` + etiquetas.map(etiqueta =>
     `<option value="${escapeHtml(etiqueta.id)}">${escapeHtml(etiqueta.nombre)} · stock: ${stockTematicaBloque(etiqueta.id)}</option>`
-  ).join("");
+  ).join("") + `<option value="__otra__">Otros: crear temática</option>`;
   select.value = etiquetas.some(etiqueta => etiqueta.id === selectedId) ? selectedId : "";
-  select.disabled = !etiquetas.length;
-  ayuda.textContent = etiquetas.length
-    ? "Elige etiquetas usadas por playeras con stock. Puedes planear más del stock actual; solo se mostrará una alerta y no se descuentan existencias."
-    : "No hay temáticas disponibles: asigna etiquetas a playeras con stock desde Inventario → Playeras.";
+  select.disabled = false;
+  ayuda.textContent = "Elige una etiqueta existente o selecciona «Otros» para crear una temática con nombre y color. Puedes planear más del stock actual; solo se mostrará una alerta y no se descuentan existencias.";
+  onSeleccionarTematicaBloque();
+}
+function onSeleccionarTematicaBloque() {
+  const esOtra = val("bloque-inventario-tematica") === "__otra__";
+  document.getElementById("bloque-inventario-otro").hidden = !esOtra;
+  document.getElementById("bloque-inventario-agregar").textContent = esOtra ? "Crear y agregar temática" : "Agregar temática";
 }
 function renderItemsBloqueInventario() {
   const container = document.getElementById("bloque-inventario-items");
@@ -3018,14 +3266,18 @@ function renderItemsBloqueInventario() {
     const etiqueta = AppState.etiquetas.find(actual => actual.id === item.etiquetaId);
     const nombre = etiqueta ? etiqueta.nombre : (item.nombre || "Temática anterior");
     const stockActual = String(item.etiquetaId || "").startsWith("legacy:") ? null : stockTematicaBloque(item.etiquetaId);
+    const detalle = `<button type="button" class="block-inventory-details-toggle" data-etiqueta-id="${escapeHtml(item.etiquetaId)}" data-index="${index}" aria-expanded="false" onclick="verDetallesPlayerasTematica(this)">Ver detalles</button><div class="block-inventory-theme-details" hidden></div>`;
     return `<div class="block-inventory-line">
-      <span>${escapeHtml(nombre)}${stockActual !== null ? `<small>Stock disponible: ${stockActual}</small>` : `<small>Etiqueta anterior del bloque</small>`}</span>
-      <div class="block-inventory-quantity">
-        <button type="button" aria-label="Restar una playera" onclick="ajustarCantidadBloqueInventario(${index},-1)">−</button>
-        <strong>${Number(item.cantidad) || 0}</strong>
-        <button type="button" aria-label="Agregar una playera" onclick="ajustarCantidadBloqueInventario(${index},1)">+</button>
-        <button type="button" class="block-inventory-remove" onclick="quitarPlayeraBloqueInventario(${index})">Quitar</button>
+      <span class="block-inventory-theme-name">${etiqueta ? `<i class="theme-color-swatch" style="background:${etiqueta.color}"></i>` : ""}${escapeHtml(nombre)}${stockActual !== null ? `<small>Stock disponible: ${stockActual}</small>` : `<small>Etiqueta anterior del bloque</small>`}</span>
+      <div class="block-inventory-line-actions">
+        <div class="block-inventory-quantity">
+          <button type="button" aria-label="Restar una playera" onclick="ajustarCantidadBloqueInventario(${index},-1)">−</button>
+          <strong>${Number(item.cantidad) || 0}</strong>
+          <button type="button" aria-label="Agregar una playera" onclick="ajustarCantidadBloqueInventario(${index},1)">+</button>
+          <button type="button" class="block-inventory-remove" onclick="quitarPlayeraBloqueInventario(${index})">Quitar</button>
+        </div>
       </div>
+      ${detalle}
     </div>`;
   }).join("");
 }
@@ -3039,25 +3291,60 @@ function openModalBloqueInventario(id = "") {
     `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`
   ).join("");
   bazarSelect.value = bloque && AppState.bazares.some(b => b.id === bloque.bazarId) ? bloque.bazarId : "";
-  bloqueItemsEdicion = bloque ? tematicasBloque(bloque).map(item => ({ ...item })) : [];
+  bloqueItemsEdicion = bloque ? tematicasBloque(bloque).map(item => ({
+    ...item,
+    ...(Array.isArray(item.playeras) ? { playeras: item.playeras.map(playera => ({ ...playera })) } : {}),
+    ...(Array.isArray(item.productosConsignados) ? {
+      productosConsignados: item.productosConsignados.map(producto => ({
+        ...producto,
+        ubicaciones: (producto.ubicaciones || []).map(ubicacion => ({ ...ubicacion }))
+      }))
+    } : {})
+  })) : [];
   document.getElementById("bloque-inventario-meta").value = String(Math.max(1, Number(bloque && bloque.metaCantidad) || 14));
   document.getElementById("bloque-inventario-cantidad").value = "1";
-  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  setVal("bloque-inventario-otro-nombre", "");
+  setVal("bloque-inventario-otro-color", "#e3363d");
+  llenarSelectTematicasBloque();
   renderItemsBloqueInventario();
   document.getElementById("modal-bloque-inventario").classList.add("open");
 }
 function agregarTematicaBloqueInventario() {
   const etiquetaId = val("bloque-inventario-tematica");
-  const etiqueta = AppState.etiquetas.find(item => item.id === etiquetaId);
   const cantidad = Number(val("bloque-inventario-cantidad"));
-  if (!etiqueta) return showToast("Selecciona una temática disponible en inventario.", "error");
+  if (!etiquetaId) return showToast("Selecciona una temática o elige «Otros» para crearla.", "error");
   if (!Number.isInteger(cantidad) || cantidad < 1) return showToast("La cantidad debe ser un número entero mayor a cero.", "error");
-  const itemExistente = bloqueItemsEdicion.find(item => item.etiquetaId === etiquetaId);
+  let etiqueta = AppState.etiquetas.find(item => item.id === etiquetaId);
+  if (etiquetaId === "__otra__") {
+    const nombre = val("bloque-inventario-otro-nombre").trim();
+    if (!nombre) return showToast("Escribe el nombre de la nueva temática.", "error");
+    const nombreNormalizado = nombre.toLocaleLowerCase();
+    if (AppState.etiquetas.some(item => item.nombre.trim().toLocaleLowerCase() === nombreNormalizado)) {
+      return showToast("Ya existe esa temática. Selecciónala en la lista o escribe otro nombre.", "error");
+    }
+    etiqueta = {
+      id: uid(),
+      nombre,
+      color: val("bloque-inventario-otro-color")
+    };
+    AppState.etiquetas.push(etiqueta);
+  }
+  if (!etiqueta) return showToast("No se encontró la temática seleccionada.", "error");
+  const temaId = etiqueta.id;
+  const itemExistente = bloqueItemsEdicion.find(item => item.etiquetaId === temaId);
   const cantidadActual = itemExistente ? Number(itemExistente.cantidad) || 0 : 0;
   if (itemExistente) itemExistente.cantidad = cantidadActual + cantidad;
-  else bloqueItemsEdicion.push({ etiquetaId, nombre: etiqueta.nombre, cantidad });
+  else bloqueItemsEdicion.push({ etiquetaId: temaId, nombre: etiqueta.nombre, cantidad });
+  if (etiquetaId === "__otra__") {
+    saveState();
+    renderEtiquetas();
+    renderPlayeraTagChips();
+    refreshAllSelects();
+  }
   document.getElementById("bloque-inventario-cantidad").value = "1";
-  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  setVal("bloque-inventario-otro-nombre", "");
+  setVal("bloque-inventario-tematica", "");
+  llenarSelectTematicasBloque();
   renderItemsBloqueInventario();
 }
 function ajustarCantidadBloqueInventario(index, cambio) {
@@ -3066,12 +3353,12 @@ function ajustarCantidadBloqueInventario(index, cambio) {
   const nuevaCantidad = (Number(item.cantidad) || 0) + cambio;
   if (nuevaCantidad <= 0) bloqueItemsEdicion.splice(index, 1);
   else item.cantidad = nuevaCantidad;
-  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  llenarSelectTematicasBloque();
   renderItemsBloqueInventario();
 }
 function quitarPlayeraBloqueInventario(index) {
   bloqueItemsEdicion.splice(index, 1);
-  llenarSelectTematicasBloque("", bloqueItemsEdicion);
+  llenarSelectTematicasBloque();
   renderItemsBloqueInventario();
 }
 function guardarBloqueInventario() {
@@ -3081,7 +3368,16 @@ function guardarBloqueInventario() {
   if (!Number.isInteger(metaCantidad) || metaCantidad < 1) return showToast("La meta debe ser un número entero mayor a cero.", "error");
   const id = val("bloque-inventario-id");
   const tematicas = bloqueItemsEdicion.filter(item => Number.isInteger(Number(item.cantidad)) && Number(item.cantidad) > 0)
-    .map(item => ({ etiquetaId: item.etiquetaId, nombre: item.nombre, cantidad: Number(item.cantidad) }));
+    .map(item => ({
+      etiquetaId: item.etiquetaId, nombre: item.nombre, cantidad: Number(item.cantidad),
+      ...(Array.isArray(item.playeras) ? { playeras: item.playeras.map(playera => ({ ...playera })) } : {}),
+      ...(Array.isArray(item.productosConsignados) ? {
+        productosConsignados: item.productosConsignados.map(producto => ({
+          ...producto,
+          ubicaciones: (producto.ubicaciones || []).map(ubicacion => ({ ...ubicacion }))
+        }))
+      } : {})
+    }));
   const datos = { nombre, bazarId: val("bloque-inventario-bazar"), metaCantidad, tematicas };
   if (!Array.isArray(AppState.bloquesInventario)) AppState.bloquesInventario = [];
   const existente = AppState.bloquesInventario.find(item => item.id === id);
@@ -6088,7 +6384,7 @@ Object.assign(window, {
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
   verDetallePlayera,   cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
-  openModalBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
+  openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,

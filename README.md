@@ -39,11 +39,25 @@ bancaria.
 ## Bloques de inventario para bazares
 
 En **Inventario → Bloques para bazar** puedes crear listas por temática, asignarlas
-a un bazar, definir una meta de playeras y elegir etiquetas usadas por prendas con
-stock para indicar cuántas planeas llevar de cada una. La vista muestra el avance,
-una barra roja/amarilla/verde según el avance, una temática a la vez con opción
-para ver el resto y el stock actual por temática. Estos bloques son solo registros
-de planeación: no reservan ni descuentan stock y no afectan ventas.
+a un bazar, definir una meta de playeras y elegir etiquetas existentes para indicar
+cuántas planeas llevar de cada una. También puedes elegir **Otros** para crear una
+etiqueta con nombre y color desde el mismo bloque. La vista muestra el
+avance, una barra roja/amarilla/verde según el avance, una temática a la vez con
+opción para ver el resto y el stock actual por temática. Estos bloques son solo
+registros de planeación: no reservan ni descuentan stock y no afectan ventas.
+También puedes agregar de una vez todas las playeras disponibles o las
+consignaciones: playeras propias en consignación y productos externos recibidos.
+En estos últimos se incluyen unidades asignadas a bazares y las que siguen sin
+asignar. Si una playera tiene varias etiquetas, elige una para evitar contarla en
+más de una temática; las que no tienen etiqueta quedan agrupadas como
+**Sin etiqueta**.
+
+Para agregar otra temática, crea una etiqueta desde el mismo bloque o en
+**Inventario → Etiquetas y colores** y elige su color. La etiqueta se guarda aunque
+todavía no tenga playeras; puedes asignarlas después desde el formulario de cada
+prenda. Los cambios se reflejan de inmediato en los filtros y bloques, también en
+otras pestañas abiertas del mismo navegador. Usa **Ver detalles** para consultar las playeras, los productos
+consignados y las unidades agregadas a cada temática.
 
 ## Respaldos JSON
 

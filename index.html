@@ -94,7 +94,7 @@
   <!-- ============================ MAIN AREA ============================ -->
   <main class="main-area">
     <header class="header">
-      <button class="btn-icon" id="sidebar-toggle" title="Menú">☰</button>
+      <button class="btn-icon" id="sidebar-toggle" title="Menú" aria-label="Abrir menú" aria-controls="sidebar" aria-expanded="false">☰</button>
       <h1 class="header-title" id="page-title">Inicio</h1>
       <div class="bazar-activo-bar">
         <span class="bazar-activo-label">🏪 Bazar activo</span>
@@ -674,7 +674,7 @@
         <div class="empty-state" id="bloques-inventario-empty">
           <div class="empty-ico">📦</div>
           <strong>Aún no hay bloques</strong>
-          <span>Crea una lista para un bazar, define cuántas playeras quieres llevar y suma cantidades por temática según las etiquetas del inventario.</span>
+          <span>Crea una lista para un bazar, define tu meta y suma cantidades por temática. También puedes crear una temática nueva desde el formulario del bloque.</span>
           <button type="button" class="btn-primary" onclick="openModalBloqueInventario()">+ Nuevo bloque</button>
         </div>
       </section>
@@ -755,13 +755,27 @@
             <div class="block-inventory-picker">
               <div class="form-group">
                 <label for="bloque-inventario-tematica">Temática de playeras disponibles</label>
-                <select class="form-input" id="bloque-inventario-tematica"></select>
+                <select class="form-input" id="bloque-inventario-tematica" onchange="onSeleccionarTematicaBloque()"></select>
               </div>
               <div class="form-group">
                 <label for="bloque-inventario-cantidad">Cantidad de esta temática</label>
                 <input class="form-input" id="bloque-inventario-cantidad" type="number" min="1" step="1" value="1">
               </div>
-              <button type="button" class="btn-secondary" onclick="agregarTematicaBloqueInventario()">Agregar temática</button>
+              <button type="button" class="btn-secondary" id="bloque-inventario-agregar" onclick="agregarTematicaBloqueInventario()">Agregar temática</button>
+              <div class="block-inventory-bulk-actions">
+                <button type="button" class="btn-secondary" onclick="prepararAgregarPlayerasBloqueInventario('inventario')">Agregar todas las playeras del inventario</button>
+                <button type="button" class="btn-secondary" onclick="prepararAgregarPlayerasBloqueInventario('consignacion')">Agregar consignaciones</button>
+              </div>
+              <div class="block-inventory-custom-theme" id="bloque-inventario-otro" hidden>
+                <div class="form-group">
+                  <label for="bloque-inventario-otro-nombre">Nombre de la nueva temática</label>
+                  <input class="form-input" id="bloque-inventario-otro-nombre" maxlength="60" placeholder="Ej. Videojuegos">
+                </div>
+                <div class="form-group">
+                  <label for="bloque-inventario-otro-color">Color de la etiqueta</label>
+                  <input class="form-input block-inventory-color" id="bloque-inventario-otro-color" type="color" value="#e3363d">
+                </div>
+              </div>
             </div>
             <p class="section-sub block-inventory-note" id="bloque-inventario-ayuda">Elige etiquetas ya asignadas a playeras con stock. La lista no descuenta existencias.</p>
             <div id="bloque-inventario-items" class="block-inventory-items"></div>
@@ -769,6 +783,23 @@
           <div class="modal-footer">
             <button type="button" class="btn-secondary" data-modal="modal-bloque-inventario">Cancelar</button>
             <button type="button" class="btn-primary" onclick="guardarBloqueInventario()">Guardar bloque</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="modal-bloque-playeras">
+        <div class="modal-box">
+          <div class="modal-header">
+            <h2 class="modal-title" id="bloque-playeras-title">Agregar playeras</h2>
+            <button type="button" class="modal-close" data-modal="modal-bloque-playeras">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="section-sub" id="bloque-playeras-ayuda"></p>
+            <div class="block-inventory-bulk-list" id="bloque-playeras-list"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" data-modal="modal-bloque-playeras">Cancelar</button>
+            <button type="button" class="btn-primary" onclick="confirmarAgregarPlayerasBloqueInventario()">Agregar al bloque</button>
           </div>
         </div>
       </div>
@@ -843,7 +874,7 @@
         <div class="section-header" style="justify-content:space-between;margin-top:32px;">
           <div>
             <h2 class="section-title">Etiquetas de filtrado</h2>
-            <p class="section-sub">Úsalas para clasificar tus playeras (ej. Anime, Oversize, Edición limitada).</p>
+            <p class="section-sub">Clasifica tus playeras por temática con nombre y color; después podrás filtrar el inventario o elegirlas en los bloques para bazar.</p>
           </div>
           <button class="btn-primary" onclick="openModalEtiqueta()">+ Nueva etiqueta</button>
         </div>
@@ -1107,7 +1138,7 @@
         </div>
         <div id="consulta-etiquetas-grid" class="chips-grid"></div>
 
-        <div class="cards-grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr));">
+        <div class="cards-grid interes-charts-grid">
           <div class="card">
             <div class="card-top"><span class="card-title">🏆 Ranking de productos</span></div>
             <canvas id="chart-interes-productos" height="220"></canvas>
