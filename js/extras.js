@@ -29,6 +29,12 @@ function llenarSelectBazar(sel, valor) {
   AppState.bazares.forEach(b => sel.appendChild(opt(b.id, b.nombre)));
   sel.value = AppState.bazares.some(b => b.id === valor) ? valor : "";
 }
+function llenarSelectCliente(sel, valor = "") {
+  sel.innerHTML = "";
+  sel.appendChild(opt("", "Sin cliente asignado"));
+  AppState.clientes.forEach(c => sel.appendChild(opt(c.id, c.nombre)));
+  sel.value = AppState.clientes.some(c => c.id === valor) ? valor : "";
+}
 // Piezas que sí se pueden vender ahora: con stock, no vendidas ni regaladas, y que no estén con un consignatario.
 /* ---------------------------------------------------------------
    PRODUCTOS VENDIBLES (playeras y stickers con una "clave" p:ID / s:ID)
@@ -82,7 +88,7 @@ const textoBusqueda = pr => norm(`${pr.nombre} ${pr.meta} ${pr.tipo === "playera
    · Consignación: se registra la venta y el pago en la asignación del bazar.
    lineas = [{ key, cantidad, precio }]
 --------------------------------------------------------------- */
-function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "") {
+function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "", clienteId = "") {
   const totalVenta = lineas.reduce((total, linea) => total + Math.max(0, Number(linea.precio) || 0) * Math.floor(Number(linea.cantidad) || 0), 0);
   const pagoNormalizado = typeof pago === "string"
     ? { metodo: pago, montoTarjeta: pago === "Tarjeta" ? totalVenta : 0, efectivoRecibido: pago === "Efectivo" ? totalVenta : 0 }
@@ -103,6 +109,10 @@ function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "") {
   }
   if ([...cantidades].some(([key, cantidad]) => cantidad > (producto(key)?.stock || 0))) {
     showToast("No se registró la venta: el stock cambió. Revisa el carrito.", "error");
+    return false;
+  }
+  if (clienteId && !AppState.clientes.some(cliente => cliente.id === clienteId)) {
+    showToast("No se registró la venta: el cliente seleccionado ya no existe.", "error");
     return false;
   }
   if (!Number.isFinite(montoTarjetaTotal) || montoTarjetaTotal < 0 || montoTarjetaTotal > totalVenta
@@ -154,7 +164,7 @@ function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "") {
         metodoPago: metodo, montoEfectivo, montoTarjeta, comisionTerminal: comision, turnoCajaId, ventaId,
         efectivoRecibido: indice === 0 ? Number(pagoNormalizado.efectivoRecibido) || 0 : 0,
         cambio: indice === 0 ? Math.max(0, (Number(pagoNormalizado.efectivoRecibido) || 0) - (totalVenta - montoTarjetaTotal)) : 0,
-        consignacionId: "", consignacionEstado: "", clienteId: "",
+        consignacionId: "", consignacionEstado: "", clienteId,
         // La copia no vuelve a descontar etiquetas de talla ni queda ligada al gasto original.
         etiquetaTallaConsumo: null, tieneEtiquetaTalla: false, gastoVinculadoId: "",
         ventaRapida: true, fechaVenta: hoyLocal()
@@ -275,6 +285,11 @@ function crearModalVR() {
             <label class="form-label">Bazar</label>
             <select id="vr-bazar" class="form-select"></select>
           </div>
+          <div class="form-group" id="vr-cliente-wrap" style="display:none;">
+            <label class="form-label">Cliente (opcional)</label>
+            <select id="vr-cliente" class="form-select"></select>
+            <span class="form-hint">La playera vendida se agregará al historial de compras del cliente.</span>
+          </div>
           <p class="cost-preview" id="vr-total">—</p>
         </div>
       </div>
@@ -335,6 +350,8 @@ function elegirVR(key) {
   renderListaVR();
   $("vr-detalle").style.display = "block";
   $("vr-elegida").textContent = `${pr.nombre} · ${pr.meta} (quedan ${pr.stock})`;
+  $("vr-cliente-wrap").style.display = pr.tipo === "playera" ? "block" : "none";
+  if (pr.tipo !== "playera") $("vr-cliente").value = "";
   $("vr-cant").value = 1;
   $("vr-cant").max = pr.stock;
   $("vr-precio").value = pr.precio;
@@ -367,7 +384,7 @@ function confirmarVR() {
   const cant = parseInt($("vr-cant").value) || 0;
   const precio = parseFloat($("vr-precio").value) || 0;
   const exito = registrarVentas([{ key: pr.key, cantidad: cant, precio, precioLista: pr.precio }], vr.metodo, $("vr-bazar").value,
-    `Venta registrada: ${cant} × ${pr.nombre} — ${fmt(cant * precio)}`);
+    `Venta registrada: ${cant} × ${pr.nombre} — ${fmt(cant * precio)}`, "", $("vr-cliente").value);
   if (exito) $("modal-venta-rapida").classList.remove("open");
 }
 function openVentaRapida() {
@@ -377,6 +394,8 @@ function openVentaRapida() {
   $("vr-detalle").style.display = "none";
   $("vr-ok").disabled = true;
   $("vr-pago").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.metodo === "Efectivo"));
+  llenarSelectCliente($("vr-cliente"));
+  $("vr-cliente-wrap").style.display = "none";
   renderListaVR();
   $("modal-venta-rapida").classList.add("open");
 }

@@ -36,6 +36,12 @@ caja capturando el efectivo contado para comparar el corte. Los pagos con
 tarjeta se registran en la aplicación, pero no se procesan con una terminal
 bancaria.
 
+Al registrar una playera con **Venta rápida**, puedes elegir opcionalmente un
+cliente; la venta queda marcada como **Vendida**, se descuenta del stock y se
+agrega al historial de compras de ese cliente. También puedes asociar un cliente
+desde el formulario de la playera en Inventario; al marcarla como vendida,
+aparecerá en el mismo historial. Las cotizaciones siguen apareciendo por separado.
+
 ## Bloques de inventario para bazares
 
 En **Inventario → Bloques para bazar** puedes crear listas por temática, asignarlas
