@@ -9,7 +9,7 @@
    pueden deshacer desde el aviso.
    ============================================================ */
 import { AppState, uid, saveState } from "./storage.js";
-import { fmt, escapeHtml, colorNombre, colorHex, comisionTerminalMonto, bazarIdsDe, getBazarVentasYGanancia } from "./calculator.js";
+import { fmt, escapeHtml, colorNombre, colorHex, comisionTerminalMonto, bazarIdsDe, getBazarVentasYGanancia, playerasDisponibles } from "./calculator.js";
 import { showToast } from "./ui.js";
 
 const $ = id => document.getElementById(id);
@@ -40,10 +40,9 @@ function llenarSelectCliente(sel, valor = "") {
    PRODUCTOS VENDIBLES (playeras y stickers con una "clave" p:ID / s:ID)
 --------------------------------------------------------------- */
 const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" });
-// Playeras que sí se pueden vender ahora: con stock, disponibles (no vendidas ni regaladas)
-// y que no estén con un consignatario.
-const playerasVendibles = () => AppState.playeras
-  .filter(p => (p.stock || 0) > 0 && (p.bazarEstado || "Disponible") === "Disponible"
+// Playeras que todavía tienen stock disponible y no están regaladas ni en consignación.
+const playerasVendibles = () => playerasDisponibles()
+  .filter(p => (p.stock || 0) > 0
     && !(p.consignacionId && p.consignacionEstado !== "Devuelta"))
   .sort(porNombre);
 const stickersVendibles = () => AppState.stickers.filter(s => (s.stock || 0) > 0).sort(porNombre);
@@ -165,6 +164,7 @@ function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "", cliente
         efectivoRecibido: indice === 0 ? Number(pagoNormalizado.efectivoRecibido) || 0 : 0,
         cambio: indice === 0 ? Math.max(0, (Number(pagoNormalizado.efectivoRecibido) || 0) - (totalVenta - montoTarjetaTotal)) : 0,
         consignacionId: "", consignacionEstado: "", clienteId,
+        stockDescontadoVenta: cantidad,
         // La copia no vuelve a descontar etiquetas de talla ni queda ligada al gasto original.
         etiquetaTallaConsumo: null, tieneEtiquetaTalla: false, gastoVinculadoId: "",
         ventaRapida: true, fechaVenta: hoyLocal()

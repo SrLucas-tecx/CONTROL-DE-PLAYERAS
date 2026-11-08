@@ -2692,9 +2692,16 @@ function savePlayera() {
   const antesVendida = existing ? playeraVendidaORegalada(existing) : false;
   const estadoVentaAnterior = existing ? (existing.bazarEstado || "Disponible") : "Disponible";
   const estadoPrendaAnterior = existing ? existing.estado : "";
+  const cantidadYaVendida = existing && estadoVentaAnterior === "Vendida"
+    ? Number(existing.stockDescontadoVenta) || (existing.ventaRapida ? 0 : Number(existing.stock) || 0)
+    : 0;
   const seVuelveAVender = !(existing && existing.ventaRapida) && val("p-estado-venta") === "Reventa";
   const estadoVenta = (existing && existing.ventaRapida) ? "Vendida" : (seVuelveAVender ? "Disponible" : (val("p-estado-venta") || "Disponible"));
   const stockCapturado = seVuelveAVender ? 1 : (parseInt(num("p-stock")) || 0);
+  const estadoPrenda = existing && estadoVentaAnterior === "Vendida" && estadoVenta === "Vendida"
+    && stockCapturado > 0 && val("p-estado") === "Agotado"
+    ? (existing.estadoAntesVenta && existing.estadoAntesVenta !== "Agotado" ? existing.estadoAntesVenta : "En stock")
+    : val("p-estado");
   if (estadoVentaAnterior !== "Vendida" && estadoVenta === "Vendida" && stockCapturado < 1) {
     return showToast("No puedes marcar como vendida una playera sin stock.", "error");
   }
@@ -2713,7 +2720,7 @@ function savePlayera() {
     stockMinimo: parseInt(num("p-stock-minimo")) || 0,
     precioVenta: parseFloat(num("p-precio-venta")) || 0,
     precioMayoreo: parseFloat(num("p-precio-mayoreo")) || 0,
-    prioridad: val("p-prioridad"), estado: seVuelveAVender ? "En stock" : val("p-estado"),
+    prioridad: val("p-prioridad"), estado: seVuelveAVender ? "En stock" : estadoPrenda,
     artistaId: val("p-artista") || "",
     pctArtista: Math.max(0, Math.min(100, parseFloat(num("p-pct-artista")) || 0)),
     clienteId: val("p-cliente") || "",
@@ -2722,6 +2729,9 @@ function savePlayera() {
     bazarId: (existing && existing.bazarId) || "",
     bazarIds: (existing && bazarIdsDe(existing)) || [],
     bazarEstado: estadoVenta, metodoPago: metodoVenta, montoTarjeta: montoTarjetaVenta,
+    ...(existing && !existing.ventaRapida && estadoVentaAnterior === "Vendida"
+      ? { stockDescontadoVenta: cantidadYaVendida }
+      : {}),
     comisionTerminal: comisionTerminalMonto(montoTarjetaVenta, AppState.settings.comisionTerminalPct),
     fechaVenta: (existing && existing.fechaVenta) || (estadoVenta === "Vendida" ? new Date().toLocaleDateString("sv-SE") : ""),
     tags, notas: val("p-notas")
@@ -2881,10 +2891,11 @@ function renderPlayeras() {
   const estadoF = document.getElementById("filter-playera-estado").value;
   const colorF = document.getElementById("filter-playera-color").value;
   const tallaF = document.getElementById("filter-playera-talla").value;
+  const disponiblesIds = new Set(playerasDisponibles().map(p => p.id));
   let list = AppState.playeras.filter(p => {
     // En stock = lo que tienes ahora · Inventario completo = todo lo registrado · Vendidas y regaladas = lo que ya salió.
     const salio = playeraVendidaORegalada(p) || !!p.ventaRapida;
-    if (uiFilters.playeraSeccion === "stock" && (salio || (p.stock || 0) <= 0)) return false;
+    if (uiFilters.playeraSeccion === "stock" && (!disponiblesIds.has(p.id) || (p.stock || 0) <= 0)) return false;
     if (uiFilters.playeraSeccion === "vendidas" && !salio) return false;
     if (uiFilters.playeraSeccion === "completo" && p.ventaRapida) return false;
     if (uiFilters.playeraTag !== "all" && !(p.tags || []).includes(uiFilters.playeraTag)) return false;
@@ -2924,7 +2935,7 @@ function renderPlayeras() {
     const hayAlgo = enVendidas
       ? AppState.playeras.some(p => playeraVendidaORegalada(p) || p.ventaRapida)
       : seccion === "stock"
-        ? AppState.playeras.some(p => !p.ventaRapida && !playeraVendidaORegalada(p) && (p.stock || 0) > 0)
+        ? AppState.playeras.some(p => disponiblesIds.has(p.id) && (p.stock || 0) > 0)
         : playerasInventario().length > 0;
     document.getElementById("playeras-empty-title").textContent = hayAlgo
       ? "Ninguna playera coincide"
@@ -2959,6 +2970,13 @@ function playerasParaBloque() {
 function stockTematicaBloque(etiquetaId) {
   return playerasParaBloque().filter(p => (p.tags || []).includes(etiquetaId))
     .reduce((total, p) => total + (Number(p.stock) || 0), 0);
+}
+function stockAsignadoTematicaBloque(item) {
+  if (!Array.isArray(item.playeras)) return stockTematicaBloque(item.etiquetaId);
+  return item.playeras.reduce((total, registro) => {
+    const playera = AppState.playeras.find(actual => actual.id === registro.playeraId);
+    return total + (playera ? Math.max(0, Number(playera.stock) || 0) : 0);
+  }, 0);
 }
 function tematicasBloque(bloque) {
   if (Array.isArray(bloque.tematicas)) return bloque.tematicas;
@@ -3008,7 +3026,8 @@ function renderBloquesInventario() {
         </div>
       </div>
       <div class="block-inventory-lines">${tematicas.length ? tematicas.map((item, index) => {
-        const stock = String(item.etiquetaId || "").startsWith("legacy:") ? null : stockTematicaBloque(item.etiquetaId);
+        const stock = String(item.etiquetaId || "").startsWith("legacy:")
+          ? null : stockAsignadoTematicaBloque(item);
         const etiqueta = AppState.etiquetas.find(actual => actual.id === item.etiquetaId);
         const alerta = stock !== null && Number(item.cantidad) > stock;
         const oculta = index > 0 ? " is-extra-theme" : "";
@@ -3051,8 +3070,8 @@ function verDetallesPlayerasTematica(button) {
       playera: AppState.playeras.find(playera => playera.id === registro.playeraId),
       cantidad: Number(registro.cantidad) || 0
     })).filter(registro => registro.playera)
-    : AppState.playeras
-      .filter(playera => (playera.tags || []).includes(button.dataset.etiquetaId))
+    : playerasDisponibles()
+      .filter(playera => (playera.tags || []).includes(button.dataset.etiquetaId) && (Number(playera.stock) || 0) > 0)
       .map(playera => ({ playera, cantidad: Number(playera.stock) || 0 }));
   const detallesConsignados = (productosConsignados || []).map(registro => {
     const consignacion = (AppState.consignaciones || []).find(item => item.id === registro.consignacionId);
@@ -3068,11 +3087,76 @@ function verDetallesPlayerasTematica(button) {
   details.innerHTML = productosConsignados
     ? detallesConsignados || `<span class="card-meta">Ya no se encuentran los productos consignados que estaban en este bloque.</span>`
     : playeras.length ? playeras.map(({ playera, cantidad }) => `
-    <div class="block-inventory-product">
-      <strong>${escapeHtml(playera.nombre || "Playera sin nombre")}</strong>
-      <span>${escapeHtml(playera.tipo || "Playera")} · Talla ${escapeHtml(playera.talla || "—")} · ${escapeHtml(colorNombre(playera.colorId))} · Cantidad agregada: ${cantidad}</span>
+    <div class="block-inventory-shirt">
+      <span class="block-inventory-shirt-product">
+        <strong>${escapeHtml(playera.nombre || "Playera sin nombre")}</strong>
+        <small>${escapeHtml(playera.tipo || "Playera")} · Talla ${escapeHtml(playera.talla || "—")} · ${escapeHtml(colorNombre(playera.colorId))}</small>
+      </span>
+      <label class="block-inventory-shirt-theme">
+        <span>Etiqueta en este bloque</span>
+        <select class="form-input" aria-label="Cambiar etiqueta de esta playera en el bloque" data-bloque-id="${escapeHtml(button.dataset.bloqueId || "")}" data-index="${index}" data-playera-id="${escapeHtml(playera.id)}" onchange="cambiarEtiquetaPlayeraBloque(this)">
+          ${AppState.etiquetas.map(etiqueta => `<option value="${escapeHtml(etiqueta.id)}"${etiqueta.id === item.etiquetaId ? " selected" : ""}>${escapeHtml(etiqueta.nombre)}</option>`).join("")}
+        </select>
+      </label>
+      <strong class="block-inventory-shirt-quantity">× ${cantidad}</strong>
     </div>`).join("") : `<span class="card-meta">Todavía no hay playeras asignadas a esta temática. Puedes planearla y agregar las playeras después.</span>`;
   details.hidden = false;
+}
+function materializarPlayerasTema(item, playeraPrioritariaId = "") {
+  if (Array.isArray(item.playeras)) return;
+  const candidatas = playerasDisponibles()
+    .filter(playera => (playera.tags || []).includes(item.etiquetaId) && (Number(playera.stock) || 0) > 0)
+    .sort((a, b) => Number(b.id === playeraPrioritariaId) - Number(a.id === playeraPrioritariaId)
+      || (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" }));
+  let restante = Math.max(0, Number(item.cantidad) || 0);
+  item.playeras = candidatas.map(playera => {
+    const cantidad = Math.min(Number(playera.stock) || 0, restante);
+    restante -= cantidad;
+    return { playeraId: playera.id, cantidad };
+  }).filter(registro => registro.cantidad > 0);
+}
+function cambiarEtiquetaPlayeraBloque(select) {
+  const indiceOrigen = Number(select.dataset.index);
+  const editando = select.closest("#bloque-inventario-items");
+  const bloque = editando ? null : (AppState.bloquesInventario || []).find(item => item.id === select.dataset.bloqueId);
+  const tematicas = editando ? bloqueItemsEdicion : (bloque && tematicasBloque(bloque));
+  const origen = tematicas && tematicas[indiceOrigen];
+  const etiquetaNueva = AppState.etiquetas.find(item => item.id === select.value);
+  if (!origen || !etiquetaNueva || origen.etiquetaId === etiquetaNueva.id) return;
+
+  materializarPlayerasTema(origen, select.dataset.playeraId);
+  const asignacion = origen.playeras.find(item => item.playeraId === select.dataset.playeraId);
+  if (!asignacion || asignacion.cantidad < 1) {
+    select.value = origen.etiquetaId;
+    return showToast("Esta playera no tiene unidades asignadas a la temática del bloque.", "error");
+  }
+
+  let destino = tematicas.find(item => item.etiquetaId === etiquetaNueva.id);
+  if (!destino) {
+    destino = { etiquetaId: etiquetaNueva.id, nombre: etiquetaNueva.nombre, cantidad: 0, playeras: [] };
+    tematicas.push(destino);
+  } else {
+    materializarPlayerasTema(destino, select.dataset.playeraId);
+  }
+
+  origen.playeras = origen.playeras.filter(item => item.playeraId !== select.dataset.playeraId);
+  origen.cantidad = Math.max(0, (Number(origen.cantidad) || 0) - asignacion.cantidad);
+  const yaAsignada = destino.playeras.find(item => item.playeraId === select.dataset.playeraId);
+  if (yaAsignada) yaAsignada.cantidad += asignacion.cantidad;
+  else destino.playeras.push({ ...asignacion });
+  destino.cantidad = (Number(destino.cantidad) || 0) + asignacion.cantidad;
+  destino.nombre = etiquetaNueva.nombre;
+  if (origen.cantidad === 0 && !origen.playeras.length) tematicas.splice(tematicas.indexOf(origen), 1);
+
+  if (editando) {
+    llenarSelectTematicasBloque();
+    renderItemsBloqueInventario();
+  } else {
+    bloque.tematicas = tematicas;
+    saveState();
+    renderBloquesInventario();
+    showToast(`Playera movida a «${etiquetaNueva.nombre}» en este bloque.`);
+  }
 }
 let playerasPendientesBloque = [];
 let productosConsignadosPendientesBloque = [];
@@ -3265,7 +3349,8 @@ function renderItemsBloqueInventario() {
   container.innerHTML = bloqueItemsEdicion.map((item, index) => {
     const etiqueta = AppState.etiquetas.find(actual => actual.id === item.etiquetaId);
     const nombre = etiqueta ? etiqueta.nombre : (item.nombre || "Temática anterior");
-    const stockActual = String(item.etiquetaId || "").startsWith("legacy:") ? null : stockTematicaBloque(item.etiquetaId);
+    const stockActual = String(item.etiquetaId || "").startsWith("legacy:")
+      ? null : stockAsignadoTematicaBloque(item);
     const detalle = `<button type="button" class="block-inventory-details-toggle" data-etiqueta-id="${escapeHtml(item.etiquetaId)}" data-index="${index}" aria-expanded="false" onclick="verDetallesPlayerasTematica(this)">Ver detalles</button><div class="block-inventory-theme-details" hidden></div>`;
     return `<div class="block-inventory-line">
       <span class="block-inventory-theme-name">${etiqueta ? `<i class="theme-color-swatch" style="background:${etiqueta.color}"></i>` : ""}${escapeHtml(nombre)}${stockActual !== null ? `<small>Stock disponible: ${stockActual}</small>` : `<small>Etiqueta anterior del bloque</small>`}</span>
@@ -3515,7 +3600,8 @@ function actualizarBarraFiltrosPlayeras() {
   const limpiar = document.getElementById("inv-filtros-limpiar");
   if (limpiar) limpiar.style.display = activos ? "inline-block" : "none";
   const reales = AppState.playeras.filter(p => !p.ventaRapida);
-  const nStock = reales.filter(p => !playeraVendidaORegalada(p) && (p.stock || 0) > 0).length;
+  const disponiblesIds = new Set(playerasDisponibles().map(p => p.id));
+  const nStock = reales.filter(p => disponiblesIds.has(p.id) && (p.stock || 0) > 0).length;
   const nVendidas = AppState.playeras.filter(p => playeraVendidaORegalada(p) || p.ventaRapida).length;
   [["stock", nStock], ["completo", reales.length], ["vendidas", nVendidas]].forEach(([k, n]) => {
     const el = document.getElementById("inv-tab-n-" + k);
@@ -6384,7 +6470,7 @@ Object.assign(window, {
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
   verDetallePlayera,   cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
-  openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
+  openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, cambiarEtiquetaPlayeraBloque, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
   deleteEtiqueta, deleteEtiquetaOp, deleteGrafica, deleteIngresoExtra, deletePlayera, deleteProveedor,

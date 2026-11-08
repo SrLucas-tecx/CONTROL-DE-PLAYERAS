@@ -334,9 +334,12 @@ export function playeraVendidaORegalada(p) {
   const estado = p.bazarEstado || "Disponible";
   return estado === "Vendida" || estado === "Venta nula" || (!!p.consignacionId && p.consignacionEstado === "Vendida");
 }
-// Inventario principal: lo que todavía tienes para vender (sin vendidas, regaladas ni copias de ventas).
+// Inventario principal: stock disponible, incluyendo prendas con ventas anteriores
+// registradas por separado mediante stockDescontadoVenta.
 export function playerasDisponibles() {
-  return AppState.playeras.filter(p => !p.ventaRapida && !playeraVendidaORegalada(p));
+  return AppState.playeras.filter(p => !p.ventaRapida
+    && (!playeraVendidaORegalada(p)
+      || ((p.bazarEstado || "Disponible") === "Vendida" && Number(p.stockDescontadoVenta) > 0)));
 }
 // Total vendido que NO está ligado a ningún bazar: cotizaciones, playeras vendidas y stickers sueltos.
 export function totalVentasSinBazar() {

@@ -763,11 +763,11 @@ button.mb-hoy:hover{background:var(--color-accent-soft);}
 .block-inventory-card-header>div:first-child{min-width:0;overflow-wrap:anywhere;}
 .block-inventory-card-header .section-title{overflow-wrap:anywhere;}
 .block-inventory-actions{flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;}
-.block-inventory-goal{max-width:320px;margin-top:var(--space-3);}
-.block-inventory-picker{display:grid;grid-template-columns:minmax(0,2fr) minmax(120px,1fr) auto;gap:var(--space-3);align-items:end;margin-top:var(--space-3);}
+.block-inventory-goal{width:100%;max-width:none;margin-top:0;}
+.block-inventory-picker{display:grid;grid-template-columns:minmax(0,2fr) minmax(140px,1fr);gap:var(--space-3);align-items:end;margin-top:var(--space-3);}
 .block-inventory-picker>.form-group{min-width:0;margin-bottom:0;}
-.block-inventory-picker>#bloque-inventario-agregar{align-self:end;min-height:44px;margin:0;}
-.block-inventory-bulk-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:var(--space-2);}
+.block-inventory-picker>#bloque-inventario-agregar{grid-column:1/-1;align-self:end;min-height:44px;margin:0;}
+.block-inventory-bulk-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2);}
 .block-inventory-bulk-actions button{min-height:44px;white-space:normal;}
 .block-inventory-bulk-list{display:flex;flex-direction:column;gap:var(--space-2);max-height:min(56vh,560px);overflow-y:auto;}
 .block-inventory-bulk-item{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,auto) auto;align-items:center;gap:var(--space-3);padding:var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface-alt);}
@@ -787,6 +787,13 @@ button.mb-hoy:hover{background:var(--color-accent-soft);}
 .block-inventory-product{display:flex;flex-direction:column;gap:3px;padding:var(--space-2) 0;border-bottom:1px solid var(--color-border);font-size:var(--fs-xs);}
 .block-inventory-product:last-child{border-bottom:0;}
 .block-inventory-product span{color:var(--color-text-muted);}
+.block-inventory-shirt{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(160px,1fr) auto;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--color-border);font-size:var(--fs-xs);}
+.block-inventory-shirt:last-child{border-bottom:0;}
+.block-inventory-shirt-product,.block-inventory-shirt-theme{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.block-inventory-shirt-product{overflow-wrap:anywhere;}
+.block-inventory-shirt-product small,.block-inventory-shirt-theme>span{color:var(--color-text-muted);font-size:var(--fs-xs);}
+.block-inventory-shirt-theme .form-input{min-width:0;min-height:40px;padding:6px 10px;}
+.block-inventory-shirt-quantity{white-space:nowrap;}
 .interes-charts-grid{grid-template-columns:repeat(auto-fit,minmax(340px,1fr));}
 .block-inventory-note{display:block;margin-top:var(--space-2);}
 .block-inventory-items,.block-inventory-lines{display:flex;flex-direction:column;gap:var(--space-2);margin-top:var(--space-3);}
@@ -810,10 +817,8 @@ button.mb-hoy:hover{background:var(--color-accent-soft);}
 .block-inventory-quantity button{min-width:36px;min-height:36px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);font-weight:800;}
 .block-inventory-quantity .block-inventory-remove{padding:0 var(--space-2);font-size:var(--fs-xs);}
 @media(max-width:700px){
-  .block-inventory-picker{grid-template-columns:minmax(0,1fr) minmax(90px,.55fr);}
-  .block-inventory-picker .form-group:first-child{grid-column:1/-1;}
+  .block-inventory-picker{grid-template-columns:minmax(0,1fr) minmax(110px,.65fr);}
   .block-inventory-picker>button{grid-column:1/-1;min-height:44px;}
-  .block-inventory-bulk-actions{display:grid;grid-template-columns:1fr;width:100%;}
   .block-inventory-bulk-actions button{width:100%;}
   .block-inventory-bulk-item{grid-template-columns:minmax(0,1fr) auto;}
   .block-inventory-bulk-item .form-input,.block-inventory-bulk-tag{grid-column:1;}
@@ -822,6 +827,14 @@ button.mb-hoy:hover{background:var(--color-accent-soft);}
 }
 @media(max-width:420px){
   .block-inventory-custom-theme{grid-template-columns:minmax(0,1fr);}
+}
+@media(max-width:520px){
+  .block-inventory-picker,.block-inventory-bulk-actions{grid-template-columns:minmax(0,1fr);}
+  .block-inventory-picker>#bloque-inventario-agregar,.block-inventory-bulk-actions{grid-column:1;}
+  .block-inventory-shirt{grid-template-columns:minmax(0,1fr) auto;}
+  .block-inventory-shirt-product{grid-column:1/-1;}
+  .block-inventory-shirt-theme{grid-column:1;}
+  .block-inventory-shirt-quantity{grid-column:2;grid-row:2;align-self:center;}
 }
 @media(max-width:560px){
   .interes-charts-grid{grid-template-columns:minmax(0,1fr);}

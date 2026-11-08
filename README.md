@@ -57,6 +57,8 @@ En estos últimos se incluyen unidades asignadas a bazares y las que siguen sin
 asignar. Si una playera tiene varias etiquetas, elige una para evitar contarla en
 más de una temática; las que no tienen etiqueta quedan agrupadas como
 **Sin etiqueta**.
+En **Ver detalles** puedes cambiar la temática de una playera para ese bloque;
+esto no modifica sus etiquetas en el inventario.
 
 Para agregar otra temática, crea una etiqueta desde el mismo bloque o en
 **Inventario → Etiquetas y colores** y elige su color. La etiqueta se guarda aunque

@@ -1965,12 +1965,13 @@ button.mb-hoy:hover {
   flex-shrink: 0;
 }
 .block-inventory-goal {
-  max-width: 320px;
-  margin-top: var(--space-3);
+  width: 100%;
+  max-width: none;
+  margin-top: 0;
 }
 .block-inventory-picker {
   display: grid;
-  grid-template-columns: minmax(0,2fr) minmax(120px,1fr) auto;
+  grid-template-columns: minmax(0,2fr) minmax(140px,1fr);
   gap: var(--space-3);
   align-items: end;
   margin-top: var(--space-3);
@@ -1980,14 +1981,15 @@ button.mb-hoy:hover {
   margin-bottom: 0;
 }
 .block-inventory-picker>#bloque-inventario-agregar {
+  grid-column: 1/-1;
   align-self: end;
   min-height: 44px;
   margin: 0;
 }
 .block-inventory-bulk-actions {
   grid-column: 1/-1;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
   gap: var(--space-2);
 }
 .block-inventory-bulk-actions button {
@@ -2093,6 +2095,39 @@ button.mb-hoy:hover {
 }
 .block-inventory-product span {
   color: var(--color-text-muted);
+}
+.block-inventory-shirt {
+  display: grid;
+  grid-template-columns: minmax(0,1.4fr) minmax(160px,1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--fs-xs);
+}
+.block-inventory-shirt:last-child {
+  border-bottom: 0;
+}
+.block-inventory-shirt-product,.block-inventory-shirt-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.block-inventory-shirt-product {
+  overflow-wrap: anywhere;
+}
+.block-inventory-shirt-product small,.block-inventory-shirt-theme>span {
+  color: var(--color-text-muted);
+  font-size: var(--fs-xs);
+}
+.block-inventory-shirt-theme .form-input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+.block-inventory-shirt-quantity {
+  white-space: nowrap;
 }
 .interes-charts-grid {
   grid-template-columns: repeat(auto-fit,minmax(340px,1fr));
@@ -2206,19 +2241,11 @@ button.mb-hoy:hover {
 }
 @media (max-width:700px) {
   .block-inventory-picker {
-    grid-template-columns: minmax(0,1fr) minmax(90px,.55fr);
-  }
-  .block-inventory-picker .form-group:first-child {
-    grid-column: 1/-1;
+    grid-template-columns: minmax(0,1fr) minmax(110px,.65fr);
   }
   .block-inventory-picker>button {
     grid-column: 1/-1;
     min-height: 44px;
-  }
-  .block-inventory-bulk-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    width: 100%;
   }
   .block-inventory-bulk-actions button {
     width: 100%;
@@ -2241,6 +2268,28 @@ button.mb-hoy:hover {
 @media (max-width:420px) {
   .block-inventory-custom-theme {
     grid-template-columns: minmax(0,1fr);
+  }
+}
+@media (max-width:520px) {
+  .block-inventory-picker,.block-inventory-bulk-actions {
+    grid-template-columns: minmax(0,1fr);
+  }
+  .block-inventory-picker>#bloque-inventario-agregar,.block-inventory-bulk-actions {
+    grid-column: 1;
+  }
+  .block-inventory-shirt {
+    grid-template-columns: minmax(0,1fr) auto;
+  }
+  .block-inventory-shirt-product {
+    grid-column: 1/-1;
+  }
+  .block-inventory-shirt-theme {
+    grid-column: 1;
+  }
+  .block-inventory-shirt-quantity {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
   }
 }
 @media (max-width:560px) {
