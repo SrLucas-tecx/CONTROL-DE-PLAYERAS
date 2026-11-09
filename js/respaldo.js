@@ -400,10 +400,22 @@ function renderEstado() {
   const dias = diasDesde(ultimo);
   const urgente = hayDatos && (dias === null || dias > 7);
   cont.innerHTML = "";
-  const linea = (txt, cls) => { const p = document.createElement("p"); p.className = "respaldo-linea" + (cls ? " " + cls : ""); p.textContent = txt; cont.appendChild(p); };
-  linea(`${urgente ? "⚠️ " : "💾 "}Último respaldo descargado: ${ultimo ? `${haceCuanto(ultimo)} (${fechaLegible(ultimo)})` : "nunca"}`, urgente ? "warn" : "");
-  linea(`🕒 Último cambio en este dispositivo: ${fechaLegible(AppState.ultimaModificacion)}`);
-  linea("📊 Aquí hay: " + COLECCIONES.slice(0, 6).map(([k, e]) => `${conteo(AppState, k)} ${e.split(" (")[0].toLowerCase()}`).join(" · "));
+  const linea = (icono, txt, cls) => {
+    const p = document.createElement("p");
+    p.className = "respaldo-linea" + (cls ? " " + cls : "");
+    const icon = document.createElement("i");
+    icon.className = "lucide-inline";
+    icon.dataset.lucide = icono;
+    icon.setAttribute("aria-hidden", "true");
+    const texto = document.createElement("span");
+    texto.textContent = txt;
+    p.append(icon, texto);
+    cont.appendChild(p);
+  };
+  linea(urgente ? "triangle-alert" : "save", `Último respaldo descargado: ${ultimo ? `${haceCuanto(ultimo)} (${fechaLegible(ultimo)})` : "nunca"}`, urgente ? "warn" : "");
+  linea("clock", `Último cambio en este dispositivo: ${fechaLegible(AppState.ultimaModificacion)}`);
+  linea("database", "Aquí hay: " + COLECCIONES.slice(0, 6).map(([k, e]) => `${conteo(AppState, k)} ${e.split(" (")[0].toLowerCase()}`).join(" · "));
+  if (window.lucide) window.lucide.createIcons();
   const snap = leerCopiaAnterior();
   const btn = $("rs-restaurar");
   if (btn) {

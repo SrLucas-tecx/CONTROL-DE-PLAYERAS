@@ -11,23 +11,23 @@
    MAPA DEL MENÚ
 --------------------------------------------------------------- */
 const SECCIONES = [
-  { id: "inicio",     icon: "🏠", label: "Inicio",     paginas: ["inicio"] },
-  { id: "ventas",     icon: "🧮", label: "Ventas",     paginas: ["cotizador", "cotizaciones", "guia-tallas", "ventas-rapidas", "clientes"] },
-  { id: "produccion", icon: "🚦", label: "Producción", paginas: ["produccion", "artes"] },
-  { id: "inventario", icon: "👕", label: "Inventario", paginas: ["playeras", "bloques-inventario", "tipos-ropa", "stickers", "consignaciones", "etiquetas", "mermas"] },
-  { id: "negocio",    icon: "🏪", label: "Negocio",    paginas: ["bazares", "caja", "gastos", "compras", "artistas", "socios", "proveedores"] },
-  { id: "reportes",   icon: "📊", label: "Reportes",   paginas: ["estadisticas", "interes"] },
-  { id: "ajustes",    icon: "⚙️", label: "Ajustes",    paginas: ["ajustes"] }
+  { id: "inicio",     icon: "house", label: "Inicio",     paginas: ["inicio"] },
+  { id: "ventas",     icon: "calculator", label: "Ventas", paginas: ["cotizador", "cotizaciones", "guia-tallas", "ventas-rapidas", "clientes"] },
+  { id: "produccion", icon: "kanban", label: "Producción", paginas: ["produccion", "artes"] },
+  { id: "inventario", icon: "package", label: "Inventario", paginas: ["playeras", "bloques-inventario", "tipos-ropa", "stickers", "consignaciones", "etiquetas", "mermas"] },
+  { id: "negocio",    icon: "store", label: "Negocio", paginas: ["bazares", "caja", "gastos", "compras", "artistas", "socios", "proveedores"] },
+  { id: "reportes",   icon: "chart-no-axes-column-increasing", label: "Reportes", paginas: ["estadisticas", "interes"] },
+  { id: "ajustes",    icon: "settings", label: "Ajustes", paginas: ["ajustes"] }
 ];
 const TAB_LABEL = {
-  inicio: "🏠 Inicio",
-  cotizador: "🧮 Cotizador", cotizaciones: "📁 Guardadas", "guia-tallas": "📏 Guía de tallas", "ventas-rapidas": "🧾 Ventas rápidas", clientes: "👥 Clientes",
-  produccion: "🚦 Kanban", artes: "🎨 Artes",
-  playeras: "👕 Playeras", "bloques-inventario": "📦 Bloques para bazar", "tipos-ropa": "👕 Tipos de ropa", stickers: "✂️ Stickers", etiquetas: "🏷️ Etiquetas", mermas: "📉 Mermas",
-  bazares: "🏪 Bazares", consignaciones: "🤝 Consignaciones", caja: "💰 Caja", gastos: "💸 Gastos",
-  compras: "🎯 Compras", artistas: "🎨 Artistas", socios: "🤝 Socios", proveedores: "🚚 Proveedores",
-  estadisticas: "📊 Estadísticas", interes: "❓ Interés",
-  ajustes: "⚙️ Costos"
+  inicio: ["house", "Inicio"],
+  cotizador: ["calculator", "Cotizador"], cotizaciones: ["folder", "Guardadas"], "guia-tallas": ["ruler", "Guía de tallas"], "ventas-rapidas": ["receipt-text", "Ventas rápidas"], clientes: ["users", "Clientes"],
+  produccion: ["kanban", "Kanban"], artes: ["palette", "Artes"],
+  playeras: ["shirt", "Playeras"], "bloques-inventario": ["package", "Bloques para bazar"], "tipos-ropa": ["shirt", "Tipos de ropa"], stickers: ["scissors", "Stickers"], etiquetas: ["tags", "Etiquetas"], mermas: ["trending-down", "Mermas"],
+  bazares: ["store", "Bazares"], consignaciones: ["handshake", "Consignaciones"], caja: ["wallet", "Caja"], gastos: ["receipt", "Gastos"],
+  compras: ["target", "Compras"], artistas: ["palette", "Artistas"], socios: ["handshake", "Socios"], proveedores: ["truck", "Proveedores"],
+  estadisticas: ["chart-no-axes-column-increasing", "Estadísticas"], interes: ["circle-help", "Interés"],
+  ajustes: ["settings", "Costos"]
 };
 const SECCION_DE = {};
 SECCIONES.forEach(s => s.paginas.forEach(p => { SECCION_DE[p] = s; }));
@@ -44,6 +44,15 @@ function el(tag, cls, text) {
   if (cls) n.className = cls;
   if (text !== undefined && text !== null) n.textContent = text;
   return n;
+}
+function agregarIcono(contenedor, nombre) {
+  const icono = el("i", "lucide-inline");
+  icono.dataset.lucide = nombre;
+  icono.setAttribute("aria-hidden", "true");
+  contenedor.appendChild(icono);
+}
+function actualizarIconos() {
+  if (window.lucide) window.lucide.createIcons();
 }
 function paginaActual() {
   const s = document.querySelector(".page-section.active");
@@ -76,11 +85,14 @@ function construirSidebar() {
     const b = el("button", "nav-item");
     b.type = "button";
     b.dataset.section = sec.id;
-    b.appendChild(el("span", "nav-ico", sec.icon));
+    const icono = el("span", "nav-ico");
+    agregarIcono(icono, sec.icon);
+    b.appendChild(icono);
     b.appendChild(el("span", "nav-text", sec.label));
     b.addEventListener("click", () => irA(ultimaPagina[sec.id] || sec.paginas[0]));
     nav.appendChild(b);
   });
+  actualizarIconos();
 }
 
 /* ---------------------------------------------------------------
@@ -102,13 +114,17 @@ function pintarPestanas(sec) {
   bar.innerHTML = "";
   bar.style.display = sec.paginas.length > 1 ? "" : "none";
   sec.paginas.forEach(p => {
-    const t = el("button", "subnav-tab", TAB_LABEL[p] || p);
+    const [icono, etiqueta] = TAB_LABEL[p] || ["circle", p];
+    const t = el("button", "subnav-tab");
     t.type = "button";
     t.dataset.page = p;
     t.setAttribute("role", "tab");
+    agregarIcono(t, icono);
+    t.appendChild(el("span", "", etiqueta));
     t.addEventListener("click", () => irA(p));
     bar.appendChild(t);
   });
+  actualizarIconos();
   seccionPintada = sec.id;
 }
 function sincronizar() {
@@ -175,7 +191,7 @@ function iniciarModales() {
 /* ---------------------------------------------------------------
    POP-UP: DETALLE RÁPIDO
    openQuickDetail({
-     icon: "👕", title: "Miku", subtitle: "Playera · MD · Negro",
+     icon: "shirt", title: "Miku", subtitle: "Playera · MD · Negro",
      sections: [{ title: "Costos", rows: [["Costo total", "$120.00"], ["Ganancia", "$80.00", "good"]] }],
      actions: [{ label: "Editar", variant: "primary", onClick: () => {} }]
    })
@@ -207,7 +223,12 @@ export function openQuickDetail(cfg) {
   body.innerHTML = "";
   if (c.icon || c.subtitle) {
     const hero = el("div", "qd-hero");
-    if (c.icon) hero.appendChild(el("span", "qd-icon", c.icon));
+    if (c.icon) {
+      const icono = el("span", "qd-icon");
+      if (/^[a-z0-9-]+$/i.test(c.icon)) agregarIcono(icono, c.icon);
+      else icono.textContent = c.icon;
+      hero.appendChild(icono);
+    }
     if (c.subtitle) hero.appendChild(el("span", "qd-subtitle", c.subtitle));
     body.appendChild(hero);
   }
@@ -246,6 +267,7 @@ export function openQuickDetail(cfg) {
     footer.appendChild(b);
   });
   document.getElementById("modal-quick-detail").classList.add("open");
+  actualizarIconos();
 }
 
 /* ---------------------------------------------------------------
@@ -310,7 +332,7 @@ function mostrarTipMenu() {
   try { if (localStorage.getItem(TIP_KEY)) return; } catch (e) { return; }
   setTimeout(() => {
     openQuickDetail({
-      icon: "✨",
+      icon: "sparkles",
       title: "Menú renovado",
       subtitle: "Ahora todo está organizado en secciones",
       sections: [{

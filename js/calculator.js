@@ -735,11 +735,9 @@ export function totalConsultas(filtroBazar) {
    PAGO DE UNA COTIZACIÓN (para el PDF y el mensaje de WhatsApp)
    Métodos: En espera, Transferencia, Efectivo, Tarjeta, Mixto.
 --------------------------------------------------------------- */
-const METODO_PAGO_EMOJI = { "En espera": "⏳", Transferencia: "🏦", Efectivo: "💵", Tarjeta: "💳", Mixto: "💵💳" };
-export function etiquetaMetodoPago(metodo, conEmoji = true) {
+export function etiquetaMetodoPago(metodo) {
   const nombre = metodo || "Efectivo";
-  const texto = nombre === "En espera" ? "En espera de pago" : nombre;
-  return conEmoji && METODO_PAGO_EMOJI[nombre] ? `${METODO_PAGO_EMOJI[nombre]} ${texto}` : texto;
+  return nombre === "En espera" ? "En espera de pago" : nombre;
 }
 // Cuánto dejó de anticipo, cuánto resta por liquidar y si ya quedó pagada por completo.
 export function resumenPagoCotizacion(q) {

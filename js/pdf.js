@@ -48,7 +48,7 @@ function bloquePago(q) {
   if (!p.total) return "";
 
   const fila = (a, b, extra) => `<tr><td style="padding:5px 0;color:#555;">${a}</td><td style="padding:5px 0;text-align:right;font-weight:700;${extra || ""}">${b}</td></tr>`;
-  const filas = [fila("Método de pago", escapeHtml(etiquetaMetodoPago(q.metodoPago, false)))];
+  const filas = [fila("Método de pago", escapeHtml(etiquetaMetodoPago(q.metodoPago)))];
   filas.push(fila("Anticipo", p.anticipo > 0 ? fmt(p.anticipo) : "$0.00 (sin anticipo)"));
 
   let banner = "";

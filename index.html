@@ -14,6 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
 <link rel="stylesheet" href="dist/styles.css">
 </head>
 <body>
@@ -1001,24 +1002,11 @@
         <div class="section-header" style="justify-content:space-between;">
           <div>
             <h2 class="section-title">Mis Bazares</h2>
-            <p class="section-sub">Solo desde aquí puedes eliminar un bazar. Da clic en “Ir al Bazar” para ver sus métricas y gráficas.</p>
+            <p class="section-sub">Solo desde aquí puedes eliminar un bazar. Toca “Abrir” para ver sus métricas y gráficas.</p>
           </div>
           <button class="btn-primary" onclick="openModalBazar()">+ Nuevo Bazar</button>
         </div>
-        <div class="bazar-table-wrap">
-          <table class="bazar-table">
-            <thead>
-              <tr>
-                <th>Bazar (nombre + lugar)</th>
-                <th>Cotizaciones</th>
-                <th>Total vendido</th>
-                <th>Ganancia real</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="bazares-table-body"></tbody>
-          </table>
-        </div>
+        <div id="bazares-grid" class="cards-grid bazar-cards"></div>
         <div class="empty-state" id="bazares-empty-hint"><div class="empty-ico">🏪</div><strong>Aún no hay bazares</strong><span>Registra un bazar para ver cuánto vendes y si ya cubriste el costo del puesto.</span><button type="button" class="btn-primary" onclick="openModalBazar()">+ Nuevo Bazar</button></div>
       </section>
       <!-- ======================= /BAZARES ======================= -->
@@ -1031,7 +1019,10 @@
             <h2 class="section-title">Consignaciones</h2>
             <p class="section-sub">Inventario de socios y productos recibidos. Revisa existencias por bazar, precios y ventas cobradas.</p>
           </div>
-          <button class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button>
+          <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;">
+            <button type="button" class="btn-secondary" onclick="openModalConsignacionesBazar()">🏪 Llevar a la caja de un bazar</button>
+            <button class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button>
+          </div>
         </div>
         <div id="consignaciones-grid" class="cards-grid"></div>
         <div class="empty-state" id="consignaciones-empty-hint"><div class="empty-ico">🤝</div><strong>Aún no hay consignaciones</strong><span>Úsalas cuando le das playeras a alguien más para que las venda.</span><button type="button" class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button></div>
@@ -1446,43 +1437,44 @@
 
       <!-- ======================= AJUSTES ======================= -->
       <section id="page-ajustes" class="page-section">
-        <div class="section-header">
-          <div>
-            <h2 class="section-title">Configuración de costos</h2>
-            <p class="section-sub">El costo de impresión se calcula con los metros utilizados multiplicados por el precio por metro del tipo de DTF seleccionado.</p>
-          </div>
-        </div>
-        <div class="settings-grid">
-          <div class="settings-column">
-            <div class="settings-card settings-panel">
-              <div>
-                <h3 class="settings-panel-title">Recargos y comisiones</h3>
-                <p class="settings-panel-description">Define los porcentajes que se aplican a pedidos y pagos.</p>
-              </div>
+
+        <!-- Pestañas de Ajustes -->
+        <nav class="settings-top-nav" id="ajustes-tabs" role="tablist" aria-label="Secciones de ajustes">
+          <button type="button" class="settings-nav-tab active" role="tab" aria-selected="true" onclick="switchAjustesTab('tab-general', this)">General</button>
+          <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-apariencia', this)">Apariencia</button>
+          <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-productos', this)">Tipos de DTF</button>
+          <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-respaldo', this)">Respaldo y nube</button>
+        </nav>
+
+        <!-- ================= GENERAL ================= -->
+        <div id="tab-general" class="ajustes-tab-content">
+          <div class="settings-grid-new">
+
+            <div class="settings-card">
+              <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="credit-card" aria-hidden="true"></i> Recargos y comisiones</h3>
+              <p class="settings-panel-description">Define los porcentajes que se aplican a pedidos y pagos.</p>
               <div class="settings-fields">
                 <div class="form-group">
-                  <label class="form-label" for="set-recargo-urgente">Recargo por pedido urgente (%)</label>
+                  <label class="form-label" for="set-recargo-urgente">Recargo urgente (%)</label>
                   <input type="number" id="set-recargo-urgente" class="form-input" min="0" step="1">
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="set-comision-terminal">Comisión de terminal (tarjeta) (%)</label>
+                  <label class="form-label" for="set-comision-terminal">Comisión de terminal (%)</label>
                   <input type="number" id="set-comision-terminal" class="form-input" min="0" step="0.1">
                 </div>
               </div>
             </div>
 
-            <div class="settings-card settings-panel">
-              <div>
-                <h3 class="settings-panel-title">Costo del DTF estándar</h3>
-                <p class="settings-panel-description">Define el precio del metro y el ancho del rollo para estimar el costo de impresión.</p>
-              </div>
+            <div class="settings-card">
+              <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="calculator" aria-hidden="true"></i> Costo del DTF estándar</h3>
+              <p class="settings-panel-description">Define el precio del metro y el ancho del rollo para estimar costos.</p>
               <div class="settings-fields">
                 <div class="form-group">
-                  <label class="form-label" for="set-dtf-precio">Precio por metro de DTF estándar ($)</label>
+                  <label class="form-label" for="set-dtf-precio">Precio por metro ($)</label>
                   <input type="number" id="set-dtf-precio" class="form-input" min="0" step="0.01">
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="set-dtf-ancho">Ancho del rollo de DTF (cm)</label>
+                  <label class="form-label" for="set-dtf-ancho">Ancho del rollo (cm)</label>
                   <input type="number" id="set-dtf-ancho" class="form-input" min="1" step="0.1">
                 </div>
                 <div class="form-group">
@@ -1491,152 +1483,178 @@
                 </div>
               </div>
               <div class="settings-cost-summary">
-                <p class="cost-preview">Costo estándar por cm²: <b id="preview-costo-cm2">$0.0000</b> — una impresión de 30×40 cm te cuesta <b id="preview-costo-ejemplo">$0.00</b></p>
-                <p class="cost-preview">Precio estándar por metro: <b id="preview-costo-metro">$0.00</b></p>
+                <p class="cost-preview">Estándar por cm²: <b id="preview-costo-cm2">$0.0000</b></p>
+                <p class="cost-preview">Impresión de 30×40 cm: <b id="preview-costo-ejemplo">$0.00</b></p>
               </div>
             </div>
 
-            <div class="settings-card settings-panel">
-              <div>
-                <h3 class="settings-panel-title">Costos y existencias</h3>
-                <p class="settings-panel-description">Ajustes para tallas grandes y alertas de inventario.</p>
-              </div>
+            <div class="settings-card">
+              <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="triangle-alert" aria-hidden="true"></i> Alertas y existencias</h3>
+              <p class="settings-panel-description">Configura el stock mínimo, el uso del rollo y las tallas extra.</p>
               <div class="settings-fields">
                 <div class="form-group">
-                  <label class="form-label" for="set-sobrecargo-2xl">Sobrecargo por talla 2XL o mayor ($)</label>
-                  <input type="number" id="set-sobrecargo-2xl" class="form-input" min="0" step="0.01">
+                  <label class="form-label" for="set-umbral-llenado">Alerta de llenado de rollo (%)</label>
+                  <input type="number" id="set-umbral-llenado" class="form-input" min="0" max="100" step="1">
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="set-stock-minimo-default">Alerta de stock mínimo (default)</label>
+                  <label class="form-label" for="set-stock-minimo-default">Stock mínimo (por defecto)</label>
                   <input type="number" id="set-stock-minimo-default" class="form-input" min="0" step="1">
                 </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-sobrecargo-2xl">Sobrecargo talla 2XL ($)</label>
+                  <input type="number" id="set-sobrecargo-2xl" class="form-input" min="0" step="0.01">
+                </div>
               </div>
             </div>
+
+          </div>
+          <div class="settings-savebar">
+            <button type="button" class="btn-primary" onclick="saveSettings()"><i class="lucide-inline" data-lucide="save" aria-hidden="true"></i> Guardar cambios</button>
+          </div>
+        </div>
+
+        <!-- ================= APARIENCIA ================= -->
+        <div id="tab-apariencia" class="ajustes-tab-content" style="display:none;">
+          <div class="settings-card">
+            <h3 class="settings-panel-title">Tonos predeterminados</h3>
+            <p class="settings-panel-description">Combinaciones listas que ya se ven bien. Toca una para aplicarla; abajo puedes ajustar cada color a tu gusto.</p>
+            <div id="palette-swatches" class="palette-swatches"></div>
           </div>
 
-          <div class="settings-column">
-            <div class="settings-card settings-panel">
+          <div class="appearance-editor">
+            <section class="appearance-editor-card" aria-labelledby="appearance-editor-title">
+              <h3 id="appearance-editor-title">Colores de la interfaz</h3>
+              <p class="section-sub">Elige 3 colores base; el resto se calcula solo (fondo casi negro con matiz de tu azul).</p>
+              <div class="appearance-color-fields">
+                <label class="appearance-color-field" for="appearance-color-blue">
+                  <span>AZUL <small>Matiz de fondos, tarjetas y bordes</small></span>
+                  <input type="color" id="appearance-color-blue" value="#111113">
+                </label>
+                <label class="appearance-color-field" for="appearance-color-yellow">
+                  <span>AMARILLO <small>Botones y resaltados</small></span>
+                  <input type="color" id="appearance-color-yellow" value="#e3363d">
+                </label>
+                <label class="appearance-color-field" for="appearance-color-red">
+                  <span>ROJO <small>Pestañas y selección</small></span>
+                  <input type="color" id="appearance-color-red" value="#e3363d">
+                </label>
+              </div>
+              <div class="appearance-preview-actions">
+                <button type="button" class="btn-primary" id="appearance-preview-button">Botón de ejemplo</button>
+                <button type="button" class="subnav-tab active" id="appearance-preview-active-tab">Pestaña activa</button>
+                <button type="button" class="subnav-tab" id="appearance-preview-tab">Pestaña</button>
+                <button type="button" class="btn-secondary" id="appearance-reset">Restablecer colores</button>
+                <button type="button" class="btn-primary" id="appearance-save">Guardar colores</button>
+              </div>
+            </section>
+            <section class="appearance-tones-card" aria-labelledby="appearance-tones-title">
+              <h3 id="appearance-tones-title">Tonalidades</h3>
+              <p class="section-sub">Los 12 tonos se aplican a toda la interfaz: fondos, tarjetas, campos, bordes, texto, botones y pestañas.</p>
+              <div id="appearance-tones" class="appearance-tones" aria-live="polite"></div>
+            </section>
+          </div>
+
+          <div class="settings-card">
+            <h3 class="settings-panel-title">Color de acento</h3>
+            <p class="settings-panel-description">Si prefieres conservar el fondo oscuro de siempre, elige solo un color principal.</p>
+            <div id="accent-swatches" class="accent-swatches"></div>
+          </div>
+        </div>
+
+        <!-- ================= TIPOS DE DTF ================= -->
+        <div id="tab-productos" class="ajustes-tab-content" style="display:none;">
+          <div class="settings-card">
+            <div class="settings-card-heading">
               <div>
-                <h3 class="settings-panel-title">Alerta de uso del rollo</h3>
-                <p class="settings-panel-description">Recibe un aviso si un lote aprovecha muy poco el rollo de DTF.</p>
+                <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="layers" aria-hidden="true"></i> Tipos de DTF</h3>
+                <p class="settings-panel-description">Agrega tipos especiales con su precio por metro y su proveedor.</p>
               </div>
+              <button type="button" class="btn-secondary" onclick="document.getElementById('gangsheet-tipo-form').open = !document.getElementById('gangsheet-tipo-form').open"><i class="lucide-inline" data-lucide="plus" aria-hidden="true"></i> Agregar tipo</button>
+            </div>
+
+            <details id="gangsheet-tipo-form" class="settings-type-details">
+              <summary>Datos del nuevo tipo</summary>
+              <div class="settings-fields">
+                <div class="form-group">
+                  <label class="form-label" for="set-gangsheet-tipo-nombre">Nombre del tipo</label>
+                  <input type="text" id="set-gangsheet-tipo-nombre" class="form-input" placeholder="Ej. DTF glitter">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-gangsheet-tipo-categoria">Categoría</label>
+                  <select id="set-gangsheet-tipo-categoria" class="form-select">
+                    <option value="gang_sheet">DTF especial</option>
+                    <option value="gang_sheet_blanco">DTF especial blanco sólido</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-gangsheet-tipo-precio">Precio por metro ($)</label>
+                  <input type="number" id="set-gangsheet-tipo-precio" class="form-input" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="set-gangsheet-tipo-proveedor">Proveedor</label>
+                  <select id="set-gangsheet-tipo-proveedor" class="form-select"></select>
+                </div>
+              </div>
+              <button type="button" class="btn-primary" onclick="addGangSheetTipo()"><i class="lucide-inline" data-lucide="save" aria-hidden="true"></i> Guardar tipo</button>
+            </details>
+
+            <div class="settings-type-table-wrap">
+              <table class="settings-type-table">
+                <thead>
+                  <tr><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Proveedor</th><th>Acciones</th></tr>
+                </thead>
+                <tbody id="gangsheet-tipos-list"></tbody>
+              </table>
+            </div>
+            <p class="form-hint">Después de agregar o quitar tipos, pulsa “Guardar cambios” en la pestaña General para conservarlos.</p>
+          </div>
+        </div>
+
+        <!-- ================= RESPALDO Y NUBE ================= -->
+        <div id="tab-respaldo" class="ajustes-tab-content" style="display:none;">
+          <div class="settings-grid-new">
+
+            <div class="settings-card" id="respaldo-card">
+              <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="save" aria-hidden="true"></i> Respaldo y dispositivos</h3>
+              <p class="settings-panel-description">Para pasar tus datos de la computadora al celular (y de regreso) y tener copias seguras.</p>
+              <div class="respaldo-estado" id="respaldo-estado"></div>
               <div class="form-group">
-                <label class="form-label" for="set-umbral-llenado">Alerta de llenado bajo del rollo (%)</label>
-                <input type="number" id="set-umbral-llenado" class="form-input" min="0" max="100" step="1">
-                <span class="form-hint">Si un lote ligado a un gasto usa menos de este porcentaje del rollo, se avisa que el costo por pieza se puede disparar.</span>
+                <label class="form-label" for="respaldo-dispositivo">Nombre de este dispositivo</label>
+                <input type="text" id="respaldo-dispositivo" class="form-input" maxlength="24" placeholder="Ej. Celular de Lucas">
               </div>
-            </div>
-
-            <div class="settings-card settings-panel settings-gang-sheet">
-              <div class="settings-card-heading">
-                <div>
-                  <h3 class="settings-panel-title">Tipos de DTF</h3>
-                  <p class="settings-panel-description">Agrega tipos especiales con su precio por metro y proveedor.</p>
-                </div>
-                <button type="button" class="btn-secondary settings-add-type" onclick="document.getElementById('gangsheet-tipo-form').open = !document.getElementById('gangsheet-tipo-form').open">+ Agregar tipo</button>
+              <div class="respaldo-acciones">
+                <button type="button" class="btn-primary" id="rs-descargar"><i class="lucide-inline" data-lucide="download" aria-hidden="true"></i> Descargar respaldo</button>
+                <button type="button" class="btn-secondary" id="rs-compartir"><i class="lucide-inline" data-lucide="send" aria-hidden="true"></i> Enviar a otro dispositivo</button>
+                <label class="btn-secondary rs-importar"><i class="lucide-inline" data-lucide="upload" aria-hidden="true"></i> Importar respaldo<input type="file" id="rs-importar" accept=".json,application/json" style="display:none"></label>
+                <button type="button" class="btn-secondary" id="rs-restaurar" style="display:none;"><i class="lucide-inline" data-lucide="rotate-ccw" aria-hidden="true"></i> Restaurar copia anterior</button>
+                <button type="button" class="btn-secondary" id="rs-caja"><i class="lucide-inline" data-lucide="table" aria-hidden="true"></i> Descargar todas las cajas (Excel)</button>
               </div>
-              <details id="gangsheet-tipo-form" class="settings-type-details">
-                <summary class="settings-type-heading">Datos del nuevo tipo</summary>
-                <div class="settings-fields">
-                  <div class="form-group">
-                    <label class="form-label" for="set-gangsheet-tipo-nombre">Nombre del tipo</label>
-                    <input type="text" id="set-gangsheet-tipo-nombre" class="form-input" maxlength="60" placeholder="Ej. DTF glitter">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="set-gangsheet-tipo-categoria">Categoría</label>
-                    <select id="set-gangsheet-tipo-categoria" class="form-select">
-                      <option value="gang_sheet">DTF especial</option>
-                      <option value="gang_sheet_blanco">DTF especial blanco sólido</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="set-gangsheet-tipo-precio">Precio por metro ($)</label>
-                    <input type="number" id="set-gangsheet-tipo-precio" class="form-input" min="0" step="0.01" placeholder="0.00">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="set-gangsheet-tipo-proveedor">Proveedor</label>
-                    <select id="set-gangsheet-tipo-proveedor" class="form-select"></select>
-                  </div>
-                </div>
-                <button type="button" class="btn-secondary" onclick="addGangSheetTipo()">Guardar tipo</button>
+              <details class="respaldo-guia">
+                <summary>¿Cómo lo uso el día de un bazar?</summary>
+                <ol>
+                  <li><b>Antes del evento (computadora):</b> toca “Descargar respaldo” y pásalo al celular (WhatsApp, correo o Drive).</li>
+                  <li><b>En el celular:</b> abre la app → Ajustes → “Importar respaldo” → elige <b>Reemplazar todo</b>.</li>
+                  <li><b>Durante el bazar:</b> registra las ventas desde el celular con Venta rápida o Modo bazar.</li>
+                  <li><b>Al terminar (celular):</b> toca “Enviar a otro dispositivo” y mándalo a tu computadora.</li>
+                  <li><b>En la computadora:</b> “Importar respaldo” → <b>Combinar</b> si también usaste la computadora ese día, o <b>Reemplazar todo</b> si no la tocaste.</li>
+                </ol>
+                <p class="form-hint">Combinar agrega lo que falte, pero no copia ediciones ni eliminaciones de registros que ya existen en el dispositivo. Siempre se guarda una copia anterior por si algo sale mal.</p>
               </details>
-              <div class="settings-type-table-wrap">
-                <table class="settings-type-table">
-                  <thead>
-                    <tr>
-                      <th>Nombre</th>
-                      <th>Categoría</th>
-                      <th>Precio por metro</th>
-                      <th>Proveedor</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody id="gangsheet-tipos-list"></tbody>
-                </table>
-              </div>
             </div>
-          </div>
-        </div>
-        <div class="settings-savebar">
-          <button class="btn-primary" onclick="saveSettings()">Guardar cambios</button>
-        </div>
 
-        <div class="section-header" style="margin-top:32px;">
-          <div>
-            <h2 class="section-title">Apariencia</h2>
-            <p class="section-sub">Elige el color principal de la app. Se recuerda en este navegador.</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div id="accent-swatches" class="accent-swatches"></div>
-        </div>
-
-        <div class="section-header" style="margin-top:32px;">
-          <div>
-            <h2 class="section-title">Respaldo y dispositivos</h2>
-            <p class="section-sub">Para pasar tus datos de la computadora al celular (y de regreso) y tener copias seguras.</p>
-          </div>
-        </div>
-        <div class="settings-card" id="respaldo-card">
-          <div class="respaldo-estado" id="respaldo-estado"></div>
-          <div class="form-row">
-            <div class="form-group" style="max-width:300px;">
-              <label class="form-label">Nombre de este dispositivo</label>
-              <input type="text" id="respaldo-dispositivo" class="form-input" maxlength="24" placeholder="Ej. Celular de Lucas">
+            <div class="settings-card">
+              <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="database" aria-hidden="true"></i> Datos de la aplicación</h3>
+              <p class="settings-panel-description">Todo se guarda en este navegador. Descarga un respaldo con frecuencia.</p>
+              <button type="button" class="btn-secondary" id="export-json-btn-2"><i class="lucide-inline" data-lucide="archive" aria-hidden="true"></i> Descargar respaldo (JSON)</button>
+              <button type="button" class="btn-danger" onclick="confirmResetAll()"><i class="lucide-inline" data-lucide="trash-2" aria-hidden="true"></i> Borrar todos los datos</button>
             </div>
+
           </div>
-          <div class="respaldo-acciones">
-            <button type="button" class="btn-primary" id="rs-descargar">⬇️ Descargar respaldo</button>
-            <button type="button" class="btn-secondary" id="rs-compartir">📤 Enviar a otro dispositivo</button>
-            <label class="btn-secondary rs-importar">📥 Importar respaldo<input type="file" id="rs-importar" accept=".json,application/json" style="display:none"></label>
-            <button type="button" class="btn-secondary" id="rs-restaurar" style="display:none;">🛟 Restaurar copia anterior</button>
-          </div>
-          <div class="respaldo-acciones">
-            <button type="button" class="btn-secondary" id="rs-caja">📊 Descargar todas las cajas (Excel)</button>
-          </div>
-          <details class="respaldo-guia">
-            <summary>¿Cómo lo uso el día de un bazar?</summary>
-            <ol>
-              <li><b>Antes del evento (computadora):</b> toca "Descargar respaldo" y pásalo al celular (WhatsApp, correo o Drive).</li>
-              <li><b>En el celular:</b> abre la app → Ajustes → "Importar respaldo" → elige <b>Reemplazar todo</b>.</li>
-              <li><b>Durante el bazar:</b> vende desde el celular (⚡ Venta rápida o 🛍️ Modo bazar).</li>
-              <li><b>Al terminar (celular):</b> toca "Enviar a otro dispositivo" y mándalo a tu computadora.</li>
-              <li><b>En la computadora:</b> "Importar respaldo" → <b>Combinar</b> si también usaste la computadora ese día, o <b>Reemplazar todo</b> si no la tocaste. Al combinar se agregan las ventas nuevas, se ajusta el stock y puedes abrir el bazar con un botón.</li>
-            </ol>
-            <p class="form-hint">Combinar agrega lo que falte, pero no copia ediciones ni eliminaciones de registros que ya existen en el dispositivo. Siempre se guarda una copia anterior por si algo sale mal.</p>
-          </details>
+
+          <!-- Aquí se inserta la sección de Google Sheets (sheets.js) -->
+          <div id="sh-mount"></div>
         </div>
 
-        <div class="section-header" style="margin-top:32px;">
-          <div>
-            <h2 class="section-title">Datos de la aplicación</h2>
-            <p class="section-sub">Todo se guarda en este navegador. Descarga un respaldo con frecuencia.</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <button class="btn-secondary" id="export-json-btn-2">📦 Descargar respaldo (JSON)</button>
-          <button class="btn-danger" onclick="confirmResetAll()">🗑️ Borrar todos los datos</button>
-        </div>
       </section>
       <!-- ======================= /AJUSTES ======================= -->
 
@@ -2545,14 +2563,15 @@
         </div>
       </div>
       <div class="form-group">
-        <div class="section-header" style="justify-content:space-between;margin-bottom:8px;">
-          <div>
-            <label class="form-label">Productos externos</label>
-            <p class="form-hint">Registra lo que te entregaron para vender. La comisión de LUCXSTUDIO se calcula sobre cada venta.</p>
-          </div>
-          <button type="button" class="btn-secondary" onclick="addConsignacionProducto()">+ Agregar producto</button>
+        <div style="margin-bottom:8px;">
+          <label class="form-label">Productos externos</label>
+          <p class="form-hint">Registra lo que te entregaron para vender. La comisión de LUCXSTUDIO se calcula sobre cada venta.</p>
         </div>
         <div id="cons-productos-list" class="cons-productos-list"></div>
+        <div class="cons-productos-footer">
+          <button type="button" class="btn-secondary" onclick="addConsignacionProducto()">+ Agregar producto</button>
+          <span class="cons-productos-total">Valor total de venta <strong id="cons-valor-total">$0.00</strong></span>
+        </div>
         <div class="consignment-split-preview" id="cons-reparto-preview" aria-live="polite"></div>
       </div>
       <div class="form-group">
@@ -2563,6 +2582,31 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-consignacion">Cancelar</button>
       <button class="btn-primary" onclick="saveConsignacion()">Guardar consignación</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-consignaciones-bazar">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Llevar a la caja de un bazar</h2>
+      <button class="modal-close" data-modal="modal-consignaciones-bazar">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="cb-bazar">Bazar</label>
+        <select id="cb-bazar" class="form-select" onchange="updateConsignacionesBazarPreview()"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Consignaciones a incluir</label>
+        <div id="cb-lista" class="gasto-ligar-list" style="max-height:220px;"></div>
+      </div>
+      <p class="cost-preview" id="cb-preview">—</p>
+      <p class="form-hint">Se mueven las unidades de la caja general o sin asignar a la caja del bazar. Lo que ya está asignado a otro bazar o ya se vendió no se toca. Después aparecen en Modo bazar → Consignación.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-consignaciones-bazar">Cancelar</button>
+      <button class="btn-primary" onclick="confirmarConsignacionesBazar()">Llevar a la caja</button>
     </div>
   </div>
 </div>
@@ -3123,6 +3167,124 @@
 <div id="pdf-template" style="position:fixed;top:0;left:-99999px;width:800px;"></div>
 
 <div id="toast"></div>
+
+<style>
+  /* Overrides de color para formularios y modales siguiendo la paleta del sistema */
+  body {
+    --index-form-bg: var(--color-input-bg, rgba(255,255,255,0.03));
+    --index-form-border: color-mix(in srgb, var(--color-text, #f2f0ee) 14%, transparent);
+    --index-form-focus: var(--color-accent-soft, rgba(227,54,61,0.18));
+    --index-panel-bg: var(--color-surface, #1b1b1e);
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .modal-form-grid .form-input,
+  .modal-form-grid .form-select,
+  .modal-form-grid .form-textarea,
+  #modal-quote-estampados .form-input,
+  #modal-quote-estampados .form-select,
+  #modal-quote-estampados input[type="number"],
+  .bazar-expense-row .form-input,
+  .bazar-expense-row .form-select,
+  .estampado-row input,
+  .settings-fields .form-input,
+  .settings-fields .form-select,
+  .settings-fields .form-textarea,
+  .gasto-form-section .form-input,
+  .gasto-form-section .form-select,
+  .gasto-form-section .form-textarea,
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    background: var(--index-form-bg);
+    border: 1px solid var(--index-form-border);
+    border-radius: 12px;
+    color: var(--color-text, #f2f0ee);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+  }
+
+  .form-input:hover,
+  .form-select:hover,
+  .form-textarea:hover,
+  .modal-form-grid .form-input:hover,
+  .modal-form-grid .form-select:hover,
+  .modal-form-grid .form-textarea:hover,
+  #modal-quote-estampados .form-input:hover,
+  #modal-quote-estampados .form-select:hover,
+  .settings-fields .form-input:hover,
+  .settings-fields .form-select:hover,
+  .settings-fields .form-textarea:hover,
+  .gasto-form-section .form-input:hover,
+  .gasto-form-section .form-select:hover,
+  .gasto-form-section .form-textarea:hover {
+    border-color: var(--color-accent, #e3363d);
+  }
+
+  .form-input:focus,
+  .form-select:focus,
+  .form-textarea:focus,
+  .modal-form-grid .form-input:focus,
+  .modal-form-grid .form-select:focus,
+  .modal-form-grid .form-textarea:focus,
+  #modal-quote-estampados .form-input:focus,
+  #modal-quote-estampados .form-select:focus,
+  #modal-quote-estampados input[type="number"]:focus,
+  .settings-fields .form-input:focus,
+  .settings-fields .form-select:focus,
+  .settings-fields .form-textarea:focus,
+  .gasto-form-section .form-input:focus,
+  .gasto-form-section .form-select:focus,
+  .gasto-form-section .form-textarea:focus {
+    outline: none;
+    border-color: var(--color-accent, #e3363d);
+    box-shadow: 0 0 0 3px var(--index-form-focus, rgba(227,54,61,0.18));
+    background: rgba(255,255,255,0.04);
+  }
+
+  .form-input::placeholder,
+  .form-select::placeholder,
+  .form-textarea::placeholder,
+  .modal-form-grid .form-input::placeholder,
+  .modal-form-grid .form-textarea::placeholder {
+    color: var(--color-text-muted, #a3a1a6);
+    opacity: 1;
+  }
+
+  .settings-card,
+  .modal-box,
+  .modal-form-grid .form-switch,
+  .bazar-expense-row,
+  .bazar-expenses-total,
+  .gasto-form-section {
+    background: var(--index-panel-bg);
+    border-color: var(--color-border, #313136);
+  }
+
+  .settings-card,
+  .settings-card .settings-fields,
+  .settings-card .settings-type-details,
+  .modal-box,
+  .modal-form-grid,
+  .modal-form-grid .form-group,
+  .modal-form-grid .form-row {
+    color: var(--color-text, #f2f0ee);
+  }
+
+  .settings-fields .form-label,
+  .form-label,
+  .modal-form-grid .form-label,
+  .gasto-form-section .form-label {
+    color: var(--color-text-muted, #a3a1a6);
+  }
+
+  .settings-card .btn-secondary,
+  .modal-box .btn-secondary,
+  .modal-box .btn-primary {
+    border-radius: 12px;
+  }
+</style>
 
 <script type="module" src="js/app.js"></script>
 </body>

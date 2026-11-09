@@ -425,7 +425,7 @@ function crearSecciones() {
         <button type="button" class="btn-danger" id="sh-desconectar">Desconectar</button>
       </div>
     </div>`;
-  pagina.appendChild(wrap);
+  (document.getElementById("sh-mount") || document.getElementById("tab-respaldo") || pagina).appendChild(wrap);
 
   $("sh-url").value = ls.get(K.url) || URL_POR_DEFECTO;
   $("sh-token").value = ls.get(K.token) || "";

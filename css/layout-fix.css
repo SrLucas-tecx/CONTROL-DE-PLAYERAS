@@ -37,3 +37,289 @@
 /* ---- Pop-ups de detalle: botones en cuadrícula, no en filas desparejas ---- */
 .qd-box .modal-footer{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:var(--space-2);}
 .qd-box .modal-footer > button{width:100%;min-width:0;white-space:normal;line-height:1.2;}
+
+/* ============ SPRINT 3 · FORMULARIOS LIGEROS ============ */
+.form-input,.form-select,.form-textarea{background:rgba(255,255,255,.03);}
+body.light input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+body.light select,body.light textarea{background:rgba(0,0,0,.03);}
+
+.form-label,.modal-form-grid .form-label{
+  text-transform:none;letter-spacing:normal;
+  font-size:.85rem;font-weight:600;color:var(--color-text-muted);
+}
+
+.btn-primary,.modal-box .btn-primary{box-shadow:none;}
+.btn-primary:hover{transform:none;}
+
+.btn-secondary,.btn-outline,.modal-box .btn-secondary{
+  background:transparent;color:var(--color-text);
+  border:1px solid color-mix(in srgb,var(--color-border) 70%,transparent);
+}
+.btn-secondary:hover,.btn-outline:hover,.modal-box .btn-secondary:hover{
+  background:rgba(255,255,255,.05);border-color:var(--color-gray);
+}
+body.light .btn-secondary:hover,body.light .btn-outline:hover,
+body.light .modal-box .btn-secondary:hover{background:rgba(0,0,0,.04);}
+
+.btn-ghost{
+  background:transparent;border:0;color:var(--color-text-muted);
+  font-weight:600;font-size:var(--fs-sm);
+  padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);
+}
+.btn-ghost:hover{background:rgba(255,255,255,.06);color:var(--color-text);}
+body.light .btn-ghost:hover{background:rgba(0,0,0,.05);}
+
+.card-actions button{background:transparent;border-color:color-mix(in srgb,var(--color-border) 60%,transparent);}
+.card-actions button:hover{background:rgba(255,255,255,.05);}
+body.light .card-actions button:hover{background:rgba(0,0,0,.04);}
+
+/* ============ SPRINT 4 · MODO BAZAR: JERARQUÍA ============ */
+.mb-cobrar{
+  background:var(--color-success);color:#07130d;
+  font-weight:800;min-height:56px;padding:0 var(--space-8);
+  border-radius:var(--radius-md);box-shadow:none;
+}
+.mb-cobrar:hover:not(:disabled){background:color-mix(in srgb,var(--color-success) 88%,#fff);}
+.mb-cobrar:disabled{background:var(--color-gray-soft);color:var(--color-text-muted);cursor:not-allowed;}
+
+.mb-ticket-pay #mb-limpiar{
+  min-height:44px;background:transparent;border:0;color:var(--color-text-muted);font-weight:600;
+}
+.mb-ticket-pay #mb-limpiar:hover:not(:disabled){background:rgba(255,255,255,.06);color:var(--color-text);}
+.pay-toggle button{
+  min-height:44px;border:1px solid color-mix(in srgb,var(--color-border) 60%,transparent);
+  background:transparent;font-weight:700;
+}
+.pay-toggle button.active{border-color:var(--color-accent);background:var(--color-accent-soft);}
+.mb-top #mb-salir,.mb-top #mb-caja-state{background:transparent;}
+
+.mb-chip{border:0;background:rgba(255,255,255,.06);}
+.mb-chip button{background:transparent;border:0;color:var(--color-text-muted);}
+.mb-chip button:hover{background:rgba(255,255,255,.1);color:var(--color-text);}
+body.light .mb-chip{background:rgba(0,0,0,.05);}
+body.light .mb-chip button:hover{background:rgba(0,0,0,.08);}
+
+.mb-tile{border:1px solid color-mix(in srgb,var(--color-border) 70%,transparent);}
+.mb-tile.active{border-color:var(--color-accent);box-shadow:0 0 0 1px var(--color-accent);}
+.mb-tab{border-width:1px;min-height:40px;font-size:var(--fs-sm);}
+
+.mb-ticket{position:relative;z-index:2;box-shadow:0 -8px 32px rgba(0,0,0,.4);}
+
+@media (max-width:600px){
+  .mb-grid{padding-bottom:var(--space-6);}
+  .mb-ticket{max-height:38dvh;}
+  .mb-ticket-items{max-height:56px;}
+  .mb-ticket-pay .mb-cobrar{min-height:52px;font-size:var(--fs-base);}
+  .mb-ticket-pay #mb-limpiar{min-height:44px;font-size:var(--fs-xs);}
+}
+
+/* ============================================================
+   CORRECCIÓN: ALINEACIÓN DE BOTONES Y EMOJIS (Sin romper tarjetas)
+   ============================================================ */
+
+/* 1. Solo aplicamos alineación horizontal a botones específicos, NO a todos */
+.btn-primary, .btn-secondary, .btn-danger, .btn-outline, .btn-ghost, .subnav-tab, .mb-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+/* 2. Restauramos los botones de las tarjetas (Pedidos/Clientes) para que el icono quede ARRIBA */
+.card-actions button {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 8px 4px;
+}
+
+/* 3. Restauramos los Accesos Rápidos del panel de Inicio (icono arriba, texto abajo) */
+#page-inicio .accesos-rapidos button,
+#page-inicio button:not(.btn-primary):not(.btn-secondary) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+
+/* 4. Alineación estricta de iconos de Lucide */
+.lucide-inline, i[data-lucide], .empty-ico {
+  display: inline-flex;
+  align-self: center;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* 5. Arreglo para los checkboxes dentro de las etiquetas (Modal "Registrar consulta") */
+.modal-box label:has(input[type="checkbox"]),
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+.modal-box input[type="checkbox"] {
+  margin: 0 !important;
+  transform: translateY(-1px);
+}
+
+/* ============================================================
+   ESTILOS DE AJUSTES: DISEÑO PANEL (Referencia de imágenes)
+   ============================================================ */
+
+.settings-top-nav {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  margin-bottom: 24px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.settings-nav-tab {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 12px 4px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  border-radius: 0;
+  transition: all 0.2s ease;
+}
+
+.settings-nav-tab:hover {
+  color: var(--color-text);
+}
+
+.settings-nav-tab.active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+}
+
+body.light .settings-nav-tab.active {
+  color: #000;
+}
+
+.settings-grid-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 600px) {
+  .settings-grid-new {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--color-text);
+}
+
+.settings-panel-title i,
+.settings-panel-title .lucide {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-muted);
+}
+
+.settings-grid-new .settings-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+/* ============================================================
+   TONALIDADES APLICADAS A TODA LA INTERFAZ
+   (--color-bg-deep, --color-accent-light, --color-tabs-light y
+   --color-tabs-dark las define extras.js; sin ellas se usan los
+   valores de siempre)
+   ============================================================ */
+.sidebar,.header{background:var(--color-bg-deep,var(--color-surface));}
+.sidebar-nav .nav-item.active{color:var(--color-tabs-light,var(--color-tabs));}
+.subnav-tab:hover,.settings-nav-tab:hover{color:var(--color-tabs-light,var(--color-text));}
+.subnav-tab.active,.settings-nav-tab.active{color:var(--color-tabs-light,var(--color-tabs));border-bottom-color:var(--color-tabs);}
+.subnav-tab:active,.settings-nav-tab:active{background:color-mix(in srgb,var(--color-tabs-dark,var(--color-tabs)) 55%,transparent);}
+.btn-primary{color:var(--color-accent-contrast,#fff);}
+.btn-primary:active{background:var(--color-accent-dark);}
+.block-inventory-more,.block-inventory-details-toggle,.area-edit-btn,.card-meta a,.toast-accion{color:var(--color-accent-light,var(--color-accent));}
+.toast-accion{color:var(--color-accent-contrast,#fff);}
+.filter-chip.active{background:var(--color-tabs);border-color:var(--color-tabs);color:var(--color-accent-contrast,#fff);}
+.palette-swatch.active,.accent-swatch.active{border-color:var(--color-tabs);}
+
+/* ============================================================
+   BOTONES: icono y texto en la misma línea, y SIEMPRE visibles
+   (los botones secundarios ya no se pierden en fondos oscuros)
+   ============================================================ */
+.btn-primary,.btn-secondary,.btn-danger,.btn-outline,.btn-ghost,
+label.btn-primary,label.btn-secondary,
+.respaldo-acciones button,.sh-acciones button,.sh-btn-grande,
+.settings-card > button,.modal-footer button,.settings-savebar button{
+  display:inline-flex;flex-direction:row;align-items:center;justify-content:center;
+  gap:8px;line-height:1.2;text-align:center;
+}
+.btn-primary svg,.btn-secondary svg,.btn-danger svg,.btn-outline svg,.btn-ghost svg,
+.respaldo-acciones svg,.sh-acciones svg,.sh-btn-grande svg,.settings-card > button svg,
+.modal-footer svg,.settings-savebar svg,.lucide-inline{
+  display:inline-block;flex:0 0 auto;margin:0;
+}
+.btn-secondary,.btn-outline,.modal-box .btn-secondary,.card-actions button,.bazar-row-actions button{
+  background:color-mix(in srgb,var(--color-text) 6%,transparent);
+  border:1px solid color-mix(in srgb,var(--color-text) 24%,transparent);
+  color:var(--color-text);
+}
+.btn-secondary:hover,.btn-outline:hover,.modal-box .btn-secondary:hover,.card-actions button:hover,.bazar-row-actions button:hover{
+  background:color-mix(in srgb,var(--color-text) 12%,transparent);
+  border-color:color-mix(in srgb,var(--color-text) 42%,transparent);
+}
+.card-actions .btn-primary{background:var(--color-accent);border-color:var(--color-accent);color:var(--color-accent-contrast,#fff);}
+.card-actions .btn-primary:hover{background:var(--color-accent-dark);border-color:var(--color-accent-dark);}
+.card-actions .danger{color:var(--color-danger);}
+.btn-danger{border:1px solid color-mix(in srgb,var(--color-danger) 40%,transparent);}
+
+/* ============================================================
+   AJUSTES: PESTAÑAS Y TARJETAS ANCHAS
+   ============================================================ */
+#page-ajustes .settings-card{max-width:none;}
+.settings-top-nav{display:flex;gap:var(--space-2);border-bottom:1px solid var(--color-border);margin-bottom:var(--space-6);overflow-x:auto;white-space:nowrap;scrollbar-width:none;}
+.settings-top-nav::-webkit-scrollbar{display:none;}
+.settings-nav-tab{display:inline-flex;align-items:center;background:transparent;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0;padding:var(--space-3) var(--space-4);font-size:var(--fs-base);font-weight:700;color:var(--color-text-muted);cursor:pointer;transition:color var(--transition),border-color var(--transition);}
+.settings-grid-new{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:var(--space-4);align-items:start;}
+@media (max-width:600px){.settings-grid-new{grid-template-columns:minmax(0,1fr);}.settings-nav-tab{padding:var(--space-3) var(--space-3);}}
+.ajustes-tab-content > .settings-card{margin-bottom:var(--space-4);}
+.settings-panel-title{display:flex;align-items:center;gap:10px;}
+.settings-card .settings-fields{margin-top:var(--space-2);}
+.settings-cost-summary{margin-top:var(--space-2);padding-top:var(--space-3);border-top:1px solid var(--color-border);}
+#page-ajustes .settings-cost-summary .cost-preview{background:var(--color-accent-soft);border:1px solid color-mix(in srgb,var(--color-accent) 35%,transparent);}
+.settings-savebar{display:flex;justify-content:flex-end;margin-top:var(--space-5);}
+.settings-type-details{margin-bottom:var(--space-4);}
+.settings-type-details summary{font-weight:700;cursor:pointer;margin-bottom:var(--space-3);}
+.settings-type-table{width:100%;text-align:left;}
+.respaldo-acciones{display:flex;flex-wrap:wrap;gap:var(--space-2);}
+#sh-mount{margin-top:var(--space-4);}
+#sh-mount > #sh-wrap > .section-header{margin-top:var(--space-6) !important;}
+
+/* ============================================================
+   MIS BAZARES: TARJETAS
+   ============================================================ */
+.bazar-cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
+.bazar-card-item{min-width:0;}
+.bazar-card-item.is-active{border-color:var(--color-accent);box-shadow:0 0 0 1px var(--color-accent);}
+.bazar-card-item .card-title{overflow-wrap:anywhere;}
+.bazar-card-item .card-meta{align-items:center;}
+.bazar-card-item .card-actions button{flex:1;}
+@media (max-width:560px){.bazar-cards{grid-template-columns:minmax(0,1fr);}}

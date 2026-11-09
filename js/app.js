@@ -4,6 +4,7 @@
    ============================================================ */
 import { loadState } from "./storage.js";
 import { applySavedTheme, renderAll } from "./ui.js";
+import "./icons.js";
 import "./nav.js";   // Rediseño Sprint 1: menú por secciones, pestañas y pop-ups
 import "./steps.js"; // Rediseño Sprint 3: cotizador por pasos
 import "./inicio.js"; // Rediseño Sprint 4: panel de inicio
@@ -17,3 +18,20 @@ applySavedTheme();
 loadState();
 renderAll();
 iniciarGuiaTallas();
+if (window.lucide) window.lucide.createIcons();
+
+// --- PESTAÑAS DE AJUSTES ---
+window.switchAjustesTab = function (tabId, btnElement) {
+  document.querySelectorAll("#page-ajustes .ajustes-tab-content").forEach(tab => { tab.style.display = "none"; });
+  document.querySelectorAll("#ajustes-tabs .settings-nav-tab").forEach(btn => {
+    btn.classList.remove("active");
+    btn.setAttribute("aria-selected", "false");
+  });
+  const destino = document.getElementById(tabId);
+  if (destino) destino.style.display = "block";
+  if (btnElement) {
+    btnElement.classList.add("active");
+    btnElement.setAttribute("aria-selected", "true");
+  }
+  if (window.lucide) window.lucide.createIcons();
+};

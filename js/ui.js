@@ -243,7 +243,7 @@ const PAGE_TITLES = {
   interes: "Interés por producto",
   "bazar-detalle": "Detalle de bazar",
   estadisticas: "Estadísticas",
-  ajustes: "Ajustes de costos"
+  ajustes: "Ajustes"
 };
 export function switchPage(page) {
   document.querySelectorAll(".page-section").forEach(s => s.classList.remove("active"));
@@ -1765,9 +1765,10 @@ function renderGangSheetTipos() {
       <td data-label="Categoría">${categoria}</td>
       <td data-label="Precio por metro">${fmt(tipo.precioMetro)}</td>
       <td data-label="Proveedor">${proveedor ? escapeHtml(proveedor.nombre) : "Sin proveedor"}</td>
-      <td data-label="Acciones"><button type="button" class="danger" title="Eliminar tipo de DTF" aria-label="Eliminar tipo ${escapeHtml(tipo.nombre)}" onclick="deleteGangSheetTipo('${escapeHtml(tipo.id)}')">🗑️</button></td>
+      <td data-label="Acciones"><button type="button" class="danger" title="Eliminar tipo de DTF" aria-label="Eliminar tipo ${escapeHtml(tipo.nombre)}" onclick="deleteGangSheetTipo('${escapeHtml(tipo.id)}')"><i class="lucide-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" class="settings-type-empty">Aún no agregas tipos personalizados.</td></tr>`;
+  if (window.lucide) window.lucide.createIcons();
 }
 function addGangSheetTipo() {
   const nombre = val("set-gangsheet-tipo-nombre").trim();
@@ -2299,10 +2300,26 @@ async function deleteConsultaEtiqueta(id) {
   saveState(); renderInteres();
 }
 
+function estadoTemporalBazar(b) {
+  const hoy = new Date().toLocaleDateString("sv-SE");
+  const ini = b.fechaInicio || b.fecha || "";
+  const fin = b.fechaFin || ini;
+  if (!ini) return { texto: "Sin fecha", clase: "badge-baja" };
+  if (hoy < ini) return { texto: "Próximo", clase: "badge-media" };
+  if (hoy > fin) return { texto: "Terminado", clase: "badge-baja" };
+  return { texto: "En curso", clase: "badge-stock" };
+}
+function diasDeBazar(b) {
+  const ini = new Date((b.fechaInicio || b.fecha || "") + "T00:00:00");
+  const fin = new Date((b.fechaFin || b.fechaInicio || b.fecha || "") + "T00:00:00");
+  if (isNaN(ini.getTime()) || isNaN(fin.getTime())) return 0;
+  return Math.max(1, Math.round((fin - ini) / 86400000) + 1);
+}
 function renderBazares() {
-  const body = document.getElementById("bazares-table-body");
+  const grid = document.getElementById("bazares-grid");
+  if (!grid) return;
   document.getElementById("bazares-empty-hint").style.display = AppState.bazares.length ? "none" : "block";
-  body.innerHTML = AppState.bazares.map(b => {
+  grid.innerHTML = AppState.bazares.map(b => {
     const stats = getBazarVentasYGanancia(b.id);
     const costoReal = costoBazarReal(b);
     const saldoPendiente = saldoBazarPendiente(b);
@@ -2310,27 +2327,31 @@ function renderBazares() {
     const sumIngresosExtra = (b.ingresosExtra || []).reduce((s, i) => s + (i.monto || 0), 0);
     const comisionTerminal = desgloseCierreBazar(b).comisionTerminal;
     const mermasBazar = totalMermasDeBazar(b.id);
-    // Ganancia real = dinero que de verdad entró y salió del bolsillo (nunca usa el
-    // costeo estimado por catálogo de cada playera, para no volver a contar el DTF/tela dos veces).
+    // Ganancia real = dinero que de verdad entró y salió del bolsillo (nunca usa el costeo
+    // estimado por catálogo de cada playera, para no contar dos veces el DTF/tela).
     const gananciaNeta = stats.totalVendido + sumIngresosExtra - costoReal - comisionTerminal - mermasBazar;
     const esActivo = activeBazarId === b.id;
+    const estado = estadoTemporalBazar(b);
+    const dias = diasDeBazar(b);
+    const id = escapeHtml(b.id);
     return `
-    <tr class="${esActivo ? "is-active" : ""}">
-      <td>
-        <div class="bazar-name-cell">🏪 ${escapeHtml(b.nombre)} ${esActivo ? `<span class="card-badge badge-alta">Activo</span>` : ""}</div>
-        <div class="card-meta">${escapeHtml(b.lugar || "—")} · ${rangoBazarFecha(b)}${costoReal ? ` · Costo real: ${fmt(costoReal)} · Pendiente: ${fmt(saldoPendiente)} (🧵 ${fmt(desglose.produccion)} · 🎪 ${fmt(desglose.evento)})` : ""}</div>
-      </td>
-      <td>${stats.cotsCount}</td>
-      <td>${fmt(stats.totalVendido)}</td>
-      <td style="color:${gananciaNeta>=0?'var(--color-success)':'var(--color-danger)'}">${fmt(gananciaNeta)}</td>
-      <td>
-        <div class="bazar-row-actions">
-          <button class="${esActivo ? "active-badge" : ""}" onclick="goToBazarDetalle('${b.id}')">${esActivo ? "✓ Viendo" : "➡️ Ir al Bazar"}</button>
-          <button onclick="openModalBazar('${b.id}')">✏️ Editar</button>
-          <button class="danger" onclick="deleteBazar('${b.id}')">🗑️ Eliminar</button>
-        </div>
-      </td>
-    </tr>`;
+    <article class="card bazar-card-item${esActivo ? " is-active" : ""}">
+      <div class="card-top">
+        <span class="card-title">🏪 ${escapeHtml(b.nombre)}</span>
+        <span class="card-badge ${estado.clase}">${estado.texto}</span>
+      </div>
+      <div class="card-meta">${escapeHtml(b.lugar || "—")} · ${rangoBazarFecha(b)}${dias ? ` · ${dias} día${dias === 1 ? "" : "s"}` : ""}${esActivo ? ` · <span class="card-badge badge-alta">Activo</span>` : ""}</div>
+      <div class="card-row"><span>Vendido</span><span>${fmt(stats.totalVendido)}</span></div>
+      <div class="card-row"><span>Ganancia real</span><span style="color:${gananciaNeta >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(gananciaNeta)}</span></div>
+      <div class="card-row"><span>Por pagar del bazar</span><span>${fmt(saldoPendiente)}</span></div>
+      <div class="card-row"><span>Ventas / unidades</span><span>${stats.cotsCount}</span></div>
+      ${costoReal ? `<div class="card-meta">Costo real ${fmt(costoReal)} · 🧵 ${fmt(desglose.produccion)} · 🎪 ${fmt(desglose.evento)}</div>` : ""}
+      <div class="card-actions">
+        <button type="button" class="btn-primary" onclick="goToBazarDetalle('${id}')">Abrir</button>
+        <button type="button" onclick="openModalBazar('${id}')">Editar</button>
+        <button type="button" class="danger" onclick="deleteBazar('${id}')">Eliminar</button>
+      </div>
+    </article>`;
   }).join("");
 }
 
@@ -5211,6 +5232,7 @@ function addConsignacionProducto(producto = {}) {
       <button type="button" class="btn-secondary" onclick="addConsignacionBazarAsignacion('${escapeHtml(id)}')">+ Agregar bazar o caja</button>
       <div class="cons-producto-summary"></div>`;
   list.appendChild(card);
+  if (!producto.id) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   card.querySelectorAll(".cons-producto-nombre,.cons-producto-cantidad,.cons-producto-precio,.cons-producto-valor")
       .forEach(control => control.addEventListener("input", updateConsignacionProductosPreview));
   card.querySelectorAll(".cons-producto-cantidad,.cons-producto-precio").forEach(control =>
@@ -5326,12 +5348,13 @@ function updateConsignacionProductosPreview() {
   const list = document.getElementById("cons-productos-list");
   if (!preview || !list) return;
   const pct = Math.max(0, Math.min(100, Number(num("cons-pct")) || 0));
-  let totalVenta = 0, comision = 0, margen = 0;
+  let totalVenta = 0, comision = 0, margen = 0, valorTotal = 0;
   list.querySelectorAll(".cons-producto-card").forEach(card => {
     const nombre = card.querySelector(".cons-producto-nombre").value.trim() || "Producto";
     const precio = Math.max(0, Number(card.querySelector(".cons-producto-precio").value) || 0);
     const valor = Math.max(0, Number(card.querySelector(".cons-producto-valor").value) || 0);
     const cantidadRecibida = Math.max(0, Number(card.querySelector(".cons-producto-cantidad").value) || 0);
+    valorTotal += cantidadRecibida * precio;
     updateConsignacionProductoTotal(card);
     const vendidas = [...card.querySelectorAll(".cons-bazar-vendidas")].reduce((total, input) => total + Math.max(0, Number(input.value) || 0), 0);
     const restantes = [...card.querySelectorAll(".cons-bazar-entregadas")].reduce((total, input, index) =>
@@ -5351,6 +5374,8 @@ function updateConsignacionProductosPreview() {
     margen += vendidas * (precio - valor);
     card.querySelector(".cons-producto-summary").textContent = `${card.querySelector(".cons-producto-unico-toggle").checked ? "Pieza única" : `${cantidadRecibida} unidades`} · ${vendidas} vendida(s) · ${restantes} en bazares · ventas ${fmt(importe)}`;
   });
+  const vt = document.getElementById("cons-valor-total");
+  if (vt) vt.textContent = fmt(valorTotal);
   const entregaDueno = pct === 0 ? totalVenta : totalVenta - comision;
   preview.innerHTML = `
     <div><span>Venta registrada</span><strong>${fmt(totalVenta)}</strong></div>
@@ -5430,98 +5455,176 @@ async function deleteConsignacion(id) {
   AppState.consignaciones = AppState.consignaciones.filter(x => x.id !== id);
   saveState(); refreshAllSelects(); renderConsignaciones(); renderPlayeras(); renderSocios();
 }
+const restanteAsignacion = asignacion => Math.max(0, (Number(asignacion.cantidadEntregada) || 0) - (Number(asignacion.cantidadVendida) || 0) - (Number(asignacion.cantidadDevuelta) || 0));
+function unidadesLibresConsignacion(producto) {
+  const asigs = producto.asignaciones || [];
+  const asignado = asigs.reduce((total, asignacion) => total + (Number(asignacion.cantidadEntregada) || 0), 0);
+  const general = asigs.find(asignacion => !asignacion.bazarId);
+  const enGeneral = general ? restanteAsignacion(general) : 0;
+  const sinAsignar = Math.max(0, (Number(producto.cantidadRecibida) || 0) - asignado);
+  return { enGeneral, sinAsignar, total: enGeneral + sinAsignar };
+}
+function ubicacionesProductoConsignacion(producto) {
+  const recibidas = Math.max(0, Number(producto.cantidadRecibida) || 0);
+  const asigs = producto.asignaciones || [];
+  const asignado = asigs.reduce((total, asignacion) => total + (Number(asignacion.cantidadEntregada) || 0), 0);
+  const general = asigs.find(asignacion => !asignacion.bazarId);
+  const cantidadGeneral = general ? restanteAsignacion(general) : Math.max(0, recibidas - asignado);
+  const lista = [];
+  if (cantidadGeneral || general) {
+    lista.push({
+      nombre: "Caja general",
+      entregadas: general ? Number(general.cantidadEntregada) || 0 : cantidadGeneral,
+      vendidas: general ? Number(general.cantidadVendida) || 0 : 0,
+      devueltas: general ? Number(general.cantidadDevuelta) || 0 : 0,
+      restantes: cantidadGeneral
+    });
+  }
+  asigs.filter(asignacion => asignacion.bazarId).forEach(asignacion => {
+    const bazar = AppState.bazares.find(item => item.id === asignacion.bazarId);
+    lista.push({
+      nombre: bazar ? bazar.nombre : "Bazar eliminado",
+      entregadas: Number(asignacion.cantidadEntregada) || 0,
+      vendidas: Number(asignacion.cantidadVendida) || 0,
+      devueltas: Number(asignacion.cantidadDevuelta) || 0,
+      restantes: restanteAsignacion(asignacion)
+    });
+  });
+  return lista;
+}
+function resumenConsignacion(consignacion) {
+  const productos = consignacion.productos || [];
+  const pct = Math.max(0, Math.min(100, Number(consignacion.pctComision) || 0));
+  if (productos.length) {
+    const r = resumenProductosConsignacion(productos, pct);
+    return {
+      productos: productos.length,
+      unidades: r.piezasRecibidas,
+      disponibles: Math.max(0, r.piezasRecibidas - r.piezasVendidas - r.piezasDevueltas),
+      sinAsignar: r.piezasSinAsignar,
+      pct,
+      detalle: r,
+      vendido: r.totalVendido,
+      valorTotal: productos.reduce((total, producto) => total + (Number(producto.cantidadRecibida) || 0) * (Number(producto.precioVenta) || 0), 0)
+    };
+  }
+  const stats = statsConsignacion(consignacion);
+  const playeras = AppState.playeras.filter(playera => playera.consignacionId === consignacion.id);
+  return {
+    productos: playeras.length,
+    unidades: stats.piezasEntregadas,
+    disponibles: stats.piezasPendientes,
+    sinAsignar: 0,
+    pct,
+    detalle: null,
+    vendido: stats.totalVendido,
+    valorTotal: playeras.reduce((total, playera) => total + ((Number(playera.precioConsignacion ?? playera.precioVenta) || 0) * (playera.stock || 0)), 0)
+  };
+}
+window.verDetalleConsignacion = function(id) {
+  openModalConsignacion(id);
+};
 function renderConsignaciones() {
   const grid = document.getElementById("consignaciones-grid");
   if (!grid) return;
-  document.getElementById("consignaciones-empty-hint").style.display = AppState.consignaciones.length ? "none" : "block";
-  grid.innerHTML = AppState.consignaciones.map(c => {
-    const productos = c.productos || [];
-    const pctComision = Math.max(0, Math.min(100, Number(c.pctComision) || 0));
-    const resumen = resumenProductosConsignacion(productos, pctComision);
-    const stats = productos.length ? null : statsConsignacion(c);
-    const socio = AppState.socios.find(item => item.id === c.socioId);
-    const productosHtml = productos.map(producto => {
-      const recibidas = Math.max(0, Number(producto.cantidadRecibida) || 0);
-      const precioUnitario = Math.max(0, Number(producto.precioVenta) || 0);
-      const asignaciones = producto.asignaciones || [];
-      const resumenProducto = resumenProductosConsignacion([producto], pctComision);
-      const totalAsignado = asignaciones.reduce((total, asignacion) => total + (Number(asignacion.cantidadEntregada) || 0), 0);
-      const cajaGeneral = asignaciones.find(asignacion => !asignacion.bazarId);
-      const cantidadGeneral = cajaGeneral
-        ? Math.max(0, (Number(cajaGeneral.cantidadEntregada) || 0) - (Number(cajaGeneral.cantidadVendida) || 0) - (Number(cajaGeneral.cantidadDevuelta) || 0))
-        : Math.max(0, recibidas - totalAsignado);
-      const ubicaciones = [
-        ...(cantidadGeneral || cajaGeneral ? [{
-          nombre: "Caja general", entregadas: cajaGeneral?.cantidadEntregada || cantidadGeneral,
-          vendidas: cajaGeneral?.cantidadVendida || 0, devueltas: cajaGeneral?.cantidadDevuelta || 0,
-          restantes: cantidadGeneral
-        }] : []),
-        ...asignaciones.filter(asignacion => asignacion.bazarId).map(asignacion => {
-          const bazar = AppState.bazares.find(item => item.id === asignacion.bazarId);
-          return {
-            nombre: bazar?.nombre || "Bazar eliminado",
-            entregadas: Number(asignacion.cantidadEntregada) || 0,
-            vendidas: Number(asignacion.cantidadVendida) || 0,
-            devueltas: Number(asignacion.cantidadDevuelta) || 0,
-            restantes: Math.max(0, (Number(asignacion.cantidadEntregada) || 0) - (Number(asignacion.cantidadVendida) || 0) - (Number(asignacion.cantidadDevuelta) || 0))
-          };
-        })
-      ];
-      const stockTotal = Math.max(0, recibidas - resumenProducto.piezasVendidas - resumenProducto.piezasDevueltas);
-      const valorTotal = recibidas * precioUnitario;
-      const ubicacionesHtml = ubicaciones.length ? ubicaciones.map(ubicacion => `
-        <div class="cons-inventory-location">
-          <strong>📍 ${escapeHtml(ubicacion.nombre)}</strong>
-          <span>${ubicacion.restantes} disponible(s)</span>
-          <small>${ubicacion.entregadas} asignada(s) · ${ubicacion.vendidas} vendida(s) · ${ubicacion.devueltas} devuelta(s)</small>
-        </div>`).join("") : `<p class="card-meta">Sin unidades disponibles.</p>`;
-      return `<article class="cons-inventory-card">
-        <div class="cons-inventory-top">
-          <div><h3>${escapeHtml(producto.nombre)}</h3><span>${producto.esPiezaUnica || recibidas === 1 ? "Pieza única" : `${recibidas} unidades`}</span></div>
-          <span class="card-badge ${stockTotal ? "badge-media" : "badge-agotado"}">${stockTotal} disponible(s)</span>
-        </div>
-        <div class="cons-inventory-values">
-          <div><span>Precio unitario</span><strong>${fmt(precioUnitario)}</strong></div>
-          <div><span>Valor total (${recibidas} × ${fmt(precioUnitario)})</span><strong>${fmt(valorTotal)}</strong></div>
-          <div><span>Valor unitario del dueño</span><strong>${fmt(producto.valorDueno)}</strong></div>
-        </div>
-        <div class="cons-inventory-locations">${ubicacionesHtml}</div>
-      </article>`;
-    }).join("");
-    const entregaDueno = pctComision === 0 ? resumen.totalVendido : resumen.totalVendido - resumen.comisionLucx;
+  const hint = document.getElementById("consignaciones-empty-hint");
+  if (hint) hint.style.display = AppState.consignaciones.length ? "none" : "block";
+  grid.innerHTML = AppState.consignaciones.map(consignacion => {
+    const resumen = resumenConsignacion(consignacion);
+    const socio = AppState.socios.find(item => item.id === consignacion.socioId);
+    const id = escapeHtml(consignacion.id);
     return `
-    <article class="card consignment-card">
-      <div class="card-top">
-        <div><span class="card-title">🤝 ${escapeHtml(socio?.nombre || c.nombre)}</span>
-        ${socio ? `<div class="card-meta">Socio vinculado</div>` : ""}</div>
-        <span class="card-badge badge-media">${pctComision}% comisión estudio</span>
-      </div>
-      ${c.fecha ? `<div class="card-meta">📅 Desde ${escapeHtml(c.fecha)}</div>` : ""}
-      ${productos.length ? `
-      <div class="card-row"><span>Productos / unidades recibidas</span><span>${productos.length} / ${resumen.piezasRecibidas}</span></div>
-      <div class="cons-inventory-list">${productosHtml}</div>
-      <div class="card-row"><span>Vendidas / devueltas / en bazares</span><span>${resumen.piezasVendidas} / ${resumen.piezasDevueltas} / ${resumen.piezasEnBazares}</span></div>
-      ${resumen.piezasSinAsignar ? `<div class="card-meta">📦 ${resumen.piezasSinAsignar} unidad(es) aún sin asignar a bazar</div>` : ""}
-      <div class="card-row"><span>Total vendido</span><span>${fmt(resumen.totalVendido)}</span></div>
-      <div class="card-row"><span>Comisión LUCXSTUDIO</span><span>${fmt(resumen.comisionLucx)}</span></div>
-      <div class="card-row"><span>${pctComision === 0 ? "Entrega íntegra al dueño" : "Para entregar al dueño"}</span><span>${fmt(entregaDueno)}</span></div>
-      <div class="card-row"><span>Margen de referencia</span><span>${fmt(resumen.margenReferencia)}</span></div>
-      ` : `
-      <div class="card-row"><span>Piezas entregadas</span><span>${stats.piezasEntregadas}</span></div>
-      <div class="card-row"><span>Vendidas</span><span>${stats.piezasVendidas}</span></div>
-      <div class="card-row"><span>Devueltas</span><span>${stats.piezasDevueltas}</span></div>
-      <div class="card-row"><span>Pendientes (con el consignatario)</span><span>${stats.piezasPendientes}</span></div>
-      <div class="card-row"><span>Total vendido</span><span>${fmt(stats.totalVendido)}</span></div>
-      <div class="card-row"><span>Ganancia total</span><span>${fmt(stats.gananciaTotal)}</span></div>
-      <div class="card-row"><span>Parte del consignatario</span><span>${fmt(stats.parteConsignatarioTotal)}</span></div>
-      <div class="card-row"><span>Ganancia para el estudio</span><span style="color:var(--color-success);">${fmt(stats.parteEstudioTotal)}</span></div>`}
-      ${c.notas ? `<div class="card-meta">${escapeHtml(c.notas)}</div>` : ""}
-      <div class="card-actions">
-        <button type="button" onclick="openModalConsignacion('${escapeHtml(c.id)}')">✏️ Editar</button>
-        <button type="button" class="danger" onclick="deleteConsignacion('${escapeHtml(c.id)}')">🗑️ Eliminar</button>
-      </div>
-    </article>`;
+      <article class="card pcard ccard">
+        <span class="pcard-swatch ccard-icon">🤝</span>
+        <div class="pcard-main">
+          <div class="pcard-name">${escapeHtml(socio ? socio.nombre : consignacion.nombre)}</div>
+          <div class="pcard-meta">${resumen.productos} producto(s) · ${resumen.unidades} unidad(es)${consignacion.fecha ? " · " + escapeHtml(fechaLegible(consignacion.fecha)) : ""}</div>
+          <div class="card-tags">
+            <span class="card-badge badge-media">${resumen.pct}% comisión</span>
+            ${resumen.sinAsignar ? `<span class="card-badge badge-baja">📦 ${resumen.sinAsignar} sin asignar</span>` : ""}
+          </div>
+        </div>
+        <div class="pcard-nums">
+          <div class="pcard-num"><span class="pcard-num-label">Disponibles</span><span class="pcard-num-value">${resumen.disponibles}</span></div>
+          <div class="pcard-num"><span class="pcard-num-label">Valor total</span><span class="pcard-num-value">${fmt(resumen.valorTotal)}</span></div>
+          <div class="pcard-num"><span class="pcard-num-label">Vendido</span><span class="pcard-num-value" style="color:var(--color-success)">${fmt(resumen.vendido)}</span></div>
+        </div>
+        <div class="pcard-actions">
+          <button type="button" class="btn-primary pcard-more" onclick="verDetalleConsignacion('${id}')">Ver más</button>
+          <button type="button" class="btn-secondary" onclick="openModalConsignacion('${id}')">✏️ Editar</button>
+          <button type="button" class="btn-danger" onclick="deleteConsignacion('${id}')">🗑️ Eliminar</button>
+        </div>
+      </article>`;
   }).join("");
+}
+function openModalConsignacionesBazar() {
+  const bazarSelect = document.getElementById("cb-bazar");
+  const lista = document.getElementById("cb-lista");
+  if (!bazarSelect || !lista) return;
+  bazarSelect.innerHTML = `<option value="">Selecciona un bazar</option>` +
+    AppState.bazares.map(bazar => `<option value="${escapeHtml(bazar.id)}">${escapeHtml(bazar.nombre)}</option>`).join("");
+  lista.innerHTML = AppState.consignaciones.map(consignacion => {
+    const libres = (consignacion.productos || []).reduce((total, producto) => total + unidadesLibresConsignacion(producto).total, 0);
+    if (!libres) return "";
+    return `
+      <label class="gasto-ligar-item">
+        <input type="checkbox" value="${escapeHtml(consignacion.id)}" checked>
+        <span>${escapeHtml(consignacion.nombre)}</span>
+        <small>${libres} libres</small>
+      </label>`;
+  }).join("") || `<p class="empty-hint">No hay consignaciones con unidades libres para mover.</p>`;
+  updateConsignacionesBazarPreview();
+  openModal("modal-consignaciones-bazar");
+}
+function updateConsignacionesBazarPreview() {
+  const preview = document.getElementById("cb-preview");
+  const bazarId = document.getElementById("cb-bazar")?.value || "";
+  const bazar = AppState.bazares.find(item => item.id === bazarId);
+  if (!preview) return;
+  const checked = [...document.querySelectorAll('#cb-lista input[type="checkbox"]:checked')];
+  if (!checked.length || !bazarId) {
+    preview.textContent = bazarId ? `Selecciona al menos una consignación para mover a ${bazar ? bazar.nombre : "este bazar"}.` : "—";
+    return;
+  }
+  const total = checked.reduce((acumulado, item) => {
+    const consignacion = AppState.consignaciones.find(cons => cons.id === item.value);
+    if (!consignacion) return acumulado;
+    return acumulado + (consignacion.productos || []).reduce((sum, producto) => sum + unidadesLibresConsignacion(producto).total, 0);
+  }, 0);
+  preview.textContent = `Se moverán ${total} unidad(es) a ${bazar ? bazar.nombre : "el bazar seleccionado"}.`;
+}
+function confirmarConsignacionesBazar() {
+  const bazarId = document.getElementById("cb-bazar")?.value;
+  if (!bazarId) return showToast("Selecciona un bazar antes de mover las consignaciones.", "error");
+  const checked = [...document.querySelectorAll('#cb-lista input[type="checkbox"]:checked')];
+  if (!checked.length) return showToast("Debes elegir al menos una consignación.", "error");
+  checked.forEach(item => {
+    const consignacion = AppState.consignaciones.find(cons => cons.id === item.value);
+    if (!consignacion || !consignacion.productos) return;
+    consignacion.productos.forEach(producto => {
+      const libres = unidadesLibresConsignacion(producto);
+      const cantidad = libres.total;
+      if (!cantidad) return;
+      const asignaciones = producto.asignaciones || [];
+      const general = asignaciones.find(asignacion => !asignacion.bazarId);
+      const destino = asignaciones.find(asignacion => asignacion.bazarId === bazarId);
+      if (general) {
+        general.cantidadEntregada = Math.max(0, (Number(general.cantidadEntregada) || 0) - cantidad);
+        if (general.cantidadEntregada === 0 && !general.ventas?.length) {
+          const idx = asignaciones.indexOf(general);
+          if (idx >= 0) asignaciones.splice(idx, 1);
+        }
+      }
+      if (destino) {
+        destino.cantidadEntregada = (Number(destino.cantidadEntregada) || 0) + cantidad;
+      } else {
+        asignaciones.push({ bazarId, cantidadEntregada: cantidad, cantidadVendida: 0, cantidadDevuelta: 0, ventas: [] });
+      }
+      producto.asignaciones = asignaciones;
+    });
+  });
+  saveState(); closeModal("modal-consignaciones-bazar"); refreshAllSelects(); renderConsignaciones(); renderPlayeras();
+  showToast("Consignaciones movidas al bazar.");
 }
 // Modal para ligar UNA playera del inventario a una consignación existente (o quitarla).
 function onAscConsignacionChange() {
@@ -6455,6 +6558,7 @@ export function renderAll(opciones) {
   renderCotizacionesGuardadas();
   if (!(opciones && opciones.conservarCotizador)) resetQuoteForm();
   if (typeof window.renderInicio === "function") window.renderInicio();
+  if (window.lucide) window.lucide.createIcons();
 }
 
 /* =================================================================

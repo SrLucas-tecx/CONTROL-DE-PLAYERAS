@@ -1344,31 +1344,315 @@ const ACENTOS = [
   { id: "violeta", nombre: "Violeta", hex: "#9b6bf2" },
   { id: "rosa", nombre: "Rosa", hex: "#e8508f" }
 ];
+const PALETAS = [
+  { id: "vampiro", nombre: "Vampiro / Contraste Alto", colores: { azul: "#000000", amarillo: "#FF0000", rojo: "#BC0202" } },
+  { id: "cereza-nocturna", nombre: "Cereza Nocturna", colores: { azul: "#111F35", amarillo: "#F63049", rojo: "#D02752" } },
+  { id: "menta-profunda", nombre: "Menta Profunda", colores: { azul: "#124170", amarillo: "#67C090", rojo: "#AAFFC7" } },
+  { id: "lavanda-te", nombre: "Lavanda y Té", colores: { azul: "#281C59", amarillo: "#EDF7BD", rojo: "#4E8D9C" } },
+  { id: "atardecer-purpura", nombre: "Atardecer Púrpura", colores: { azul: "#522D60", amarillo: "#FFD38B", rojo: "#F2A67B" } },
+  { id: "bosque-esmeralda", nombre: "Bosque Esmeralda", colores: { azul: "#1F6F5F", amarillo: "#6FCF97", rojo: "#2FA084" } },
+  { id: "magma-oscuro", nombre: "Magma Oscuro", colores: { azul: "#22092C", amarillo: "#F05941", rojo: "#BE3144" } },
+  { id: "carmesi-neon", nombre: "Carmesí Neón", colores: { azul: "#00224D", amarillo: "#FF204E", rojo: "#A0153E" } },
+  {
+    id: "ciruela-mistica",
+    nombre: "Ciruela Mística",
+    colores: { azul: "#290044", amarillo: "#EEE3B0", rojo: "#D77FC4" },
+    // Tonos exactos de esta paleta (el resto se calcula solo)
+    tonos: {
+      fondoHondo: "#1B0030", fondo: "#290044", tarjetas: "#500071", campos: "#8A2A78",
+      textoSuave: "#EEE3B0", botones: "#EEE3B0", pestanas: "#D77FC4"
+    }
+  }
+];
 const ACENTO_KEY = "LUCXSTUDIO_ACENTO";
+const PALETA_KEY = "LUCXSTUDIO_PALETA";
+const COLORES_PERSONALIZADOS_KEY = "LUCXSTUDIO_COLORES_PERSONALIZADOS";
+const COLORES_PERSONALIZADOS_DEFAULT = { azul: "#111113", amarillo: "#e3363d", rojo: "#e3363d" };
 function hexARgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function limitar(n, min, max) { return Math.min(max, Math.max(min, n)); }
+function hexAHsl(hex) {
+  const [r, g, b] = hexARgb(hex).map(canal => canal / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), diferencia = max - min;
+  const l = (max + min) / 2;
+  const s = diferencia === 0 ? 0 : diferencia / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (diferencia !== 0) {
+    if (max === r) h = ((g - b) / diferencia) % 6;
+    else if (max === g) h = (b - r) / diferencia + 2;
+    else h = (r - g) / diferencia + 4;
+  }
+  return { h: (h * 60 + 360) % 360, s: s * 100, l: l * 100 };
+}
+function hslAHex({ h, s, l }) {
+  s = limitar(s, 0, 100) / 100;
+  l = limitar(l, 0, 100) / 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const canal = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return "#" + [canal(0), canal(8), canal(4)].map(valor => Math.round(valor * 255).toString(16).padStart(2, "0")).join("");
+}
+function esHexColor(valor) { return typeof valor === "string" && /^#[\da-f]{6}$/i.test(valor); }
+function coloresPersonalizadosGuardados() {
+  try {
+    const guardados = JSON.parse(localStorage.getItem(COLORES_PERSONALIZADOS_KEY) || "null");
+    return guardados && ["azul", "amarillo", "rojo"].every(clave => esHexColor(guardados[clave]))
+      ? { azul: guardados.azul, amarillo: guardados.amarillo, rojo: guardados.rojo }
+      : null;
+  } catch (e) { return null; }
+}
+const ETIQUETAS_TONOS = [
+  ["fondoHondo", "Fondo hondo"], ["fondo", "Fondo"], ["tarjetas", "Tarjetas"], ["campos", "Campos"],
+  ["bordes", "Bordes"], ["textoSuave", "Texto suave"], ["amarilloClaro", "Amarillo claro"], ["botones", "Botones"],
+  ["botonHover", "Botón al pasar"], ["rojoClaro", "Rojo claro"], ["pestanas", "Pestañas"], ["rojoOscuro", "Rojo oscuro"]
+];
+// Calcula las 12 tonalidades a partir de los 3 colores base. `fijos` permite forzar tonos exactos.
+function calcularTonos(colores, fijos) {
+  const azul = hexAHsl(colores.azul), amarillo = hexAHsl(colores.amarillo), rojo = hexAHsl(colores.rojo);
+  const satBase = azul.s < 8 ? 0 : limitar(azul.s, 25, 70);   // fondos grises si el azul es casi neutro
+  const fondo = (l, k) => hslAHex({ h: azul.h, s: satBase * k, l });
+  const tinte = (color, ajuste, max) => hslAHex({ h: color.h, s: color.s, l: limitar(color.l + ajuste, 0, max) });
+  return Object.assign({
+    fondoHondo: fondo(2.5, 0.5), fondo: fondo(5.5, 0.55), tarjetas: fondo(9.5, 0.6), campos: fondo(14, 0.65),
+    bordes: fondo(22, 0.7), textoSuave: fondo(74, 0.8),
+    amarilloClaro: tinte(amarillo, 22, 88), botones: colores.amarillo, botonHover: tinte(amarillo, -12, 100),
+    rojoClaro: tinte(rojo, 18, 85), pestanas: colores.rojo, rojoOscuro: tinte(rojo, -16, 100)
+  }, fijos || {});
+}
+// Aplica TODAS las tonalidades como variables CSS (las usa el resto de la interfaz).
+function aplicarTonos(t) {
+  const r = document.documentElement.style;
+  const set = (k, v) => r.setProperty(k, v);
+  set("--color-bg-deep", t.fondoHondo);
+  set("--color-bg", t.fondo);
+  set("--color-surface", t.tarjetas);
+  set("--color-surface-alt", t.campos);
+  set("--color-input-bg", colorConOpacidad(t.campos, 0.45));
+  set("--color-border", t.bordes);
+  set("--color-text-muted", t.textoSuave);
+  set("--color-accent", t.botones);
+  set("--color-accent-dark", t.botonHover);
+  set("--color-accent-light", t.amarilloClaro);
+  set("--color-accent-soft", colorConOpacidad(t.botones, 0.15));
+  set("--color-accent-contrast", colorTextoContraste(t.botones));
+  set("--color-tabs", t.pestanas);
+  set("--color-tabs-light", t.rojoClaro);
+  set("--color-tabs-dark", t.rojoOscuro);
+  set("--color-tab-soft", colorConOpacidad(t.pestanas, 0.15));
+  set("--color-danger", "#e3363d");
+  set("--color-danger-soft", "rgba(227,54,61,.15)");
+  r.removeProperty("--appearance-deep-bg");
+}
+// Tonalidades del modo activo (colores propios, paleta o acento).
+function tonosActuales() {
+  const propios = coloresPersonalizadosGuardados();
+  if (propios) return calcularTonos(propios);
+  const paleta = PALETAS.find(item => item.id === paletaGuardada());
+  if (paleta) return calcularTonos(paleta.colores, paleta.tonos);
+  const acento = ACENTOS.find(item => item.id === acentoGuardado()) || ACENTOS[0];
+  return calcularTonos({ azul: "#121214", amarillo: acento.hex, rojo: acento.hex }, {
+    fondoHondo: "#121214", fondo: "#121214", tarjetas: "#1b1b1e", campos: "#232327", bordes: "#313136", textoSuave: "#a3a1a6"
+  });
+}
+function tonosDerivados(colores, fijos) {
+  const t = calcularTonos(colores, fijos);
+  return ETIQUETAS_TONOS.map(([clave, nombre]) => [nombre, t[clave]]);
+}
+function coloresEditorActuales() {
+  const personalizados = coloresPersonalizadosGuardados();
+  if (personalizados) return personalizados;
+  const paleta = PALETAS.find(item => item.id === paletaGuardada());
+  if (paleta) return { azul: paleta.colores.azul, amarillo: paleta.colores.amarillo, rojo: paleta.colores.rojo };
+  const acento = ACENTOS.find(item => item.id === acentoGuardado()) || ACENTOS[0];
+  return { ...COLORES_PERSONALIZADOS_DEFAULT, rojo: acento.hex };
+}
+function aplicarColoresPersonalizados(colores) {
+  aplicarTonos(calcularTonos(colores));
+}
+function renderTonosApariencia(colores, fijos) {
+  const contenedor = $("appearance-tones");
+  if (!contenedor) return;
+  const tonos = colores ? calcularTonos(colores, fijos) : tonosActuales();
+  contenedor.replaceChildren();
+  ETIQUETAS_TONOS.forEach(([clave, nombre]) => {
+    const hex = tonos[clave];
+    const tono = el("span", "appearance-tone");
+    tono.style.backgroundColor = hex;
+    tono.style.color = colorTextoContraste(hex);
+    tono.title = `${nombre}: ${hex}`;
+    tono.appendChild(el("span", "", nombre));
+    tono.appendChild(el("small", "", hex.toUpperCase()));
+    contenedor.appendChild(tono);
+  });
+}
+function actualizarVistaPreviaApariencia() {
+  const colores = {
+    azul: $("appearance-color-blue").value,
+    amarillo: $("appearance-color-yellow").value,
+    rojo: $("appearance-color-red").value
+  };
+  renderTonosApariencia(colores);
+  const boton = $("appearance-preview-button");
+  boton.style.backgroundColor = colores.amarillo;
+  boton.style.color = colorTextoContraste(colores.amarillo);
+  const pestanaActiva = $("appearance-preview-active-tab");
+  pestanaActiva.style.color = colores.rojo;
+  pestanaActiva.style.borderBottomColor = colores.rojo;
+  pestanaActiva.style.backgroundColor = colorConOpacidad(colores.rojo, 0.14);
+  const pestana = $("appearance-preview-tab");
+  pestana.style.color = colores.azul;
+  pestana.style.borderColor = colores.azul;
+}
+function cargarColoresEditor(colores = coloresEditorActuales()) {
+  $("appearance-color-blue").value = colores.azul;
+  $("appearance-color-yellow").value = colores.amarillo;
+  $("appearance-color-red").value = colores.rojo;
+  actualizarVistaPreviaApariencia();
+}
+function iniciarEditorApariencia() {
+  const entradas = ["appearance-color-blue", "appearance-color-yellow", "appearance-color-red"];
+  entradas.forEach(id => $(id).addEventListener("input", actualizarVistaPreviaApariencia));
+  cargarColoresEditor();
+  renderTonosApariencia();
+  $("appearance-save").addEventListener("click", () => {
+    const colores = {
+      azul: $("appearance-color-blue").value,
+      amarillo: $("appearance-color-yellow").value,
+      rojo: $("appearance-color-red").value
+    };
+    if (!Object.values(colores).every(esHexColor)) {
+      showToast("Elige colores válidos para aplicar la paleta.", "error");
+      return;
+    }
+    try {
+      localStorage.setItem(COLORES_PERSONALIZADOS_KEY, JSON.stringify(colores));
+      localStorage.removeItem(PALETA_KEY);
+      localStorage.removeItem(ACENTO_KEY);
+    } catch (e) {
+      showToast("No se pudieron guardar los colores en este navegador.", "error");
+      return;
+    }
+    aplicarColoresPersonalizados(colores);
+    renderPaletas();
+    renderAcentos();
+    showToast("Colores guardados.");
+  });
+  $("appearance-reset").addEventListener("click", () => {
+    try {
+      localStorage.removeItem(COLORES_PERSONALIZADOS_KEY);
+      localStorage.removeItem(PALETA_KEY);
+      localStorage.setItem(ACENTO_KEY, "rojo");
+    } catch (e) {
+      showToast("No se pudieron restablecer los colores guardados.", "error");
+      return;
+    }
+    aplicarAcento("rojo");
+    cargarColoresEditor(COLORES_PERSONALIZADOS_DEFAULT);
+    renderPaletas();
+    renderAcentos();
+    showToast("Se restableció el color de acento original.");
+  });
+}
 function oscurecer(hex, f) {
   const [r, g, b] = hexARgb(hex).map(v => Math.round(v * (1 - f)));
   return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
 }
+function aclarar(hex, f) {
+  const [r, g, b] = hexARgb(hex).map(v => Math.round(v + (255 - v) * f));
+  return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
+}
+function colorTextoContraste(hex) {
+  const luminancia = hexARgb(hex).map(v => {
+    const canal = v / 255;
+    return canal <= 0.04045 ? canal / 12.92 : ((canal + 0.055) / 1.055) ** 2.4;
+  }).reduce((suma, canal, index) => suma + canal * [0.2126, 0.7152, 0.0722][index], 0);
+  const contrasteClaro = 1.05 / (luminancia + 0.05);
+  const contrasteOscuro = (luminancia + 0.05) / 0.05;
+  return contrasteOscuro > contrasteClaro ? "#17161a" : "#ffffff";
+}
+function colorConOpacidad(hex, alpha) {
+  const [r, g, b] = hexARgb(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function paletaGuardada() {
+  try {
+    const id = localStorage.getItem(PALETA_KEY);
+    return PALETAS.some(paleta => paleta.id === id) ? id : "";
+  } catch (e) { return ""; }
+}
 function aplicarAcento(id) {
   const a = ACENTOS.find(x => x.id === id) || ACENTOS[0];
   const root = document.documentElement.style;
-  const [r, g, b] = hexARgb(a.hex);
+  ["--appearance-deep-bg", "--color-bg-deep", "--color-accent-light", "--color-tabs-light", "--color-tabs-dark"]
+    .forEach(p => root.removeProperty(p));
+  root.setProperty("--color-bg", "#121214");
+  root.setProperty("--color-surface", "#1b1b1e");
+  root.setProperty("--color-surface-alt", "#232327");
+  root.setProperty("--color-border", "#313136");
+  root.setProperty("--color-input-bg", "rgba(255,255,255,.04)");
+  root.setProperty("--color-text-muted", "#a3a1a6");
+  root.setProperty("--color-danger", "#e3363d");
+  root.setProperty("--color-danger-soft", "rgba(227,54,61,.15)");
   root.setProperty("--color-accent", a.hex);
   root.setProperty("--color-accent-dark", oscurecer(a.hex, 0.22));
-  root.setProperty("--color-accent-soft", `rgba(${r},${g},${b},.15)`);
+  root.setProperty("--color-accent-soft", colorConOpacidad(a.hex, 0.15));
+  root.setProperty("--color-accent-contrast", colorTextoContraste(a.hex));
+  root.setProperty("--color-tabs", a.hex);
+  root.setProperty("--color-tab-soft", colorConOpacidad(a.hex, 0.15));
   return a.id;
 }
+function aplicarPaleta(id) {
+  const paleta = PALETAS.find(item => item.id === id);
+  if (!paleta) return "";
+  aplicarTonos(calcularTonos(paleta.colores, paleta.tonos));
+  return paleta.id;
+}
 function acentoGuardado() { try { return localStorage.getItem(ACENTO_KEY) || "rojo"; } catch (e) { return "rojo"; } }
+function renderPaletas() {
+  const cont = $("palette-swatches");
+  if (!cont) return;
+  const actual = paletaGuardada();
+  cont.innerHTML = "";
+  PALETAS.forEach(paleta => {
+    const b = el("button", "palette-swatch" + (paleta.id === actual ? " active" : ""));
+    b.type = "button";
+    b.setAttribute("aria-label", paleta.nombre);
+    b.setAttribute("aria-pressed", String(paleta.id === actual));
+    b.title = paleta.nombre;
+    const muestras = el("span", "palette-colors");
+    ["azul", "amarillo", "rojo"].forEach(nombre => {
+      const punto = el("span", "palette-color");
+      punto.style.background = paleta.colores[nombre];
+      punto.setAttribute("aria-hidden", "true");
+      muestras.appendChild(punto);
+    });
+    b.appendChild(muestras);
+    b.appendChild(el("span", "accent-name", paleta.nombre));
+    b.addEventListener("click", () => {
+      aplicarPaleta(paleta.id);
+      try {
+        localStorage.setItem(PALETA_KEY, paleta.id);
+        localStorage.removeItem(COLORES_PERSONALIZADOS_KEY);
+      } catch (e) { /* sin almacenamiento */ }
+      cargarColoresEditor({ azul: paleta.colores.azul, amarillo: paleta.colores.amarillo, rojo: paleta.colores.rojo });
+      renderTonosApariencia();
+      renderPaletas();
+      renderAcentos();
+    });
+    cont.appendChild(b);
+  });
+}
 function renderAcentos() {
   const cont = $("accent-swatches");
   if (!cont) return;
   const actual = acentoGuardado();
+  const paletaActiva = paletaGuardada();
+  const coloresPersonalizados = !!coloresPersonalizadosGuardados();
   cont.innerHTML = "";
   ACENTOS.forEach(a => {
-    const b = el("button", "accent-swatch" + (a.id === actual ? " active" : ""));
+    const b = el("button", "accent-swatch" + (!paletaActiva && !coloresPersonalizados && a.id === actual ? " active" : ""));
     b.type = "button";
     b.setAttribute("aria-label", a.nombre);
+    b.setAttribute("aria-pressed", String(!paletaActiva && !coloresPersonalizados && a.id === actual));
     b.title = a.nombre;
     const punto = el("span", "accent-dot");
     punto.style.background = a.hex;
@@ -1376,7 +1660,14 @@ function renderAcentos() {
     b.appendChild(el("span", "accent-name", a.nombre));
     b.addEventListener("click", () => {
       aplicarAcento(a.id);
-      try { localStorage.setItem(ACENTO_KEY, a.id); } catch (e) { /* sin almacenamiento */ }
+      try {
+        localStorage.setItem(ACENTO_KEY, a.id);
+        localStorage.removeItem(PALETA_KEY);
+        localStorage.removeItem(COLORES_PERSONALIZADOS_KEY);
+      } catch (e) { /* sin almacenamiento */ }
+      cargarColoresEditor({ ...COLORES_PERSONALIZADOS_DEFAULT, rojo: a.hex });
+      renderTonosApariencia();
+      renderPaletas();
       renderAcentos();
     });
     cont.appendChild(b);
@@ -1515,8 +1806,12 @@ function insertarBotonesMenu() {
 function iniciar() {
   iniciarSelectorBazar();
   iniciarHistorial();
-  aplicarAcento(acentoGuardado());
+  const coloresPersonalizados = coloresPersonalizadosGuardados();
+  if (coloresPersonalizados) aplicarColoresPersonalizados(coloresPersonalizados);
+  else if (!aplicarPaleta(paletaGuardada())) aplicarAcento(acentoGuardado());
+  renderPaletas();
   renderAcentos();
+  iniciarEditorApariencia();
   insertarBotonesMenu();
   crearFab();
   actualizarFab();
