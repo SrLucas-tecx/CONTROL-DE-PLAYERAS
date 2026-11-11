@@ -8,7 +8,7 @@ import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
   colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
-  bazarIdsDe, bazarTiene, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
+  bazarIdsDe, bazarTiene, bazaresOrdenados, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
   comisionTerminalMonto, saldoPendienteCliente, desgloseCierreBazar, desgloseCierreCajaGeneral, clienteNombre, statsCliente,
   totalMermas, totalMermasMesActual, totalMermasDeBazar, comisionConsignacion, statsConsignacion, nombreConsignacion,
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
@@ -212,7 +212,9 @@ function estadoVacio(icono, titulo, texto, accion) {
 function openModal(id) { document.getElementById(id).classList.add("open"); }
 function closeModal(id) { document.getElementById(id).classList.remove("open"); }
 document.addEventListener("click", (e) => {
-  if (e.target.matches("[data-modal]")) closeModal(e.target.getAttribute("data-modal"));
+  // closest(): el ✕ ahora es un icono SVG; el clic llega al <svg>, no al botón
+  const cierre = e.target.closest ? e.target.closest("[data-modal]") : null;
+  if (cierre) closeModal(cierre.getAttribute("data-modal"));
   if (e.target.classList.contains("modal-overlay")) e.target.classList.remove("open");
 });
 
@@ -275,7 +277,7 @@ document.getElementById("header-cta").addEventListener("click", () => switchPage
 function renderHeaderBazarSelect() {
   const sel = document.getElementById("header-bazar-activo");
   sel.innerHTML = `<option value="">Sin bazar activo</option>` +
-    AppState.bazares.map(b => `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`).join("");
+    bazaresOrdenados().map(b => `<option value="${b.id}">${escapeHtml(b.nombre)}</option>`).join("");
   sel.value = activeBazarId || "";
 }
 export function onHeaderBazarChange() {
@@ -808,9 +810,12 @@ function assignConsignacionToSocio(socioId, consignacionId) {
     renderConsignaciones();
     showToast(`Consignación asignada a ${socio.nombre}.`);
 }
-function unassignConsignacionFromSocio(consignacionId) {
+async function unassignConsignacionFromSocio(consignacionId) {
     const consignacion = AppState.consignaciones.find(item => item.id === consignacionId);
     if (!consignacion) return;
+    const ok = await pedirConfirmacion(`¿Quitar "${consignacion.nombre}" de este socio?`,
+      { titulo: "Quitar consignación", confirmLabel: "Quitar", aviso: "Consignación quitada del socio." });
+    if (!ok) return;
     delete consignacion.socioId;
     saveState();
     renderSocios();
@@ -2048,7 +2053,7 @@ function renderCaja() {
   if (cajaSeleccion !== "general" && !AppState.bazares.some(b => b.id === cajaSeleccion)) cajaSeleccion = "general";
   if (document.activeElement !== sel) {
     sel.innerHTML = `<option value="general">💰 Caja general (ventas sin bazar)</option>` +
-      AppState.bazares.map(b => `<option value="${b.id}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
+      bazaresOrdenados().map(b => `<option value="${b.id}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
     sel.value = cajaSeleccion;
   } else {
     cajaSeleccion = sel.value;
@@ -2254,7 +2259,12 @@ function quickAddConsulta(productoKey, nombre) {
   });
   saveState(); renderInteres();
 }
-function quickSubtractConsulta(productoKey, nombre) {
+async function quickSubtractConsulta(productoKey, nombre) {
+  const ok = await pedirConfirmacion(`¿Restar una pregunta a "${nombre}"?`,
+    { titulo: "Restar pregunta", confirmLabel: "Restar", danger: false, deshacer: false });
+  if (ok) quickSubtractConsultaDirecto(productoKey, nombre);
+}
+function quickSubtractConsultaDirecto(productoKey, nombre) {
   const nombreNormalizado = nombre.trim().toLowerCase();
   const consulta = AppState.consultas
     .filter(c => (interesFiltro === "all" || (interesFiltro === "none" ? !c.bazarId : c.bazarId === interesFiltro)))
@@ -2268,7 +2278,8 @@ function quickSubtractConsulta(productoKey, nombre) {
   saveState(); renderInteres();
   showToast("Se restó una pregunta.");
 }
-function deleteConsulta(id) {
+async function deleteConsulta(id) {
+  if (!(await pedirConfirmacion("¿Eliminar este registro de consulta?", { aviso: "Consulta eliminada." }))) return;
   AppState.consultas = AppState.consultas.filter(x => x.id !== id);
   saveState(); renderInteres();
 }
@@ -2319,7 +2330,7 @@ function renderBazares() {
   const grid = document.getElementById("bazares-grid");
   if (!grid) return;
   document.getElementById("bazares-empty-hint").style.display = AppState.bazares.length ? "none" : "block";
-  grid.innerHTML = AppState.bazares.map(b => {
+  grid.innerHTML = bazaresOrdenados().map(b => {
     const stats = getBazarVentasYGanancia(b.id);
     const costoReal = costoBazarReal(b);
     const saldoPendiente = saldoBazarPendiente(b);
@@ -3513,6 +3524,9 @@ function playeraCardCompacta(p) {
   const badges = [`<span class="card-badge ${estadoBadgeClass(p.estado)}">${escapeHtml(p.estado)}</span>`];
   if (p.ventaRapida) badges.push(`<span class="card-badge badge-media">⚡ Venta rápida${p.fechaVenta ? " · " + escapeHtml(p.fechaVenta) : ""}</span>`);
   if (stockBajo) badges.push(`<span class="card-badge badge-agotado">⚠️ Stock bajo</span>`);
+  const difLista = (p.ventaRapida && p.precioLista != null) ? (Number(p.precioLista) - (Number(p.precioVenta) || 0)) : 0;
+  if (Math.abs(difLista) > 0.004) badges.push(`<span class="card-badge badge-media">🏷️ ${difLista > 0 ? "−" : "+"}${fmt(Math.abs(difLista))} c/u vs. lista</span>`);
+  if (p.clienteId) badges.push(`<span class="card-badge badge-alta">👤 ${escapeHtml(clienteNombre(p.clienteId) || "Cliente")}</span>`);
   if (p.consignacionId && p.consignacionEstado === "En consignación") badges.push(`<span class="card-badge badge-media">🤝 En consignación</span>`);
   if (bazarEstado === "Vendida") badges.push(`<span class="card-badge badge-agotado">Vendida ✅</span>`);
   else if (bazarEstado === "Venta nula") badges.push(`<span class="card-badge badge-agotado">🎁 Venta nula</span>`);
@@ -3534,6 +3548,35 @@ function playeraCardCompacta(p) {
       <button type="button" class="btn-secondary" onclick="openModalPlayera('${p.id}')" title="Editar">✏️</button>
     </div>
   </div>`;
+}
+function openModalAsignarCliente(id, tipo = "playera") {
+  const reg = tipo === "sticker"
+    ? (AppState.ventasStickers || []).find(x => x.id === id)
+    : AppState.playeras.find(x => x.id === id);
+  if (!reg) return;
+  setVal("ac-playera-id", id);
+  setVal("ac-tipo", tipo);
+  document.getElementById("ac-playera-nombre").textContent = tipo === "sticker"
+    ? `${reg.nombre} · sticker ${reg.tamano || ""} · venta de ${reg.cantidad || 0} pza`
+    : `${reg.nombre} · Talla ${reg.talla || "—"} · ${colorNombre(reg.colorId)}${reg.ventaRapida ? ` · venta de ${reg.stock || 0} pza` : ""}`;
+  document.getElementById("ac-cliente").innerHTML = `<option value="">— Sin cliente —</option>` +
+    AppState.clientes.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.nombre)}</option>`).join("");
+  setVal("ac-cliente", reg.clienteId || "");
+  openModal("modal-asignar-cliente");
+}
+function saveAsignarCliente() {
+  const tipo = val("ac-tipo") || "playera";
+  const id = val("ac-playera-id");
+  const reg = tipo === "sticker"
+    ? (AppState.ventasStickers || []).find(x => x.id === id)
+    : AppState.playeras.find(x => x.id === id);
+  if (!reg) return;
+  const copia = tomarCopiaEstado();
+  reg.clienteId = val("ac-cliente") || "";
+  saveState();
+  closeModal("modal-asignar-cliente");
+  refrescarVistaActual();
+  ofrecerDeshacer(reg.clienteId ? `${reg.nombre}: agregado al historial de ${clienteNombre(reg.clienteId)}.` : `${reg.nombre}: sin cliente asignado.`, copia);
 }
 function verDetallePlayera(id) {
   const p = AppState.playeras.find(x => x.id === id);
@@ -3558,8 +3601,19 @@ function verDetallePlayera(id) {
   if (sobrecargo) costos.push(["Sobrecargo de talla", fmt(sobrecargo)]);
   costos.push(["Costo total", fmt(cTotal)]);
   costos.push(["Precio de venta", fmt(p.precioVenta)]);
+  if (p.ventaRapida && p.precioLista != null && Math.abs(p.precioLista - (p.precioVenta || 0)) > 0.004) {
+    const dif = p.precioLista - (p.precioVenta || 0);
+    costos.push(["Precio de lista (inventario)", fmt(p.precioLista)]);
+    costos.push(["Diferencia por pieza", `${dif > 0 ? "−" : "+"}${fmt(Math.abs(dif))}`, dif > 0 ? "bad" : "good"]);
+  }
   if (p.precioMayoreo) costos.push(["Precio de mayoreo", fmt(p.precioMayoreo)]);
   costos.push(["Ganancia", fmt(ganancia), ganancia >= 0 ? "good" : "bad"]);
+  {
+    const margen = (p.precioVenta || 0) > 0 ? ganancia / p.precioVenta * 100 : null;
+    const retorno = cTotal > 0 ? ganancia / cTotal * 100 : null;
+    costos.push(["Rentabilidad (margen sobre la venta)", margen === null ? "—" : `${margen.toFixed(1)}%`, margen === null ? "" : margen >= 0 ? "good" : "bad"]);
+    costos.push(["Retorno sobre el costo", retorno === null ? "—" : `${retorno.toFixed(1)}%`, retorno === null ? "" : retorno >= 0 ? "good" : "bad"]);
+  }
   const secciones = [{ title: "Costos y ganancia", rows: costos }];
 
   const artista = p.artistaId ? AppState.artistas.find(a => a.id === p.artistaId) : null;
@@ -3593,6 +3647,7 @@ function verDetallePlayera(id) {
     { label: "✏️ Editar", variant: "primary", onClick: () => openModalPlayera(id) },
     { label: "🏪 Bazar", onClick: () => openModalAsignarPlayeraBazar(id) },
     { label: "🤝 Consignar", onClick: () => openModalAsignarConsignacion(id) },
+    { label: "👤 Cliente", onClick: () => openModalAsignarCliente(id) },
     { label: "📉 Merma", onClick: () => openModalMermaDesdePlayera(id) }
   ];
   if (gastoLigado) acciones.push({ label: "🔓 Desvincular costo real", onClick: () => desvincularCostoRealDePiezaBoton("playera", id) });
@@ -3888,6 +3943,7 @@ function renderStickers() {
       ${gastoLigado ? `<div class="card-meta">🔗 vinculado a "${escapeHtml(gastoLigado.concepto)}"${gastoLigado.pctLlenado != null ? ` · lote al ${gastoLigado.pctLlenado}% de llenado` : ""}</div>` : ""}
       <div class="card-row"><span>Precio de venta</span><span>${fmt(s.precioVenta)}</span></div>
       <div class="card-row"><span>Ganancia</span><span style="color:${(s.precioVenta || 0) - (s.costo || 0) >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt((s.precioVenta || 0) - (s.costo || 0))}</span></div>
+      <div class="card-row"><span>Rentabilidad</span><span style="color:${(s.precioVenta || 0) - (s.costo || 0) >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${(s.precioVenta || 0) > 0 ? ((((s.precioVenta || 0) - (s.costo || 0)) / s.precioVenta) * 100).toFixed(1) + "%" : "—"}</span></div>
       <div class="card-row"><span>Stock</span><span>${s.stock} pza(s)</span></div>
       <div class="card-tags">
         <span class="card-badge ${estadoBadgeClass(s.estado)}">${s.estado}</span>
@@ -4074,11 +4130,13 @@ function onQuotePrendaClienteChange(isChecked) {
 function abrirImpresionDesdePrenda() {
   if (editingQuotePrendaRowId) openModalQuoteEstampados(editingQuotePrendaRowId);
 }
-function quitarPrendaDesdeModal() {
+async function quitarPrendaDesdeModal() {
   if (!editingQuotePrendaRowId) return;
-  removeQuoteItem(editingQuotePrendaRowId);
-  editingQuotePrendaRowId = null;
-  closeModal("modal-quote-prenda");
+  const id = editingQuotePrendaRowId;
+  if (await removeQuoteItem(id)) {
+    editingQuotePrendaRowId = null;
+    closeModal("modal-quote-prenda");
+  }
 }
 function addQuoteSticker() {
   const sticker = AppState.stickers.find(s => (s.stock || 0) > 0) || AppState.stickers[0];
@@ -4160,15 +4218,23 @@ function updateQuoteStickerFieldDesdeModal(field, value) {
   if (!editingQuoteStickerRowId) return;
   updateQuoteStickerField(editingQuoteStickerRowId, field, value);
 }
-function quitarStickerDesdeModal() {
+async function quitarStickerDesdeModal() {
   if (!editingQuoteStickerRowId) return;
-  removeQuoteSticker(editingQuoteStickerRowId);
-  editingQuoteStickerRowId = null;
-  closeModal("modal-quote-sticker");
+  const id = editingQuoteStickerRowId;
+  if (await removeQuoteSticker(id)) {
+    editingQuoteStickerRowId = null;
+    closeModal("modal-quote-sticker");
+  }
 }
-function removeQuoteSticker(rowId) {
-  quoteStickerItems = quoteStickerItems.filter(item => item.rowId !== rowId);
+async function removeQuoteSticker(rowId) {
+  const item = quoteStickerItems.find(i => i.rowId === rowId);
+  if (!item) return false;
+  const ok = await pedirConfirmacion(`¿Quitar el sticker "${item.nombre || "sin nombre"}" de la cotización?`,
+    { titulo: "Quitar sticker", confirmLabel: "Quitar", deshacer: false });
+  if (!ok) return false;
+  quoteStickerItems = quoteStickerItems.filter(i => i.rowId !== rowId);
   renderQuoteItems();
+  return true;
 }
 function updateQuoteStickerField(rowId, field, value) {
   const item = quoteStickerItems.find(sticker => sticker.rowId === rowId);
@@ -4213,9 +4279,15 @@ function onQuoteStickerDtfEspecialChange(isChecked) {
   const metrosWrap = document.getElementById("qs-dtf-metros-wrap");
   if (metrosWrap) metrosWrap.style.display = isChecked ? "none" : "block";
 }
-function removeQuoteItem(rowId) {
+async function removeQuoteItem(rowId) {
+  const item = quoteItems.find(i => i.rowId === rowId);
+  if (!item) return false;
+  const ok = await pedirConfirmacion(`¿Quitar "${item.nombre || "esta prenda"}" de la cotización?`,
+    { titulo: "Quitar prenda", confirmLabel: "Quitar", deshacer: false });
+  if (!ok) return false;
   quoteItems = quoteItems.filter(i => i.rowId !== rowId);
   renderQuoteItems();
+  return true;
 }
 function onQuoteItemProductChange(rowId, playeraId) {
   const item = quoteItems.find(i => i.rowId === rowId);
@@ -4670,10 +4742,24 @@ function saveServicioExtra() {
   updateQuoteSummary();
   showToast("Servicio extra guardado.");
 }
-function deleteServicioExtra(id) {
+async function deleteServicioExtra(id) {
+  const s = quoteServiciosExtra.find(x => x.id === id);
+  if (!s) return;
+  const ok = await pedirConfirmacion(`¿Quitar el servicio extra "${s.concepto}"?`,
+    { titulo: "Quitar servicio extra", confirmLabel: "Quitar", deshacer: false });
+  if (!ok) return;
   quoteServiciosExtra = quoteServiciosExtra.filter(x => x.id !== id);
   renderServiciosExtra();
   updateQuoteSummary();
+}
+// El botón "Nueva cotización" pide confirmación si ya hay algo capturado.
+async function confirmarNuevaCotizacion() {
+  if (quoteItems.length || quoteStickerItems.length || quoteServiciosExtra.length || val("q-cliente").trim()) {
+    const ok = await pedirConfirmacion("Se borrará lo que llevas capturado en el cotizador. ¿Empezar una cotización nueva?",
+      { titulo: "Nueva cotización", confirmLabel: "Empezar de nuevo", deshacer: false });
+    if (!ok) return;
+  }
+  resetQuoteForm();
 }
 function renderServiciosExtra() {
   const body = document.getElementById("quote-servicios-extra-body");
@@ -5843,7 +5929,12 @@ function openModalClienteDetalle(clienteId) {
       <span>🏪 ${escapeHtml(p.nombre)} · venta directa (sin cotización)</span>
       <span>${fmt((p.precioVenta || 0) * (p.stock || 0))}</span>
     </div>`).join("");
-  document.getElementById("modal-cliente-detalle-body").innerHTML = filasPedidos + filasPlayeras ||
+  const filasStickers = (AppState.ventasStickers || []).filter(v => (stats.stickerIds || []).includes(v.id)).map(v => `
+    <div class="card-row">
+      <span>✂️ ${escapeHtml(v.nombre)} ×${v.cantidad || 0} · venta directa (sin cotización)</span>
+      <span>${fmt((v.precioVenta || 0) * (v.cantidad || 0))}</span>
+    </div>`).join("");
+  document.getElementById("modal-cliente-detalle-body").innerHTML = filasPedidos + filasPlayeras + filasStickers ||
     `<p class="empty-hint">Este cliente no tiene cotizaciones ni ventas directas.</p>`;
   openModal("modal-cliente-detalle");
 }
@@ -6611,5 +6702,6 @@ Object.assign(window, {
   setQuoteType,
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
-  viewCotizacion, recalcularCostosCotizacionesPorGastos, verCostosReales
+  viewCotizacion, recalcularCostosCotizacionesPorGastos, verCostosReales,
+  openModalAsignarCliente, saveAsignarCliente, confirmarNuevaCotizacion
 });

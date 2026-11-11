@@ -323,3 +323,52 @@ label.btn-primary,label.btn-secondary,
 .bazar-card-item .card-meta{align-items:center;}
 .bazar-card-item .card-actions button{flex:1;}
 @media (max-width:560px){.bazar-cards{grid-template-columns:minmax(0,1fr);}}
+
+/* ============================================================
+   CONTROLES NATIVOS LEGIBLES (select, fecha, listas, scroll)
+   Sin esto los menús desplegables salen blancos y sin contraste.
+   ============================================================ */
+html{color-scheme:dark;}
+html:has(body.light){color-scheme:light;}
+body.light{color-scheme:light;}
+select option,select optgroup{background-color:var(--color-surface-alt,#232327);color:var(--color-text,#f2f0ee);}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(.85);cursor:pointer;}
+body.light input[type="date"]::-webkit-calendar-picker-indicator,
+body.light input[type="time"]::-webkit-calendar-picker-indicator{filter:none;}
+
+/* Los iconos dentro de botones no "roban" el clic (arregla las ✕ que no cerraban) */
+button svg,button i,label svg,a svg{pointer-events:none;}
+
+/* ============================================================
+   FORMULARIOS ALINEADOS (playera, sticker, etc.)
+   ============================================================ */
+.form-row{align-items:flex-start;}
+.form-row > .form-group{display:block;}
+.form-row > .form-group > .form-label{margin-top:0;}
+.form-label{min-height:1.25em;}
+.switch-label{display:inline-flex;align-items:center;gap:8px;line-height:1.3;}
+.form-switch{min-height:48px;}
+.form-hint{line-height:1.4;}
+
+/* Etiquetas (badges) centradas y sin deformarse */
+.card-badge{display:inline-flex;align-items:center;justify-content:center;gap:4px;line-height:1.25;white-space:nowrap;text-align:center;align-self:flex-start;}
+.card-tags{align-items:center;}
+.card-top .card-badge{flex:0 0 auto;}
+
+/* Botones de pestañas/alternadores con icono: icono y texto en una línea */
+.pay-toggle button,.mb-tab,.inv-tabs button,.mb-chk,.view-toggle button,.mbd-rapidos button{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1.2;
+}
+
+/* ============================================================
+   VENTAS RÁPIDAS: botón de cliente y diferencia contra lista
+   ============================================================ */
+.vs-row{grid-template-columns:minmax(0,2fr) minmax(0,1.2fr) auto auto;}
+.vs-acciones{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center;}
+.vs-cliente,.vs-precio{background:var(--color-accent-soft);color:var(--color-text);}
+.vs-cliente:hover,.vs-precio:hover{background:var(--color-accent);color:var(--color-accent-contrast,#fff);}
+@media (max-width:760px){
+  .vs-row{grid-template-columns:minmax(0,1fr) auto;}
+  .vs-acciones{grid-column:1/-1;justify-content:flex-start;}
+}

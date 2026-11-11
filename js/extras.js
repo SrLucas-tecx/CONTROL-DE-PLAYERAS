@@ -9,7 +9,7 @@
    pueden deshacer desde el aviso.
    ============================================================ */
 import { AppState, uid, saveState } from "./storage.js";
-import { fmt, escapeHtml, colorNombre, colorHex, comisionTerminalMonto, bazarIdsDe, getBazarVentasYGanancia, playerasDisponibles } from "./calculator.js";
+import { fmt, escapeHtml, colorNombre, colorHex, comisionTerminalMonto, bazarIdsDe, getBazarVentasYGanancia, playerasDisponibles, clienteNombre, bazaresOrdenados } from "./calculator.js";
 import { showToast } from "./ui.js";
 
 const $ = id => document.getElementById(id);
@@ -26,7 +26,7 @@ const bazarActivoHeader = () => { const s = $("header-bazar-activo"); return s ?
 function llenarSelectBazar(sel, valor) {
   sel.innerHTML = "";
   sel.appendChild(opt("", "Sin bazar (caja general)"));
-  AppState.bazares.forEach(b => sel.appendChild(opt(b.id, b.nombre)));
+  bazaresOrdenados().forEach(b => sel.appendChild(opt(b.id, b.nombre)));
   sel.value = AppState.bazares.some(b => b.id === valor) ? valor : "";
 }
 function llenarSelectCliente(sel, valor = "") {
@@ -128,7 +128,7 @@ function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "", cliente
     const pr = producto(l.key);
     const cantidad = Math.floor(l.cantidad);
     const precio = Math.max(0, Number(l.precio) || 0);
-    const lista = Math.max(precio, Number(l.precioLista) || precio);   // precio sin descuento
+    const lista = Number(l.precioLista) || precio;   // precio sin descuento
     const total = precio * cantidad;
     const montoTarjeta = Math.min(total, tarjetaRestante);
     tarjetaRestante = Math.max(0, tarjetaRestante - montoTarjeta);
@@ -145,7 +145,7 @@ function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "", cliente
       }
       asignacion.cantidadVendida = (Number(asignacion.cantidadVendida) || 0) + cantidad;
       asignacion.ventas = [...(asignacion.ventas || []), {
-        id: uid(), ventaId, turnoCajaId, cantidad, precioVenta: precio, total, metodoPago: metodo,
+        id: uid(), ventaId, turnoCajaId, cantidad, precioVenta: precio, precioLista: lista, total, metodoPago: metodo,
         montoEfectivo, montoTarjeta, comisionTerminal: comision,
         efectivoRecibido: indice === 0 ? Number(pagoNormalizado.efectivoRecibido) || 0 : 0,
         cambio: indice === 0 ? Math.max(0, (Number(pagoNormalizado.efectivoRecibido) || 0) - (totalVenta - montoTarjetaTotal)) : 0,
@@ -180,7 +180,7 @@ function registrarVentas(lineas, pago, bazarId, aviso, turnoCajaId = "", cliente
         metodoPago: metodo, montoEfectivo, montoTarjeta, comisionTerminal: comision, turnoCajaId, ventaId,
         efectivoRecibido: indice === 0 ? Number(pagoNormalizado.efectivoRecibido) || 0 : 0,
         cambio: indice === 0 ? Math.max(0, (Number(pagoNormalizado.efectivoRecibido) || 0) - (totalVenta - montoTarjetaTotal)) : 0,
-        bazarId: bazarId || "", bazarIds: bazarId ? [bazarId] : [], fecha: hoyLocal()
+        bazarId: bazarId || "", bazarIds: bazarId ? [bazarId] : [], fecha: hoyLocal(), clienteId
       });
       s.stock = Math.max(0, (s.stock || 0) - cantidad);
       if (s.stock === 0) s.estado = "Agotado";
@@ -288,7 +288,7 @@ function crearModalVR() {
           <div class="form-group" id="vr-cliente-wrap" style="display:none;">
             <label class="form-label">Cliente (opcional)</label>
             <select id="vr-cliente" class="form-select"></select>
-            <span class="form-hint">La playera vendida se agregará al historial de compras del cliente.</span>
+            <span class="form-hint">La venta se agregará al historial de compras del cliente.</span>
           </div>
           <p class="cost-preview" id="vr-total">—</p>
         </div>
@@ -350,8 +350,8 @@ function elegirVR(key) {
   renderListaVR();
   $("vr-detalle").style.display = "block";
   $("vr-elegida").textContent = `${pr.nombre} · ${pr.meta} (quedan ${pr.stock})`;
-  $("vr-cliente-wrap").style.display = pr.tipo === "playera" ? "block" : "none";
-  if (pr.tipo !== "playera") $("vr-cliente").value = "";
+  $("vr-cliente-wrap").style.display = pr.tipo !== "consignacion" ? "block" : "none";
+  if (pr.tipo === "consignacion") $("vr-cliente").value = "";
   $("vr-cant").value = 1;
   $("vr-cant").max = pr.stock;
   $("vr-precio").value = pr.precio;
@@ -373,16 +373,27 @@ function actualizarTotalVR() {
   const precio = parseFloat($("vr-precio").value) || 0;
   const valida = cant >= 1 && cant <= pr.stock;
   const total = cant * precio;
+  const dif = precio - pr.precio;
   let txt = valida ? `Total: ${fmt(total)}` : `La cantidad debe estar entre 1 y ${pr.stock}.`;
+  if (valida && Math.abs(dif) > 0.004) txt += ` — lista ${fmt(pr.precio)} (${dif < 0 ? "−" : "+"}${fmt(Math.abs(dif))} c/u)`;
   if (valida && vr.metodo === "Tarjeta") txt += ` — comisión de terminal: ${fmt(comisionTerminalMonto(total, AppState.settings.comisionTerminalPct))}`;
   $("vr-total").textContent = txt;
   ok.disabled = !valida;
 }
-function confirmarVR() {
+async function confirmarVR() {
   const pr = producto(vr.sel);
   if (!pr) return;
   const cant = parseInt($("vr-cant").value) || 0;
   const precio = parseFloat($("vr-precio").value) || 0;
+  const dif = precio - pr.precio;
+  const ok = await window.confirmPopup({
+    title: "Confirmar venta rápida",
+    message: `${cant} × ${pr.nombre} a ${fmt(precio)} c/u = ${fmt(cant * precio)} (${vr.metodo.toLowerCase()})` +
+      (Math.abs(dif) > 0.004 ? ` · precio de lista ${fmt(pr.precio)}, diferencia ${dif < 0 ? "−" : "+"}${fmt(Math.abs(dif))} c/u` : "") +
+      ". ¿Registrar la venta?",
+    confirmLabel: "Registrar venta", danger: false
+  });
+  if (!ok) return;
   const exito = registrarVentas([{ key: pr.key, cantidad: cant, precio, precioLista: pr.precio }], vr.metodo, $("vr-bazar").value,
     `Venta registrada: ${cant} × ${pr.nombre} — ${fmt(cant * precio)}`, "", $("vr-cliente").value);
   if (exito) $("modal-venta-rapida").classList.remove("open");
@@ -495,7 +506,13 @@ function crearModoBazar() {
     mb.metodo = b.dataset.metodo;
     $("mb-pago").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
   });
-  $("mb-limpiar").addEventListener("click", () => { mb.ticket = {}; mb.desc = {}; renderMB(); });
+  $("mb-limpiar").addEventListener("click", async () => {
+    if (lineasMB().length) {
+      const ok = await window.confirmPopup({ title: "Vaciar el carrito", message: "Se quitarán todos los productos de esta venta. ¿Seguro?", confirmLabel: "Vaciar", danger: true });
+      if (!ok) return;
+    }
+    mb.ticket = {}; mb.desc = {}; renderMB();
+  });
   $("mb-cobrar").addEventListener("click", cobrarMB);
 }
 const modoBazarAbierto = () => { const o = $("modo-bazar"); return !!o && o.classList.contains("open"); };
@@ -747,12 +764,13 @@ function lineasMB() {
 /* ---- Descuento por línea ---- */
 // Precio final por pieza de un producto del ticket, ya con su descuento (% o $ por pieza).
 function calcularFinal(precio, tipo, valor) {
+  if (tipo === "precio") return Math.max(0, Math.round(valor * 100) / 100);
   const menos = tipo === "pct" ? precio * Math.min(100, Math.max(0, valor)) / 100 : Math.max(0, valor);
   return Math.max(0, Math.round((precio - menos) * 100) / 100);
 }
 function precioFinalMB(pr) {
   const d = mb.desc[pr.key];
-  return d && d.valor > 0 ? calcularFinal(pr.precio, d.tipo, d.valor) : pr.precio;
+  return d ? calcularFinal(pr.precio, d.tipo, d.valor) : pr.precio;
 }
 const mbd = { key: "", tipo: "pct" };
 function crearModalDescMB() {
@@ -762,17 +780,18 @@ function crearModalDescMB() {
   o.innerHTML = `
     <div class="modal-box modal-box-sm">
       <div class="modal-header">
-        <h2 class="modal-title">🏷️ Descuento</h2>
+        <h2 class="modal-title">🏷️ Descuento o precio</h2>
         <button class="modal-close" data-modal="modal-mb-desc" aria-label="Cerrar">✕</button>
       </div>
       <div class="modal-body">
         <div class="vr-elegida" id="mbd-prod"></div>
-        <div class="pay-toggle" id="mbd-tipo">
-          <button type="button" data-tipo="pct" class="active">% Porcentaje</button>
-          <button type="button" data-tipo="monto">$ Pesos por pieza</button>
+        <div class="pay-toggle" id="mbd-tipo" style="grid-template-columns:repeat(3,minmax(0,1fr));">
+          <button type="button" data-tipo="pct" class="active">% Descuento</button>
+          <button type="button" data-tipo="monto">$ Descuento</button>
+          <button type="button" data-tipo="precio">$ Precio final</button>
         </div>
         <div class="form-group" style="margin-top:var(--space-4);">
-          <label class="form-label" id="mbd-label">Descuento (%)</label>
+          <label class="form-label" id="mbd-label" for="mbd-valor">Descuento (%)</label>
           <input type="number" id="mbd-valor" class="form-input" min="0" step="any" inputmode="decimal">
         </div>
         <div class="mbd-rapidos" id="mbd-rapidos">
@@ -780,10 +799,13 @@ function crearModalDescMB() {
           <button type="button" data-pct="15">15%</button><button type="button" data-pct="20">20%</button>
           <button type="button" data-pct="50">50%</button>
         </div>
+        <label class="tag-checkbox" style="margin-bottom:var(--space-3);">
+          <input type="checkbox" id="mbd-guardar"> Guardar como nuevo precio de lista del producto
+        </label>
         <p class="cost-preview" id="mbd-preview">—</p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-secondary" id="mbd-quitar">Quitar descuento</button>
+        <button type="button" class="btn-secondary" id="mbd-quitar">Quitar cambio</button>
         <button type="button" class="btn-primary" id="mbd-ok">Aplicar</button>
       </div>
     </div>`;
@@ -810,21 +832,28 @@ function crearModalDescMB() {
   });
 }
 function pintarTipoDescMB() {
-  $("mbd-tipo").querySelectorAll("button").forEach(x => x.classList.toggle("active", x.dataset.tipo === mbd.tipo));
-  $("mbd-label").textContent = mbd.tipo === "pct" ? "Descuento (%)" : "Descuento por pieza ($)";
+  $("mbd-tipo").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.tipo === mbd.tipo));
+  $("mbd-label").textContent = mbd.tipo === "pct" ? "Descuento (%)" : mbd.tipo === "monto" ? "Descuento por pieza ($)" : "Precio final por pieza ($)";
   $("mbd-rapidos").style.display = mbd.tipo === "pct" ? "flex" : "none";
 }
 function previewDescMB() {
   const pr = producto(mbd.key);
   const ok = $("mbd-ok");
   if (!pr) { ok.disabled = true; return; }
-  const valor = parseFloat($("mbd-valor").value) || 0;
-  const invalido = valor < 0 || (mbd.tipo === "pct" && valor > 100) || (mbd.tipo === "monto" && valor > pr.precio);
-  const final = calcularFinal(pr.precio, mbd.tipo, valor);
+  const texto = $("mbd-valor").value;
+  const valor = parseFloat(texto);
+  const vacio = texto === "" || isNaN(valor);
+  const invalido = vacio || valor < 0 || (mbd.tipo === "pct" && valor > 100) || (mbd.tipo === "monto" && valor > pr.precio);
   const cant = mb.ticket[pr.key] || 1;
-  $("mbd-preview").textContent = invalido
-    ? (mbd.tipo === "pct" ? "El porcentaje debe estar entre 0 y 100." : `El descuento no puede ser mayor al precio (${fmt(pr.precio)}).`)
-    : `${fmt(pr.precio)} → ${fmt(final)} c/u (−${fmt(pr.precio - final)}) · ${cant} pza(s): ${fmt(final * cant)}`;
+  if (invalido) {
+    $("mbd-preview").textContent = vacio ? `Precio de lista: ${fmt(pr.precio)}. Escribe un valor.`
+      : mbd.tipo === "pct" ? "El porcentaje debe estar entre 0 y 100."
+      : mbd.tipo === "monto" ? `El descuento no puede ser mayor al precio (${fmt(pr.precio)}).` : "El precio no puede ser negativo.";
+  } else {
+    const final = calcularFinal(pr.precio, mbd.tipo, valor);
+    const dif = final - pr.precio;
+    $("mbd-preview").textContent = `Lista ${fmt(pr.precio)} → ${fmt(final)} c/u (${Math.abs(dif) < 0.005 ? "sin cambio" : (dif < 0 ? "−" : "+") + fmt(Math.abs(dif))}) · ${cant} pza(s): ${fmt(final * cant)}`;
+  }
   ok.disabled = invalido;
 }
 function abrirDescuentoMB(key) {
@@ -834,18 +863,31 @@ function abrirDescuentoMB(key) {
   const actual = mb.desc[key];
   mbd.key = key;
   mbd.tipo = actual ? actual.tipo : "pct";
-  $("mbd-prod").textContent = `${pr.nombre} · ${pr.meta} · precio normal ${fmt(pr.precio)}`;
+  $("mbd-prod").textContent = `${pr.nombre} · ${pr.meta} · precio de lista ${fmt(pr.precio)}`;
   $("mbd-valor").value = actual ? actual.valor : "";
+  $("mbd-guardar").checked = !!(actual && actual.guardar);
   pintarTipoDescMB();
   previewDescMB();
   $("modal-mb-desc").classList.add("open");
 }
 function aplicarDescMB() {
-  const valor = parseFloat($("mbd-valor").value) || 0;
-  if (valor > 0) mb.desc[mbd.key] = { tipo: mbd.tipo, valor };
+  const valor = parseFloat($("mbd-valor").value);
+  if (isNaN(valor)) return;
+  if (mbd.tipo === "precio" || valor > 0) mb.desc[mbd.key] = { tipo: mbd.tipo, valor, guardar: $("mbd-guardar").checked };
   else delete mb.desc[mbd.key];
   $("modal-mb-desc").classList.remove("open");
   renderMB();
+}
+// Guarda el precio editado como nuevo precio de lista (playera, sticker o producto consignado).
+function actualizarPrecioProducto(key, precio) {
+  const [t, a, b] = String(key).split(":");
+  if (t === "p") { const p = AppState.playeras.find(i => i.id === a); if (p) p.precioVenta = precio; }
+  else if (t === "s") { const s = AppState.stickers.find(i => i.id === a); if (s) s.precioVenta = precio; }
+  else if (t === "c") {
+    const c = AppState.consignaciones.find(i => i.id === a);
+    const it = c && (c.productos || []).find(i => i.id === b);
+    if (it) { it.precioVenta = precio; it.precioTotal = (Number(it.cantidadRecibida) || 0) * precio; }
+  }
 }
 
 function renderTicketMB() {
@@ -856,7 +898,7 @@ function renderTicketMB() {
   let total = 0;
   lineas.forEach(({ pr, cantidad }) => {
     const final = precioFinalMB(pr);
-    const conDesc = final < pr.precio;
+    const conDesc = Math.abs(final - pr.precio) > 0.004;
     total += final * cantidad;
     const chip = el("span", "mb-chip");
     const menos = el("button", "", "−"); menos.type = "button"; menos.dataset.key = pr.key; menos.dataset.delta = "-1"; menos.setAttribute("aria-label", "Quitar una");
@@ -864,8 +906,8 @@ function renderTicketMB() {
     chip.appendChild(menos);
     chip.appendChild(el("span", "mb-chip-text", `${cantidad} × ${pr.tipo === "sticker" ? "✂️ " : ""}${pr.nombre}${conDesc ? ` · ${fmt(final)} c/u` : ""}`));
     chip.appendChild(mas);
-    if (pr.tipo !== "consignacion") {
-      const desc = el("button", "mb-chip-desc" + (conDesc ? " on" : ""), "🏷️"); desc.type = "button"; desc.dataset.desc = pr.key; desc.setAttribute("aria-label", "Descuento"); desc.title = "Descuento";
+    {
+      const desc = el("button", "mb-chip-desc" + (conDesc ? " on" : ""), "🏷️"); desc.type = "button"; desc.dataset.desc = pr.key; desc.setAttribute("aria-label", "Descuento o precio"); desc.title = "Descuento o precio";
       chip.appendChild(desc);
     }
     cont.appendChild(chip);
@@ -929,7 +971,10 @@ function detalleHoyMB() {
     const visibles = lineas.slice(0, 12);
     secciones.push({
       title: "Ventas de hoy (toca Anular si te equivocaste)",
-      rows: visibles.map(l => [l.texto, fmt(l.monto), "", { texto: "Anular", onClick: () => { anularVenta(l.tipo, l.id); detalleHoyMB(); } }]),
+      rows: visibles.map(l => [l.texto, fmt(l.monto), "", { texto: "Anular", onClick: async () => {
+        const ok = await window.confirmPopup({ title: "Anular venta", message: "Se borrará esta venta y las piezas regresarán al stock. ¿Seguro?", confirmLabel: "Anular", danger: true });
+        if (ok) { anularVenta(l.tipo, l.id); detalleHoyMB(); }
+      } }]),
       text: lineas.length > visibles.length ? `Y ${lineas.length - visibles.length} venta(s) más.` : undefined
     });
   } else {
@@ -970,6 +1015,10 @@ function crearDialogoCobroMB() {
       <div class="form-group" id="mb-cobro-recibido-wrap">
         <label class="form-label" for="mb-cobro-recibido">Efectivo recibido</label>
         <input id="mb-cobro-recibido" class="form-input" type="number" min="0" step="0.01" inputmode="decimal">
+      </div>
+      <div class="form-group" id="mb-cobro-cliente-wrap" style="display:none;">
+        <label class="form-label" for="mb-cobro-cliente">Cliente (opcional, para playeras y stickers)</label>
+        <select id="mb-cobro-cliente" class="form-select"></select>
       </div>
       <p id="mb-cobro-resumen" class="mb-dialog-copy"></p>
       <div class="mb-dialog-actions">
@@ -1023,6 +1072,8 @@ function cobrarMB() {
     return;
   }
   crearDialogoCobroMB();
+  llenarSelectCliente($("mb-cobro-cliente"));
+  $("mb-cobro-cliente-wrap").style.display = lineasMB().some(l => l.pr.tipo === "playera" || l.pr.tipo === "sticker") ? "block" : "none";
   cobroMB.metodo = mb.metodo;
   actualizarCamposCobroMB();
   $("mb-cobro-dialog").classList.add("open");
@@ -1053,11 +1104,20 @@ async function confirmarCobroMB() {
     : confirm(`Cobrar ${fmt(total)} y descontar el inventario?`);
   if (!confirmado) return;
   const piezas = lineas.reduce((suma, linea) => suma + linea.cantidad, 0);
+  const clienteId = $("mb-cobro-cliente") ? $("mb-cobro-cliente").value : "";
+  const guardados = lineas.filter(l => mb.desc[l.pr.key] && mb.desc[l.pr.key].guardar)
+    .map(l => ({ key: l.pr.key, precio: precioFinalMB(l.pr) }));
   const exito = registrarVentas(
     lineas.map(({ pr, cantidad }) => ({ key: pr.key, cantidad, precio: precioFinalMB(pr), precioLista: pr.precio })),
     { metodo: cobroMB.metodo, montoTarjeta, efectivoRecibido }, $("mb-bazar").value,
-    `Cobrado: ${piezas} pieza(s) — ${fmt(total)} · Cambio: ${fmt(cambio)}`, turno.id
+    `Cobrado: ${piezas} pieza(s) — ${fmt(total)} · Cambio: ${fmt(cambio)}`, turno.id, clienteId
   );
+  if (exito && guardados.length) {
+    guardados.forEach(g => actualizarPrecioProducto(g.key, g.precio));
+    saveState();
+    window.refrescarVistaActual();
+    showToast(`Precio de lista actualizado en ${guardados.length} producto(s).`);
+  }
   if (exito) {
     $("mb-cobro-dialog").classList.remove("open");
     mb.ticket = {}; mb.desc = {};
@@ -1086,19 +1146,135 @@ function cerrarModoBazar() {
 /* ===============================================================
    HISTORIAL DE VENTAS RÁPIDAS (pantalla completa, cualquier fecha)
 =============================================================== */
+/* ===============================================================
+   EDITAR EL PRECIO DE UNA VENTA YA REGISTRADA
+   Recalcula total, parte en tarjeta/efectivo y comisión de terminal.
+   El precio de lista original se conserva para poder comparar.
+=============================================================== */
+const ep = { tipo: "", id: "" };
+function localizarVenta(tipo, id) {
+  if (tipo === "playera") {
+    const v = AppState.playeras.find(i => i.id === id && i.ventaRapida);
+    return v ? { v, tipo, nombre: v.nombre, cantidad: v.stock || 0, precio: v.precioVenta || 0, total: (v.precioVenta || 0) * (v.stock || 0) } : null;
+  }
+  if (tipo === "sticker") {
+    const v = (AppState.ventasStickers || []).find(i => i.id === id);
+    return v ? { v, tipo, nombre: v.nombre, cantidad: v.cantidad || 0, precio: v.precioVenta || 0, total: (v.precioVenta || 0) * (v.cantidad || 0) } : null;
+  }
+  for (const c of AppState.consignaciones || []) {
+    for (const it of c.productos || []) {
+      for (const a of it.asignaciones || []) {
+        const v = (a.ventas || []).find(i => i.id === id);
+        if (v) return { v, tipo, nombre: it.nombre, cantidad: v.cantidad || 0, precio: v.precioVenta || 0, total: v.total != null ? v.total : (v.precioVenta || 0) * (v.cantidad || 0) };
+      }
+    }
+  }
+  return null;
+}
+function aplicarPrecioVenta(r, nuevoPrecio) {
+  const v = r.v;
+  const nuevoTotal = Math.round(nuevoPrecio * r.cantidad * 100) / 100;
+  const metodo = v.metodoPago || "Efectivo";
+  const tarjetaAnt = Number(v.montoTarjeta) || 0;
+  let tarjeta;
+  if (metodo === "Tarjeta") tarjeta = nuevoTotal;
+  else if (metodo === "Efectivo") tarjeta = 0;
+  else tarjeta = r.total > 0 ? Math.min(nuevoTotal, Math.round(nuevoTotal * tarjetaAnt / r.total * 100) / 100) : 0;   // mixto: misma proporción
+  if (v.precioLista == null) v.precioLista = r.precio;          // conserva la lista original para comparar
+  v.precioVenta = nuevoPrecio;
+  if (r.tipo === "consignacion") v.total = nuevoTotal;
+  v.montoTarjeta = tarjeta;
+  v.montoEfectivo = Math.max(0, Math.round((nuevoTotal - tarjeta) * 100) / 100);
+  v.comisionTerminal = comisionTerminalMonto(tarjeta, AppState.settings.comisionTerminalPct);
+}
+function crearModalEP() {
+  if ($("modal-editar-precio")) return;
+  const o = el("div", "modal-overlay");
+  o.id = "modal-editar-precio";
+  o.innerHTML = `
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">✏️ Editar precio de la venta</h2>
+        <button class="modal-close" data-modal="modal-editar-precio" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="vr-elegida" id="ep-prod"></div>
+        <div class="form-group">
+          <label class="form-label" for="ep-precio">Precio c/u ($)</label>
+          <input type="number" id="ep-precio" class="form-input" min="0" step="0.01" inputmode="decimal">
+        </div>
+        <p class="cost-preview" id="ep-preview">—</p>
+        <p class="form-hint">Se recalculan el total, la parte en tarjeta, la comisión de terminal, el corte de caja y la ganancia. Puedes deshacerlo desde el aviso.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" data-modal="modal-editar-precio">Cancelar</button>
+        <button type="button" class="btn-primary" id="ep-ok">Guardar precio</button>
+      </div>
+    </div>`;
+  document.body.appendChild(o);
+  $("ep-precio").addEventListener("input", previewEP);
+  $("ep-ok").addEventListener("click", guardarEP);
+}
+function previewEP() {
+  const r = localizarVenta(ep.tipo, ep.id);
+  if (!r) return;
+  const texto = $("ep-precio").value;
+  const nuevo = parseFloat(texto);
+  if (texto === "" || isNaN(nuevo) || nuevo < 0) {
+    $("ep-preview").textContent = "Escribe un precio válido (0 o mayor).";
+    $("ep-ok").disabled = true;
+    return;
+  }
+  const nTotal = nuevo * r.cantidad;
+  const dif = nTotal - r.total;
+  const lista = r.v.precioLista != null ? r.v.precioLista : r.precio;
+  $("ep-preview").textContent = `Antes: ${fmt(r.precio)} c/u · ${fmt(r.total)} → Ahora: ${fmt(nuevo)} c/u · ${fmt(nTotal)} (${Math.abs(dif) < 0.005 ? "sin cambio" : (dif < 0 ? "−" : "+") + fmt(Math.abs(dif))}) · Lista: ${fmt(lista)}`;
+  $("ep-ok").disabled = false;
+}
+function editarPrecioVenta(tipo, id) {
+  const r = localizarVenta(tipo, id);
+  if (!r) return showToast("No se encontró la venta.", "error");
+  crearModalEP();
+  ep.tipo = tipo; ep.id = id;
+  $("ep-prod").textContent = `${r.nombre} · ${r.cantidad} pza(s) · ${r.v.metodoPago || "Efectivo"}`;
+  $("ep-precio").value = r.precio;
+  previewEP();
+  $("modal-editar-precio").classList.add("open");
+}
+async function guardarEP() {
+  const r = localizarVenta(ep.tipo, ep.id);
+  const nuevo = parseFloat($("ep-precio").value);
+  if (!r || isNaN(nuevo) || nuevo < 0) return;
+  if (Math.abs(nuevo - r.precio) < 0.005) { $("modal-editar-precio").classList.remove("open"); return; }
+  const turno = (AppState.turnosCaja || []).find(t => t.id === r.v.turnoCajaId);
+  const avisoTurno = turno && turno.estado === "cerrada" ? " Ojo: esta venta pertenece a un turno de caja ya cerrado; el corte guardado de ese turno no se modifica." : "";
+  const ok = await window.confirmPopup({
+    title: "Cambiar el precio de la venta",
+    message: `El precio pasará de ${fmt(r.precio)} a ${fmt(nuevo)} c/u (total ${fmt(r.total)} → ${fmt(nuevo * r.cantidad)}). Cambian el total vendido, la comisión de terminal y la ganancia.${avisoTurno} ¿Continuar?`,
+    confirmLabel: "Cambiar precio", danger: false
+  });
+  if (!ok) return;
+  const copia = window.tomarCopiaEstado();
+  aplicarPrecioVenta(r, nuevo);
+  saveState();
+  $("modal-editar-precio").classList.remove("open");
+  window.refrescarVistaActual();
+  window.ofrecerDeshacer(`Precio actualizado: ${r.nombre} ahora ${fmt(nuevo)} c/u.`, copia);
+}
+
 function ventasSueltas() {
   const playeras = AppState.playeras.filter(p => p.ventaRapida && p.bazarEstado === "Vendida").map(p => ({
     tipo: "playera", id: p.id, fecha: p.fechaVenta || "", nombre: p.nombre,
     meta: `Talla ${p.talla || "—"} · ${colorNombre(p.colorId)}`, cantidad: p.stock || 0,
     precio: p.precioVenta || 0, lista: p.precioLista != null ? p.precioLista : (p.precioVenta || 0),
     metodo: p.metodoPago || "Efectivo", montoEfectivo: p.montoEfectivo, montoTarjeta: p.montoTarjeta,
-    comision: p.comisionTerminal || 0, bazarIds: bazarIdsDe(p)
+    comision: p.comisionTerminal || 0, bazarIds: bazarIdsDe(p), clienteId: p.clienteId || ""
   }));
   const stickers = (AppState.ventasStickers || []).map(v => ({
     tipo: "sticker", id: v.id, fecha: v.fecha || "", nombre: v.nombre, meta: v.tamano || "Sticker",
     cantidad: v.cantidad || 0, precio: v.precioVenta || 0, lista: v.precioLista != null ? v.precioLista : (v.precioVenta || 0),
     metodo: v.metodoPago || "Efectivo", montoEfectivo: v.montoEfectivo, montoTarjeta: v.montoTarjeta,
-    comision: v.comisionTerminal || 0, bazarIds: bazarIdsDe(v)
+    comision: v.comisionTerminal || 0, bazarIds: bazarIdsDe(v), clienteId: v.clienteId || ""
   }));
   const consignaciones = (AppState.consignaciones || []).flatMap(consignacion =>
     (consignacion.productos || []).flatMap(item =>
@@ -1106,7 +1282,7 @@ function ventasSueltas() {
         (asignacion.ventas || []).map(venta => ({
           tipo: "consignacion", id: venta.id, fecha: venta.fecha || "", nombre: item.nombre,
           meta: consignacion.nombre, cantidad: venta.cantidad || 0, precio: venta.precioVenta || item.precioVenta || 0,
-          lista: venta.precioVenta || item.precioVenta || 0, total: venta.total || 0,
+          lista: venta.precioLista != null ? venta.precioLista : (venta.precioVenta || item.precioVenta || 0), total: venta.total || 0,
           metodo: venta.metodoPago || "Efectivo", montoEfectivo: venta.montoEfectivo,
           montoTarjeta: venta.montoTarjeta, comision: venta.comisionTerminal || 0,
           bazarIds: asignacion.bazarId ? [asignacion.bazarId] : []
@@ -1180,19 +1356,29 @@ function renderVentasRapidas() {
       const icono = v.tipo === "sticker" ? "✂️" : v.tipo === "consignacion" ? "🤝" : "👕";
       main.appendChild(el("span", "vs-name", `${icono} ${v.nombre}`));
       const b = v.bazarIds.length ? AppState.bazares.find(x => x.id === v.bazarIds[0]) : null;
-      main.appendChild(el("span", "vs-meta", `${v.meta} · ${b ? "🏪 " + b.nombre : "Caja general"}`));
+      main.appendChild(el("span", "vs-meta", `${v.meta} · ${b ? "🏪 " + b.nombre : "Caja general"}${v.clienteId ? " · 👤 " + (clienteNombre(v.clienteId) || "Cliente") : ""}`));
       fila.appendChild(main);
       const mid = el("div", "vs-mid");
       mid.appendChild(el("span", "vs-qty", `${v.cantidad} × ${fmt(v.precio)}`));
-      if (v.lista > v.precio + 0.001) mid.appendChild(el("span", "vs-desc", `🏷️ −${fmt(v.lista - v.precio)} c/u`));
+      if (Math.abs(v.lista - v.precio) > 0.001) mid.appendChild(el("span", "vs-desc", `🏷️ ${v.lista > v.precio ? "−" : "+"}${fmt(Math.abs(v.lista - v.precio))} c/u vs. lista`));
       fila.appendChild(mid);
       const der = el("div", "vs-der");
       der.appendChild(el("b", "", fmt(monto(v))));
       der.appendChild(el("span", "vs-metodo", v.metodo === "Tarjeta" ? "💳 Tarjeta" : v.metodo === "Mixto" ? "💵💳 Mixto" : "💵 Efectivo"));
       fila.appendChild(der);
+      const acciones = el("div", "vs-acciones");
+      const bp = el("button", "qd-row-btn vs-precio", "Editar precio");
+      bp.type = "button"; bp.dataset.precio = v.id; bp.dataset.tipo = v.tipo;
+      acciones.appendChild(bp);
+      if (v.tipo !== "consignacion") {
+        const bc = el("button", "qd-row-btn vs-cliente", v.clienteId ? "Cambiar cliente" : "Cliente");
+        bc.type = "button"; bc.dataset.cliente = v.id; bc.dataset.tipo = v.tipo;
+        acciones.appendChild(bc);
+      }
       const btn = el("button", "qd-row-btn vs-anular", "Anular");
       btn.type = "button"; btn.dataset.anular = v.id; btn.dataset.tipo = v.tipo;
-      fila.appendChild(btn);
+      acciones.appendChild(btn);
+      fila.appendChild(acciones);
       lista.appendChild(fila);
     });
   });
@@ -1212,7 +1398,11 @@ function iniciarHistorial() {
   const lista = $("vs-lista");
   if (lista) lista.addEventListener("click", ev => {
     const a = ev.target.closest("[data-anular]");
-    if (a) pedirAnular(a.dataset.tipo, a.dataset.anular);
+    if (a) { pedirAnular(a.dataset.tipo, a.dataset.anular); return; }
+    const c = ev.target.closest("[data-cliente]");
+    if (c) { window.openModalAsignarCliente(c.dataset.cliente, c.dataset.tipo); return; }
+    const p = ev.target.closest("[data-precio]");
+    if (p) editarPrecioVenta(p.dataset.tipo, p.dataset.precio);
   });
 }
 
@@ -1738,7 +1928,7 @@ function iniciarSelectorBazar() {
       ico: "➖", titulo: "Sin bazar activo", sub: "Las ventas van a la caja general",
       activa: !sel.value, etiqueta: !sel.value ? "Activo" : "", onClick: () => elegir("")
     }));
-    AppState.bazares.forEach(b => {
+    bazaresOrdenados().forEach(b => {
       const activa = sel.value === b.id;
       const vendido = getBazarVentasYGanancia(b.id).totalVendido;
       panel.appendChild(tarjeta({
@@ -1837,4 +2027,4 @@ function iniciar() {
 }
 iniciar();
 
-Object.assign(window, { openVentaRapida, openModoBazar, abrirBuscador, renderVentasRapidas, anularVenta });
+Object.assign(window, { openVentaRapida, openModoBazar, abrirBuscador, renderVentasRapidas, anularVenta, editarPrecioVenta });

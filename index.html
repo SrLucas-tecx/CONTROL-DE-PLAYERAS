@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="dist/styles.css">
+<link rel="stylesheet" href="dist/styles.css?v=20261109b">
 </head>
 <body>
 
@@ -404,7 +404,7 @@
         </div>
 
         <div class="quote-actions">
-          <button class="btn-secondary" onclick="resetQuoteForm()">🗑️ Nueva cotización</button>
+          <button class="btn-secondary" onclick="confirmarNuevaCotizacion()">🗑️ Nueva cotización</button>
           <button class="btn-primary" onclick="openPreviewCotizacion()">📤 Vista previa / Compartir</button>
           <button class="btn-primary" onclick="saveQuote()">💾 Guardar cotización</button>
         </div>
@@ -2669,6 +2669,30 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-asignar-consignacion">Cancelar</button>
       <button class="btn-primary" onclick="saveAsignarConsignacion()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-asignar-cliente">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">👤 Asignar a un cliente</h2>
+      <button class="modal-close" data-modal="modal-asignar-cliente" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ac-playera-id">
+      <input type="hidden" id="ac-tipo" value="playera">
+      <p class="vr-elegida" id="ac-playera-nombre"></p>
+      <div class="form-group">
+        <label class="form-label" for="ac-cliente">Cliente registrado</label>
+        <select id="ac-cliente" class="form-select"></select>
+        <span class="form-hint">Si la playera ya está vendida, aparece en el historial de compras de ese cliente.</span>
+      </div>
+      <p class="cost-preview">¿No está en la lista? Cierra esta ventana y regístralo primero en Clientes.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" data-modal="modal-asignar-cliente">Cancelar</button>
+      <button class="btn-primary" onclick="saveAsignarCliente()">Guardar</button>
     </div>
   </div>
 </div>

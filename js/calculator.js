@@ -308,6 +308,22 @@ export function costoBazarReal(bazar) {
 export function saldoBazarPendiente(bazar) {
   return Math.max(0, costoBazarReal(bazar) - ((bazar && bazar.montoPagadoBazar) || 0));
 }
+// Bazares ordenados: primero los que están en curso, luego los próximos (el más cercano primero)
+// y al final los que ya pasaron (el que terminó más recientemente primero).
+export function bazaresOrdenados() {
+  const hoy = new Date().toLocaleDateString("sv-SE");
+  const ini = b => b.fechaInicio || b.fecha || "";
+  const fin = b => b.fechaFin || ini(b);
+  const rango = b => !ini(b) ? 3 : hoy < ini(b) ? 1 : hoy > fin(b) ? 2 : 0;
+  return [...AppState.bazares].sort((a, b) => {
+    const ra = rango(a), rb = rango(b);
+    if (ra !== rb) return ra - rb;
+    if (ra === 0) return fin(a).localeCompare(fin(b));
+    if (ra === 1) return ini(a).localeCompare(ini(b));
+    if (ra === 2) return fin(b).localeCompare(fin(a));
+    return (a.nombre || "").localeCompare(b.nombre || "", "es");
+  });
+}
 export function bazarIdsDe(registro) {
   return registro.bazarIds || (registro.bazarId ? [registro.bazarId] : []);
 }
@@ -627,10 +643,18 @@ export function statsCliente(cliente) {
   });
   playerasVendidas.forEach(p => {
     totalGastado += (p.precioVenta || 0) * cantidadVendidaPlayera(p);
+    if ((p.fechaVenta || "") > ultimaFecha) ultimaFecha = p.fechaVenta;
+  });
+  // Stickers vendidos (venta rápida / modo bazar) ligados a este cliente
+  const stickersVendidos = (AppState.ventasStickers || []).filter(v => v.clienteId === cliente.id);
+  stickersVendidos.forEach(v => {
+    totalGastado += (v.precioVenta || 0) * (v.cantidad || 0);
+    if ((v.fecha || "") > ultimaFecha) ultimaFecha = v.fecha;
   });
   return {
-    pedidos: pedidos.length + playerasVendidas.length, totalGastado, ultimaFecha,
-    cotizacionIds: pedidos.map(c => c.id), playeraIds: playerasVendidas.map(p => p.id)
+    pedidos: pedidos.length + playerasVendidas.length + stickersVendidos.length, totalGastado, ultimaFecha,
+    cotizacionIds: pedidos.map(c => c.id), playeraIds: playerasVendidas.map(p => p.id),
+    stickerIds: stickersVendidos.map(v => v.id)
   };
 }
 export function agruparClientes() {
