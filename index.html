@@ -28,7 +28,7 @@
       <span class="logo-word"><img src="assets/images/Letras-crop.png" alt="LUCXSTUDIO"></span>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" aria-label="Menú principal">
       <div class="nav-group-label">Ventas</div>
       <button class="nav-item active" data-page="cotizador">🧮 Cotizador rápido</button>
       <button class="nav-item" data-page="cotizaciones">📁 Cotizaciones guardadas</button>
@@ -99,12 +99,12 @@
       <h1 class="header-title" id="page-title">Inicio</h1>
       <div class="bazar-activo-bar">
         <span class="bazar-activo-label">🏪 Bazar activo</span>
-        <select id="header-bazar-activo" class="form-select" onchange="onHeaderBazarChange()"></select>
+        <select id="header-bazar-activo" aria-label="Bazar activo" class="form-select" onchange="onHeaderBazarChange()"></select>
         <button class="btn-icon" id="header-bazar-add" title="Nuevo bazar">+</button>
       </div>
       <div class="search-bar">
         <span>🔍</span>
-        <input type="text" id="global-search" placeholder="Buscar playera, sticker o cotización...">
+        <input type="text" id="global-search" placeholder="Buscar playera, sticker o cotización..." aria-label="Buscar playera, sticker o cotización...">
       </div>
       <button class="btn-primary" id="header-cta">+ Nueva cotización</button>
     </header>
@@ -183,45 +183,45 @@
                 <span class="form-hint">En “Solo stickers” no se pueden agregar playeras.</span>
               </div>
               <div class="form-group">
-                <label class="form-label">Cliente guardado (opcional)</label>
+                <label class="form-label" for="q-cliente-select">Cliente guardado (opcional)</label>
                 <select id="q-cliente-select" class="form-select" onchange="onQuoteClienteSelectChange(this.value)"><option value="">— Cliente nuevo / sin guardar —</option></select>
                 <input type="hidden" id="q-cliente-id">
               </div>
               <div class="form-group">
-                <label class="form-label">Cliente</label>
+                <label class="form-label" for="q-cliente">Cliente</label>
                 <input type="text" id="q-cliente" class="form-input" placeholder="Nombre del cliente">
               </div>
               <div class="form-group">
-                <label class="form-label">WhatsApp del cliente (opcional)</label>
+                <label class="form-label" for="q-cliente-tel">WhatsApp del cliente (opcional)</label>
                 <input type="tel" id="q-cliente-tel" class="form-input" placeholder="Ej. 7221234567">
               </div>
               <div class="form-group">
-                <label class="form-label">Fecha</label>
+                <label class="form-label" for="q-fecha">Fecha</label>
                 <input type="date" id="q-fecha" class="form-input">
               </div>
               <div class="form-group">
-                <label class="form-label">Entrega prevista</label>
+                <label class="form-label" for="q-fecha-entrega-prevista">Entrega prevista</label>
                 <input type="date" id="q-fecha-entrega-prevista" class="form-input">
               </div>
               <div class="form-group">
-                <label class="form-label">Entrega real</label>
+                <label class="form-label" for="q-fecha-entrega-real">Entrega real</label>
                 <input type="date" id="q-fecha-entrega-real" class="form-input">
                 <span class="form-hint">Se registra al marcar el pedido como entregado.</span>
               </div>
               <div class="form-group">
-                <label class="form-label">Vendedor</label>
+                <label class="form-label" for="q-vendedor">Vendedor</label>
                 <input type="text" id="q-vendedor" class="form-input" placeholder="Ej. SrLucas">
               </div>
               <div class="form-group">
-                <label class="form-label">Artista / colaborador</label>
+                <label class="form-label" for="q-artista">Artista / colaborador</label>
                 <select id="q-artista" class="form-select" onchange="onQuoteArtistChange()"></select>
               </div>
               <div class="form-group" id="q-comision-custom-wrap" style="display:none;">
-                <label class="form-label">% para el artista</label>
+                <label class="form-label" for="q-comision-pct">% para el artista</label>
                 <input type="number" id="q-comision-pct" class="form-input" min="0" max="100" step="0.1" value="0" onchange="renderQuoteItems()">
               </div>
               <div class="form-group">
-                <label class="form-label">Tipo de venta</label>
+                <label class="form-label" for="q-tipo-venta">Tipo de venta</label>
                 <select id="q-tipo-venta" class="form-select" onchange="onQuoteTipoVentaChange()">
                   <option value="Menudeo">🛍️ Menudeo</option>
                   <option value="Mayoreo">📦 Mayoreo</option>
@@ -229,7 +229,7 @@
               </div>
             </div>
             <div class="form-group quote-operational-tags">
-            <label class="form-label">Etiquetas operativas</label>
+            <span class="form-label">Etiquetas operativas</span>
             <div id="q-tags-operativos-container" class="tag-checkbox-list"></div>
           </div>
           </div>
@@ -278,53 +278,52 @@
             <h2 class="quote-step-title">Pago y ajustes</h2>
             <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Método de pago</label>
+              <label class="form-label" for="q-metodo-pago">Método de pago</label>
               <select id="q-metodo-pago" class="form-select" onchange="onQuoteMetodoPagoChange()">
                 <option value="En espera">💵💳❓ En espera</option>
                 <option value="Transferencia">💳 Transferencia</option>
                 <option value="Efectivo">💵 Efectivo</option>
                 <option value="Tarjeta">💳 Tarjeta</option>
                 <option value="Mixto">💵💳 Mixto</option>
-                <option value="Mixto">💵💳 Mixto</option>
                 
               </select>
             </div>
             <div class="form-group" id="q-monto-tarjeta-wrap" style="display:none;">
-              <label class="form-label">Monto con tarjeta ($)</label>
+              <label class="form-label" for="q-monto-tarjeta">Monto con tarjeta ($)</label>
               <input type="number" id="q-monto-tarjeta" class="form-input" min="0" step="0.01" oninput="updateQuoteSummary()">
             </div>
             <div class="form-group">
-              <label class="form-label">Anticipo del cliente ($)</label>
+              <label class="form-label" for="q-anticipo">Anticipo del cliente ($)</label>
               <input type="number" id="q-anticipo" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateQuoteSummary()">
               <span class="form-hint">Para pedidos grandes con anticipo + liquidación (ej. 60/40).</span>
             </div>
           </div>
           <div class="form-row">
-              <div class="form-group" style="flex:2;min-width:260px;">
+              <div class="form-group">
                 <div class="form-switch" style="background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3);">
                   <span class="switch-label">🎁 Venta nula (regalo / cortesía, no cuenta como ingreso)</span>
                   <label class="switch">
-                    <input type="checkbox" id="q-venta-nula" onchange="onQuoteVentaNulaChange()">
+                    <input type="checkbox" id="q-venta-nula" onchange="onQuoteVentaNulaChange()" aria-label="🎁 Venta nula (regalo / cortesía, no cuenta como ingreso)">
                     <span class="slider"></span>
                   </label>
                 </div>
               </div>
               <div class="form-group" id="q-venta-nula-motivo-wrap" style="display:none;">
-                <label class="form-label">Motivo</label>
+                <label class="form-label" for="q-venta-nula-motivo">Motivo</label>
                 <input type="text" id="q-venta-nula-motivo" class="form-input" placeholder="Ej. regalo de cumpleaños">
               </div>
             </div>
             <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Descuento (0% – 15%)</label>
+              <label class="form-label" for="q-descuento-pct">Descuento (0% – 15%)</label>
               <input type="number" id="q-descuento-pct" class="form-input" min="0" max="15" step="1" value="0" oninput="updateQuoteSummary()">
             </div>
-            <div class="form-group" style="flex:2;min-width:260px;">
-              <label class="form-label">&nbsp;</label>
+            <div class="form-group">
+              <span class="form-label">&nbsp;</span>
               <div class="form-switch" style="background:var(--color-surface-alt);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3);">
                 <span class="switch-label">🚀 Pedido urgente (aplica el recargo configurado en Ajustes)</span>
                 <label class="switch">
-                  <input type="checkbox" id="q-urgente" onchange="updateQuoteSummary()">
+                  <input type="checkbox" id="q-urgente" onchange="updateQuoteSummary()" aria-label="🚀 Pedido urgente (aplica el recargo configurado en Ajustes)">
                   <span class="slider"></span>
                 </label>
               </div>
@@ -399,7 +398,7 @@
         </p>
 
         <div class="form-group">
-          <label class="form-label">Notas de la cotización</label>
+          <label class="form-label" for="q-notas">Notas de la cotización</label>
           <textarea id="q-notas" class="form-textarea" placeholder="Ej. entregar el viernes, incluye bolsa sorpresa..."></textarea>
         </div>
 
@@ -441,19 +440,19 @@
           <button class="btn-primary" onclick="openVentaRapida()">⚡ Nueva venta</button>
         </div>
         <div class="filter-bar">
-          <select class="filter-select" id="vs-periodo">
+          <select class="filter-select" id="vs-periodo" aria-label="Periodo">
             <option value="hoy">Hoy</option>
             <option value="semana">Últimos 7 días</option>
             <option value="mes" selected>Este mes</option>
             <option value="todo">Todo el historial</option>
           </select>
-          <select class="filter-select" id="vs-bazar"></select>
-          <select class="filter-select" id="vs-metodo">
+          <select class="filter-select" id="vs-bazar" aria-label="Lugar de venta"></select>
+          <select class="filter-select" id="vs-metodo" aria-label="Método de pago">
             <option value="all">Efectivo y tarjeta</option>
             <option value="Efectivo">💵 Efectivo</option>
             <option value="Tarjeta">💳 Tarjeta</option>
           </select>
-          <input type="search" id="vs-buscar" class="form-input" placeholder="Buscar producto..." style="max-width:240px;" autocomplete="off">
+          <input type="search" id="vs-buscar" class="form-input" placeholder="Buscar producto..." style="max-width:240px;" autocomplete="off" aria-label="Buscar producto...">
         </div>
         <div class="sticker-count-row">
           <div class="sticker-count-card size-total">
@@ -483,17 +482,17 @@
 
       <section id="page-cotizaciones" class="page-section">
         <div class="filter-bar">
-          <select class="filter-select" id="filter-cot-estado" onchange="renderCotizacionesGuardadas()">
+          <select class="filter-select" id="filter-cot-estado" aria-label="Filtrar por estado" onchange="renderCotizacionesGuardadas()">
             <option value="all">Todos los estados</option>
             <option value="Pendiente">⏳ Pendiente</option>
             <option value="Confirmado">✅ Confirmado</option>
             <option value="Pagado">💰 Pagado</option>
             <option value="Entregado">📦 Entregado</option>
           </select>
-          <select class="filter-select" id="filter-cot-bazar" onchange="renderCotizacionesGuardadas()">
+          <select class="filter-select" id="filter-cot-bazar" aria-label="Filtrar por bazar" onchange="renderCotizacionesGuardadas()">
             <option value="all">Todos los bazares</option>
           </select>
-          <select class="filter-select" id="filter-cot-tipo" onchange="renderCotizacionesGuardadas()">
+          <select class="filter-select" id="filter-cot-tipo" aria-label="Filtrar por tipo de venta" onchange="renderCotizacionesGuardadas()">
             <option value="all">Menudeo y mayoreo</option>
             <option value="Menudeo">🛍️ Menudeo</option>
             <option value="Mayoreo">📦 Mayoreo</option>
@@ -645,16 +644,16 @@
         <div class="filter-bar filter-panel" id="inv-filtros-panel">
           <button class="filter-chip active" data-tag="all" onclick="setPlayeraTagFilter('all',this)">Todas las etiquetas</button>
           <div id="playera-tag-chips" style="display:inline-flex;gap:8px;flex-wrap:wrap;"></div>
-          <select class="filter-select" id="filter-playera-estado" onchange="renderPlayeras()">
+          <select class="filter-select" id="filter-playera-estado" aria-label="Filtrar por estado" onchange="renderPlayeras()">
             <option value="all">Todos los estados</option>
             <option value="En stock">🟢 En stock</option>
             <option value="En proceso">🟡 En proceso</option>
             <option value="Agotado">🔴 Agotado</option>
           </select>
-          <select class="filter-select" id="filter-playera-color" onchange="renderPlayeras()">
+          <select class="filter-select" id="filter-playera-color" aria-label="Filtrar por color" onchange="renderPlayeras()">
             <option value="all">Todos los colores</option>
           </select>
-          <select class="filter-select" id="filter-playera-talla" onchange="renderPlayeras()">
+          <select class="filter-select" id="filter-playera-talla" aria-label="Filtrar por talla" onchange="renderPlayeras()">
             <option value="all">Todas las tallas</option>
           </select>
         </div>
@@ -702,10 +701,10 @@
               <div class="inventory-summary-card inventory-summary-cost">
                 <span id="inventory-total-cost-label">Costo de las puras prendas</span>
                 <strong id="inventory-total-cost">$0.00</strong>
-                <div class="inventory-cost-mode" role="group" aria-label="Tipo de costo mostrado">
+                <fieldset class="inventory-cost-mode" aria-label="Tipo de costo mostrado">
                   <button type="button" class="active" data-inventory-cost-mode="prendas" onclick="cambiarResumenCostoInventario('prendas')">Puras prendas</button>
                   <button type="button" data-inventory-cost-mode="produccion" onclick="cambiarResumenCostoInventario('produccion')">Producción total</button>
-                </div>
+                </fieldset>
                 <small id="inventory-total-cost-help">Solo costo de la playera o prenda × unidades disponibles; excluye impresión y estampado.</small>
                 <div class="inventory-summary-status">
                   <span>En proceso <strong id="inventory-units-process">0</strong></span>
@@ -1051,7 +1050,7 @@
           </div>
           <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
             <div class="form-group" style="margin:0;min-width:240px;">
-              <select id="caja-selector" class="form-select" onchange="renderCaja()"></select>
+              <select id="caja-selector" aria-label="Caja a consultar" class="form-select" onchange="renderCaja()"></select>
             </div>
             <button type="button" class="btn-secondary" id="caja-descargar">⬇️ Descargar esta caja</button>
           </div>
@@ -1083,12 +1082,12 @@
         <div class="quote-meta-card">
           <div class="form-row">
             <div class="form-group" id="caja-fondo-wrap">
-              <label class="form-label">Fondo de caja inicial ($)</label>
+              <label class="form-label" for="caja-fondo">Fondo de caja inicial ($)</label>
               <input type="number" id="caja-fondo" class="form-input" min="0" step="0.01" placeholder="0.00" onchange="updateFondoCaja(this.value)">
               <span class="form-hint" id="caja-fondo-hint">Cambio con el que abriste la caja.</span>
             </div>
             <div class="form-group">
-              <label class="form-label">Efectivo contado ahora ($)</label>
+              <label class="form-label" for="caja-contado">Efectivo contado ahora ($)</label>
               <input type="number" id="caja-contado" class="form-input" min="0" step="0.01" placeholder="Cuenta tu caja para ver si cuadra" onchange="updateEfectivoContadoCaja(this.value)">
             </div>
           </div>
@@ -1105,7 +1104,7 @@
             <p class="section-sub">Qué diseños preguntan más los clientes, aunque no los compren. Úsalo en un bazar o fuera de él.</p>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <select id="interes-filtro" class="form-select" onchange="renderInteres()"></select>
+            <select id="interes-filtro" aria-label="Filtrar consultas" class="form-select" onchange="renderInteres()"></select>
             <button class="btn-primary" onclick="openModalConsulta()">+ Registrar consulta</button>
           </div>
         </div>
@@ -1214,25 +1213,25 @@
           <h3 class="section-title" style="font-size:var(--fs-md);margin-bottom:var(--space-3);">🧮 Cierre de caja</h3>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">💵 Ventas en efectivo</label>
+              <span class="form-label">💵 Ventas en efectivo</span>
               <p class="cost-preview" id="bd-cierre-efectivo" style="margin:0;">$0.00</p>
             </div>
             <div class="form-group">
-              <label class="form-label">💳 Ventas con tarjeta</label>
+              <span class="form-label">💳 Ventas con tarjeta</span>
               <p class="cost-preview" id="bd-cierre-tarjeta" style="margin:0;">$0.00</p>
             </div>
             <div class="form-group">
-              <label class="form-label">Comisión de terminal</label>
+              <span class="form-label">Comisión de terminal</span>
               <p class="cost-preview" id="bd-cierre-comision" style="margin:0;color:var(--color-danger);">− $0.00</p>
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Fondo de caja + ventas efectivo = efectivo esperado</label>
+              <span class="form-label">Fondo de caja + ventas efectivo = efectivo esperado</span>
               <p class="cost-preview" id="bd-cierre-esperado" style="margin:0;">$0.00</p>
             </div>
             <div class="form-group">
-              <label class="form-label">Efectivo contado al cerrar ($)</label>
+              <label class="form-label" for="bd-efectivo-contado">Efectivo contado al cerrar ($)</label>
               <input type="number" id="bd-efectivo-contado" class="form-input" min="0" step="0.01" placeholder="Cuenta tu caja al final del día" onchange="updateEfectivoContadoBazar(this.value)">
             </div>
           </div>
@@ -1439,12 +1438,12 @@
       <section id="page-ajustes" class="page-section">
 
         <!-- Pestañas de Ajustes -->
-        <nav class="settings-top-nav" id="ajustes-tabs" role="tablist" aria-label="Secciones de ajustes">
+        <div class="settings-top-nav" id="ajustes-tabs" role="tablist" aria-label="Secciones de ajustes">
           <button type="button" class="settings-nav-tab active" role="tab" aria-selected="true" onclick="switchAjustesTab('tab-general', this)">General</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-apariencia', this)">Apariencia</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-productos', this)">Tipos de DTF</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-respaldo', this)">Respaldo y nube</button>
-        </nav>
+        </div>
 
         <!-- ================= GENERAL ================= -->
         <div id="tab-general" class="ajustes-tab-content">
@@ -1670,196 +1669,189 @@
 
 <!-- MODAL: PLAYERA -->
 <div class="modal-overlay" id="modal-playera">
-  <div class="modal-box">
+  <div class="modal-box modal-box-wide">
     <div class="modal-header">
       <h2 class="modal-title" id="modal-playera-title">Nueva playera</h2>
-      <button class="modal-close" data-modal="modal-playera">✕</button>
+      <button class="modal-close" data-modal="modal-playera" aria-label="Cerrar">✕</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body pm-body">
       <input type="hidden" id="p-id">
-      <div class="form-row">
-        <div class="form-group" style="flex:2;">
-          <label class="form-label">Nombre del diseño *</label>
-          <input type="text" id="p-nombre" class="form-input" placeholder="Ej. Playera Negra Miku">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Tipo de prenda</label>
-          <select id="p-tipo" class="form-select" onchange="onPlayeraTipoChange()">
-            <option>Playera</option>
-            <option>Playera Oversize</option>
-            <option>Manga larga</option>
-            <option>Sudadera</option>
-            <option>Cuello V Mujer</option>
-            <option>Cuello V Hombre</option>
-            <option>Sudadera sin capucha</option>
-            <option>Playera de tirantes</option>
-            <option>Playera sin mangas</option>
-            <option>Corte de Relog</option>
-            <option>Niños</option>
-            <option>Bolsa Sorpresa</option>
 
-          </select>
-          <span class="form-hint">Al cambiar el tipo se cargan el costo y el precio sugeridos; puedes modificarlos para esta prenda.</span>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Talla</label>
-          <input type="text" id="p-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G, XG" oninput="updatePlayeraPreview()">
-          <datalist id="talla-list">
-            <option value="CH"><option value="MD"><option value="G"><option value="XG"><option value="XXG">
-          </datalist>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Color</label>
-          <select id="p-color" class="form-select" onchange="onPlayeraColorChange()"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Stock (piezas)</label>
-          <input type="number" id="p-stock" class="form-input" min="0" value="1">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Stock mínimo (alerta)</label>
-          <input type="number" id="p-stock-minimo" class="form-input" min="0" value="0">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <div class="form-switch">
-            <span class="switch-label">🎁 Prenda del cliente (costo de playera $0.00)</span>
-            <label class="switch">
-              <input type="checkbox" id="p-prenda-cliente" onchange="onPrendaClienteChange()">
-              <span class="slider"></span>
-            </label>
+      <section class="pm-section">
+        <h3 class="pm-section-title">👕 Datos de la prenda</h3>
+        <div class="pm-grid">
+          <div class="form-group pm-6">
+            <label class="form-label" for="p-nombre">Nombre del diseño *</label>
+            <input type="text" id="p-nombre" class="form-input" placeholder="Ej. Playera Negra Miku">
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-tipo">Tipo de prenda</label>
+            <select id="p-tipo" class="form-select" onchange="onPlayeraTipoChange()">
+              <option>Playera</option>
+              <option>Playera Oversize</option>
+              <option>Manga larga</option>
+              <option>Sudadera</option>
+              <option>Cuello V Mujer</option>
+              <option>Cuello V Hombre</option>
+              <option>Sudadera sin capucha</option>
+              <option>Playera de tirantes</option>
+              <option>Playera sin mangas</option>
+              <option>Corte de Relog</option>
+              <option>Niños</option>
+              <option>Bolsa Sorpresa</option>
+            </select>
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-color">Color</label>
+            <select id="p-color" class="form-select" onchange="onPlayeraColorChange()"></select>
+          </div>
+          <p class="form-hint pm-12">Al cambiar el tipo o el color se cargan el costo y el precio sugeridos; puedes modificarlos para esta prenda.</p>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-talla">Talla</label>
+            <input type="text" id="p-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G, XG" oninput="updatePlayeraPreview()">
+            <datalist id="talla-list">
+              <option value="CH"><option value="MD"><option value="G"><option value="XG"><option value="XXG">
+            </datalist>
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-stock">Stock (piezas)</label>
+            <input type="number" id="p-stock" class="form-input" min="0" value="1">
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-stock-minimo">Stock mínimo (alerta)</label>
+            <input type="number" id="p-stock-minimo" class="form-input" min="0" value="0">
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-estado">Estado</label>
+            <select id="p-estado" class="form-select">
+              <option>En stock</option><option selected>En proceso</option><option>Agotado</option>
+            </select>
           </div>
         </div>
-        <div class="form-group">
-          <div class="form-switch">
-            <span class="switch-label">✨ DTF especial</span>
-            <label class="switch">
-              <input type="checkbox" id="p-dtf-especial" onchange="onPlayeraDtfEspecialChange()">
-              <span class="slider"></span>
-            </label>
+      </section>
+
+      <section class="pm-section">
+        <h3 class="pm-section-title">💰 Costos y precios</h3>
+        <div class="pm-grid">
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-costo-playera">Costo de la playera ($)</label>
+            <input type="number" id="p-costo-playera" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-precio-venta">Precio menudeo ($)</label>
+            <input type="number" id="p-precio-venta" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-precio-mayoreo">Precio mayoreo ($)</label>
+            <input type="number" id="p-precio-mayoreo" class="form-input" min="0" step="0.01" placeholder="Opcional">
+          </div>
+          <div class="form-group pm-3">
+            <label class="form-label" for="p-prioridad">Prioridad de venta</label>
+            <select id="p-prioridad" class="form-select">
+              <option>Alta</option><option>Media</option><option>Baja</option>
+            </select>
+          </div>
+
+          <div class="form-group pm-6">
+            <div class="form-switch pm-switch">
+              <span class="switch-label">🎁 Prenda del cliente (costo $0.00)</span>
+              <label class="switch">
+                <input type="checkbox" id="p-prenda-cliente" onchange="onPrendaClienteChange()" aria-label="🎁 Prenda del cliente (costo $0.00)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group pm-6">
+            <div class="form-switch pm-switch">
+              <span class="switch-label">✨ DTF especial</span>
+              <label class="switch">
+                <input type="checkbox" id="p-dtf-especial" onchange="onPlayeraDtfEspecialChange()" aria-label="✨ DTF especial">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group pm-6">
+            <div id="p-dtf-especial-wrap" style="display:none;">
+              <label class="form-label" for="p-dtf-tipo">Tipo de DTF especial</label>
+              <select id="p-dtf-tipo" class="form-select" onchange="onPlayeraDtfTipoChange()"></select>
+            </div>
+            <div id="p-dtf-metros-wrap">
+              <label class="form-label" for="p-dtf-metros">Metros de DTF utilizados</label>
+              <input type="number" id="p-dtf-metros" class="form-input" min="0" step="0.00001" oninput="onPlayeraDtfMetrosChange(this.value)">
+            </div>
+            <span class="form-hint" id="p-dtf-precio-hint">Se calcula con los metros y el precio del DTF estándar.</span>
+          </div>
+          <div id="p-area-wrap" class="form-group pm-6">
+            <label class="form-label" for="p-num-estampados"># de estampados</label>
+            <input type="number" id="p-num-estampados" class="form-input pm-num" min="1" value="1" onchange="onPlayeraNumEstampadosChange()">
+            <div id="p-estampados-list" class="estampados-list"></div>
+          </div>
+
+          <p class="cost-preview pm-12" id="p-cost-preview">Costo del estampado: $0.00 — Costo total: $0.00</p>
+        </div>
+      </section>
+
+      <section class="pm-section">
+        <h3 class="pm-section-title">🏪 Venta, etiquetas y cliente</h3>
+        <div class="pm-grid">
+          <div class="form-group pm-6">
+            <label class="form-label" for="p-estado-venta">¿Ya salió del inventario?</label>
+            <select id="p-estado-venta" class="form-select" onchange="onPlayeraEstadoVentaChange()">
+              <option value="Disponible">🟢 No, sigue disponible</option>
+              <option value="Vendida">✅ Vendida</option>
+              <option value="Venta nula">🎁 Regalada (venta nula)</option>
+              <option value="Reventa">🔁 Se vuelve a vender (stock 1)</option>
+            </select>
+            <div id="p-metodo-pago-wrap" class="pm-subfield" style="display:none;">
+              <label class="form-label" for="p-metodo-pago">Método de pago</label>
+              <select id="p-metodo-pago" class="form-select">
+                <option value="Efectivo">💵 Efectivo</option>
+                <option value="Tarjeta">💳 Tarjeta</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group pm-6">
+            <label class="form-label" for="p-cliente">Cliente asociado (opcional)</label>
+            <select id="p-cliente" class="form-select"><option value="">— Sin cliente asignado —</option></select>
+          </div>
+
+          <div class="form-group pm-8">
+            <label class="form-label" for="p-artista">Artista</label>
+            <select id="p-artista" class="form-select" onchange="onPlayeraArtistChange()"></select>
+          </div>
+          <div class="form-group pm-4">
+            <label class="form-label" for="p-pct-artista">% comisión del artista</label>
+            <input type="number" id="p-pct-artista" class="form-input" min="0" max="100" step="1" oninput="updatePlayeraPreview()">
+          </div>
+          <p class="cost-preview pm-12" id="p-comision-preview">Parte artista: $0.00 — Parte estudio: $0.00</p>
+
+          <div class="form-group pm-12">
+            <div class="pm-inline">
+              <div class="form-switch pm-switch">
+                <span class="switch-label">🏷️ Lleva etiqueta de talla</span>
+                <label class="switch">
+                  <input type="checkbox" id="p-tiene-etiqueta" onchange="onPlayeraTieneEtiquetaChange()" aria-label="🏷️ Lleva etiqueta de talla">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div id="p-etiqueta-talla-wrap" style="display:none;">
+                <label class="form-label" for="p-etiqueta-talla-id">Etiqueta de talla a usar (su stock se descuenta al guardar)</label>
+                <select id="p-etiqueta-talla-id" class="form-select" onchange="updatePlayeraPreview()"></select>
+              </div>
+            </div>
+          </div>
+          <div class="form-group pm-12">
+            <span class="form-label">Etiquetas</span>
+            <div id="p-tags-container" class="tag-checkbox-list"></div>
+          </div>
+
+          <div class="form-group pm-12">
+            <label class="form-label" for="p-notas">Notas</label>
+            <textarea id="p-notas" class="form-textarea pm-notas" placeholder="Opcional"></textarea>
           </div>
         </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Costo de la playera ($)</label>
-          <input type="number" id="p-costo-playera" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
-          <span class="form-hint">Se suma al costo de impresión para calcular el costo total y la ganancia.</span>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group" id="p-dtf-especial-wrap" style="display:none;">
-          <label class="form-label" for="p-dtf-tipo">Tipo de DTF Especial</label>
-          <select id="p-dtf-tipo" class="form-select" onchange="onPlayeraDtfTipoChange()"></select>
-        </div>
-        <div class="form-group" id="p-dtf-metros-wrap">
-          <label class="form-label" for="p-dtf-metros">Metros de DTF utilizados</label>
-          <input type="number" id="p-dtf-metros" class="form-input" min="0" step="0.00001" oninput="onPlayeraDtfMetrosChange(this.value)">
-          <span class="form-hint" id="p-dtf-precio-hint">Se calcula con los metros y el precio del DTF estándar.</span>
-        </div>
-      </div>
-
-      <div id="p-area-wrap">
-        <div class="form-group">
-          <label class="form-label"># de estampados</label>
-          <input type="number" id="p-num-estampados" class="form-input" min="1" value="1" onchange="onPlayeraNumEstampadosChange()" style="max-width:120px;">
-        </div>
-        <div id="p-estampados-list" class="estampados-list"></div>
-      </div>
-
-      <div class="form-group">
-        <div class="form-switch">
-          <span class="switch-label">Lleva etiqueta</span>
-          <label class="switch">
-            <input type="checkbox" id="p-tiene-etiqueta" onchange="onPlayeraTieneEtiquetaChange()">
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-      <div class="form-group" id="p-etiqueta-talla-wrap" style="display:none;">
-        <label class="form-label">Etiqueta de talla a usar</label>
-        <select id="p-etiqueta-talla-id" class="form-select" onchange="updatePlayeraPreview()"></select>
-        <span class="form-hint">Elige cuál etiqueta física se le cose a esta playera — su stock se descuenta al guardar.</span>
-      </div>
-
-      <p class="cost-preview" id="p-cost-preview">Costo del estampado: $0.00 — Costo total: $0.00</p>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Precio de venta (menudeo) ($)</label>
-          <input type="number" id="p-precio-venta" class="form-input" min="0" step="0.01" oninput="updatePlayeraPreview()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Precio de mayoreo ($)</label>
-          <input type="number" id="p-precio-mayoreo" class="form-input" min="0" step="0.01" placeholder="Opcional">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Prioridad de venta</label>
-          <select id="p-prioridad" class="form-select">
-            <option>Alta</option><option>Media</option><option>Baja</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Estado</label>
-          <select id="p-estado" class="form-select">
-            <option>En stock</option><option selected>En proceso</option><option>Agotado</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">¿Ya salió del inventario?</label>
-          <select id="p-estado-venta" class="form-select" onchange="onPlayeraEstadoVentaChange()">
-            <option value="Disponible">🟢 No, sigue disponible</option>
-            <option value="Vendida">✅ Vendida</option>
-            <option value="Venta nula">🎁 Regalada (venta nula)</option>
-            <option value="Reventa">🔁 Se vuelve a vender (stock 1)</option>
-          </select>
-          <span class="form-hint">Al guardar, pasa sola a la pestaña "Vendidas y regaladas". Puedes cambiarla cuando quieras.</span>
-        </div>
-        <div class="form-group" id="p-metodo-pago-wrap" style="display:none;">
-          <label class="form-label">Método de pago</label>
-          <select id="p-metodo-pago" class="form-select">
-            <option value="Efectivo">💵 Efectivo</option>
-            <option value="Tarjeta">💳 Tarjeta</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Etiquetas</label>
-        <div id="p-tags-container" class="tag-checkbox-list"></div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Artista</label>
-          <select id="p-artista" class="form-select" onchange="onPlayeraArtistChange()"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">% Comisión del artista (sobre la ganancia)</label>
-          <input type="number" id="p-pct-artista" class="form-input" min="0" max="100" step="1" oninput="updatePlayeraPreview()">
-        </div>
-      </div>
-      <p class="cost-preview" id="p-comision-preview">Parte artista: $0.00 — Parte estudio: $0.00</p>
-
-      <div class="form-group">
-        <label class="form-label">Cliente asociado (encargo o venta, opcional)</label>
-        <select id="p-cliente" class="form-select"><option value="">— Sin cliente asignado —</option></select>
-        <span class="form-hint">Asocia esta playera a un cliente; si la marcas como vendida, aparecerá en su historial de compras.</span>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Notas</label>
-        <textarea id="p-notas" class="form-textarea" placeholder="Opcional"></textarea>
-      </div>
+      </section>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-playera">Cancelar</button>
@@ -1878,39 +1870,39 @@
     <div class="modal-body">
       <input type="hidden" id="s-id">
       <div class="form-group">
-        <label class="form-label">Nombre del diseño *</label>
+        <label class="form-label" for="s-nombre">Nombre del diseño *</label>
         <input type="text" id="s-nombre" class="form-input" placeholder="Ej. Gato alien">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Tamaño</label>
+          <label class="form-label" for="s-tamano">Tamaño</label>
           <select id="s-tamano" class="form-select">
             <option>Chico</option><option>Mediano</option><option>Grande</option>
           </select>
         </div>
           <div class="form-group">
-            <label class="form-label">Ancho (cm)</label>
+            <label class="form-label" for="s-ancho">Ancho (cm)</label>
             <input type="number" id="s-ancho" class="form-input" min="0" step="0.01" oninput="onStickerDimensionChange()">
           </div>
           <div class="form-group">
-            <label class="form-label">Largo (cm)</label>
+            <label class="form-label" for="s-largo">Largo (cm)</label>
             <input type="number" id="s-largo" class="form-input" min="0" step="0.01" oninput="onStickerDimensionChange()">
           </div>
         <div class="form-group">
-            <label class="form-label">Costo producción ($)</label>
+            <label class="form-label" for="s-costo">Costo producción ($)</label>
             <input type="number" id="s-costo" class="form-input" min="0" step="0.01" readonly>
             <span class="form-hint" id="s-costo-preview">Costo calculado según el método de impresión seleccionado.</span>
           </div>
           <div class="form-group">
-            <label class="form-label">Precio de venta ($)</label>
+            <label class="form-label" for="s-precio-venta">Precio de venta ($)</label>
             <input type="number" id="s-precio-venta" class="form-input" min="0" step="0.01">
         </div>
         <div class="form-group">
-          <label class="form-label">Stock</label>
+          <label class="form-label" for="s-stock">Stock</label>
           <input type="number" id="s-stock" class="form-input" min="0" value="1">
         </div>
         <div class="form-group">
-          <label class="form-label">Stock mínimo (alerta)</label>
+          <label class="form-label" for="s-stock-minimo">Stock mínimo (alerta)</label>
           <input type="number" id="s-stock-minimo" class="form-input" min="0" value="0">
         </div>
       </div>
@@ -1919,7 +1911,7 @@
           <div class="form-switch">
             <span class="switch-label">✨ DTF especial</span>
             <label class="switch">
-              <input type="checkbox" id="s-dtf-especial" onchange="onStickerDtfEspecialChange()">
+              <input type="checkbox" id="s-dtf-especial" onchange="onStickerDtfEspecialChange()" aria-label="✨ DTF especial">
               <span class="slider"></span>
             </label>
           </div>
@@ -1938,24 +1930,24 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Prioridad de venta</label>
+          <label class="form-label" for="s-prioridad">Prioridad de venta</label>
           <select id="s-prioridad" class="form-select">
             <option>Alta</option><option>Media</option><option>Baja</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Estado</label>
+          <label class="form-label" for="s-estado">Estado</label>
           <select id="s-estado" class="form-select">
             <option>En stock</option><option>Agotado</option>
           </select>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Cliente (encargo, opcional)</label>
+        <label class="form-label" for="s-cliente">Cliente (encargo, opcional)</label>
         <select id="s-cliente" class="form-select"><option value="">— Sin cliente asignado —</option></select>
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
+        <label class="form-label" for="s-notas">Notas</label>
         <input type="text" id="s-notas" class="form-input" placeholder="Opcional">
       </div>
     </div>
@@ -1976,11 +1968,11 @@
     <div class="modal-body">
       <input type="hidden" id="col-id">
       <div class="form-group">
-        <label class="form-label">Nombre del color</label>
+        <label class="form-label" for="col-nombre">Nombre del color</label>
         <input type="text" id="col-nombre" class="form-input" placeholder="Ej. Rojo ladrillo">
       </div>
       <div class="form-group">
-        <label class="form-label">Tono</label>
+        <label class="form-label" for="col-hex">Tono</label>
         <input type="color" id="col-hex" class="form-input" style="height:44px;padding:4px;">
       </div>
     </div>
@@ -2001,7 +1993,7 @@
     <div class="modal-body">
       <input type="hidden" id="tp-id">
       <div class="form-group">
-        <label class="form-label">Nombre del tipo de ropa</label>
+        <label class="form-label" for="tp-nombre">Nombre del tipo de ropa</label>
         <input type="text" id="tp-nombre" class="form-input" placeholder="Ej. Sudadera, Polo...">
       </div>
       <div class="settings-card" style="margin-bottom:var(--space-3);">
@@ -2049,11 +2041,11 @@
     <div class="modal-body">
       <input type="hidden" id="et-id">
       <div class="form-group">
-        <label class="form-label">Nombre de la etiqueta</label>
+        <label class="form-label" for="et-nombre">Nombre de la etiqueta</label>
         <input type="text" id="et-nombre" class="form-input" placeholder="Ej. Anime, Oversize...">
       </div>
       <div class="form-group">
-        <label class="form-label">Color de la etiqueta</label>
+        <label class="form-label" for="et-color">Color de la etiqueta</label>
         <input type="color" id="et-color" class="form-input" style="height:44px;padding:4px;" value="#e3363d">
       </div>
     </div>
@@ -2074,11 +2066,11 @@
     <div class="modal-body">
       <input type="hidden" id="eo-id">
       <div class="form-group">
-        <label class="form-label">Nombre de la etiqueta</label>
+        <label class="form-label" for="eo-nombre">Nombre de la etiqueta</label>
         <input type="text" id="eo-nombre" class="form-input" placeholder="Ej. Urgente, Retrabajo, Cliente VIP...">
       </div>
       <div class="form-group">
-        <label class="form-label">Color de la etiqueta</label>
+        <label class="form-label" for="eo-color">Color de la etiqueta</label>
         <input type="color" id="eo-color" class="form-input" style="height:44px;padding:4px;" value="#e3363d">
       </div>
     </div>
@@ -2114,11 +2106,11 @@
       <input type="hidden" id="te-id">
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Talla</label>
+          <label class="form-label" for="te-talla">Talla</label>
           <input type="text" id="te-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G">
         </div>
         <div class="form-group">
-          <label class="form-label">Color de la etiqueta</label>
+          <label class="form-label" for="te-color">Color de la etiqueta</label>
           <select id="te-color" class="form-select">
             <option>Negro</option>
             <option>Blanco</option>
@@ -2126,7 +2118,7 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Cantidad en stock</label>
+        <label class="form-label" for="te-cantidad">Cantidad en stock</label>
         <input type="number" id="te-cantidad" class="form-input" min="0" value="0">
       </div>
     </div>
@@ -2147,11 +2139,11 @@
     <div class="modal-body">
       <input type="hidden" id="a-id">
       <div class="form-group">
-        <label class="form-label">Nombre</label>
+        <label class="form-label" for="a-nombre">Nombre</label>
         <input type="text" id="a-nombre" class="form-input" placeholder="Ej. Obake">
       </div>
       <div class="form-group">
-        <label class="form-label">Tipo de colaboración</label>
+        <label class="form-label" for="a-modo">Tipo de colaboración</label>
         <select id="a-modo" class="form-select" onchange="onArtistModeChange()">
           <option value="ninguno">Sin comisión (100% estudio)</option>
           <option value="venta">Solo venta (artista 30% / estudio 70%)</option>
@@ -2162,16 +2154,16 @@
       </div>
       <div class="form-row" id="a-pct-row">
         <div class="form-group">
-          <label class="form-label">% Artista</label>
+          <label class="form-label" for="a-pct-artista">% Artista</label>
           <input type="number" id="a-pct-artista" class="form-input" min="0" max="100" value="0">
         </div>
         <div class="form-group">
-          <label class="form-label">% Estudio</label>
+          <label class="form-label" for="a-pct-estudio">% Estudio</label>
           <input type="number" id="a-pct-estudio" class="form-input" min="0" max="100" value="100">
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Notas / contacto</label>
+        <label class="form-label" for="a-notas">Notas / contacto</label>
         <input type="text" id="a-notas" class="form-input" placeholder="Opcional">
       </div>
     </div>
@@ -2192,19 +2184,19 @@
     <div class="modal-body">
       <input type="hidden" id="cl-id">
       <div class="form-group">
-        <label class="form-label">Nombre</label>
+        <label class="form-label" for="cl-nombre">Nombre</label>
         <input type="text" id="cl-nombre" class="form-input" placeholder="Nombre del cliente">
       </div>
       <div class="form-group">
-        <label class="form-label">WhatsApp / Teléfono (opcional)</label>
+        <label class="form-label" for="cl-telefono">WhatsApp / Teléfono (opcional)</label>
         <input type="tel" id="cl-telefono" class="form-input" placeholder="Ej. 7221234567">
       </div>
       <div class="form-group">
-        <label class="form-label">Etiquetas</label>
+        <span class="form-label">Etiquetas</span>
         <div id="cl-tags-container" class="tag-checkbox-list"></div>
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
+        <label class="form-label" for="cl-notas">Notas</label>
         <textarea id="cl-notas" class="form-textarea" placeholder="Opcional"></textarea>
       </div>
     </div>
@@ -2224,11 +2216,11 @@
     <div class="modal-body">
       <input type="hidden" id="cet-id">
       <div class="form-group">
-        <label class="form-label">Nombre</label>
+        <label class="form-label" for="cet-nombre">Nombre</label>
         <input type="text" id="cet-nombre" class="form-input" placeholder="Ej. Cliente VIP">
       </div>
       <div class="form-group">
-        <label class="form-label">Color</label>
+        <label class="form-label" for="cet-color">Color</label>
         <input type="color" id="cet-color" class="form-input" value="#e3363d">
       </div>
     </div>
@@ -2248,33 +2240,33 @@
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">Producto</label>
+        <label class="form-label" for="consulta-producto">Producto</label>
         <select id="consulta-producto" class="form-select" onchange="onConsultaProductoChange()"></select>
       </div>
       <div class="form-group" id="consulta-nombre-wrap">
-        <label class="form-label">Nombre del producto</label>
+        <label class="form-label" for="consulta-nombre">Nombre del producto</label>
         <input type="text" id="consulta-nombre" class="form-input" placeholder="Ej. Diseño que no tengo en inventario">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">¿Cuántas veces preguntaron?</label>
+          <label class="form-label" for="consulta-cantidad">¿Cuántas veces preguntaron?</label>
           <input type="number" id="consulta-cantidad" class="form-input" min="1" step="1" value="1">
         </div>
         <div class="form-group">
-          <label class="form-label">Fecha</label>
+          <label class="form-label" for="consulta-fecha">Fecha</label>
           <input type="date" id="consulta-fecha" class="form-input">
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Bazar (opcional)</label>
+        <label class="form-label" for="consulta-bazar">Bazar (opcional)</label>
         <select id="consulta-bazar" class="form-select"></select>
       </div>
       <div class="form-group">
-        <label class="form-label">Etiquetas</label>
+        <span class="form-label">Etiquetas</span>
         <div id="consulta-tags-container" class="tag-checkbox-list"></div>
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
+        <label class="form-label" for="consulta-notas">Notas</label>
         <input type="text" id="consulta-notas" class="form-input" placeholder="Opcional">
       </div>
     </div>
@@ -2294,11 +2286,11 @@
     <div class="modal-body">
       <input type="hidden" id="cqt-id">
       <div class="form-group">
-        <label class="form-label">Nombre</label>
+        <label class="form-label" for="cqt-nombre">Nombre</label>
         <input type="text" id="cqt-nombre" class="form-input" placeholder="Ej. Preguntó por envío">
       </div>
       <div class="form-group">
-        <label class="form-label">Color</label>
+        <label class="form-label" for="cqt-color">Color</label>
         <input type="color" id="cqt-color" class="form-input" value="#e0a23a">
       </div>
     </div>
@@ -2318,19 +2310,19 @@
     <div class="modal-body">
       <input type="hidden" id="prov-id">
       <div class="form-group">
-        <label class="form-label">Nombre del proveedor</label>
+        <label class="form-label" for="prov-nombre">Nombre del proveedor</label>
         <input type="text" id="prov-nombre" class="form-input" placeholder="Ej. Telas del Centro">
       </div>
       <div class="form-group">
-        <label class="form-label">Qué provee</label>
+        <label class="form-label" for="prov-producto">Qué provee</label>
         <input type="text" id="prov-producto" class="form-input" placeholder="Ej. Playeras, DTF, bolsas...">
       </div>
       <div class="form-group">
-        <label class="form-label">Contacto</label>
+        <label class="form-label" for="prov-contacto">Contacto</label>
         <input type="text" id="prov-contacto" class="form-input" placeholder="Teléfono / WhatsApp">
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
+        <label class="form-label" for="prov-notas">Notas</label>
         <textarea id="prov-notas" class="form-textarea" placeholder="Opcional"></textarea>
       </div>
     </div>
@@ -2351,41 +2343,41 @@
     <div class="modal-body">
       <input type="hidden" id="merma-id">
       <div class="form-group">
-        <label class="form-label">Playera del inventario (opcional)</label>
+        <label class="form-label" for="merma-playera">Playera del inventario (opcional)</label>
         <select id="merma-playera" class="form-select" onchange="onMermaPlayeraChange()"><option value="">— Sin playera / pieza libre —</option></select>
         <span class="form-hint">Si la eliges, se descuenta del stock y se calcula su costo real automáticamente.</span>
       </div>
       <div class="form-group" id="merma-nombre-wrap">
-        <label class="form-label">Concepto</label>
+        <label class="form-label" for="merma-nombre">Concepto</label>
         <input type="text" id="merma-nombre" class="form-input" placeholder="Ej. Playera manchada con DTF">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Cantidad</label>
+          <label class="form-label" for="merma-cantidad">Cantidad</label>
           <input type="number" id="merma-cantidad" class="form-input" min="1" step="1" value="1" oninput="updateMermaCostoPreview()">
         </div>
         <div class="form-group">
-          <label class="form-label">Costo unitario ($)</label>
+          <label class="form-label" for="merma-costo-unitario">Costo unitario ($)</label>
           <input type="number" id="merma-costo-unitario" class="form-input" min="0" step="0.01" oninput="updateMermaCostoPreview()">
         </div>
         <div class="form-group">
-          <label class="form-label">Motivo</label>
+          <label class="form-label" for="merma-motivo">Motivo</label>
           <select id="merma-motivo" class="form-select"></select>
         </div>
       </div>
       <p class="cost-preview" id="merma-costo-preview">Costo total de la merma: $0.00</p>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Fecha</label>
+          <label class="form-label" for="merma-fecha">Fecha</label>
           <input type="date" id="merma-fecha" class="form-input">
         </div>
         <div class="form-group">
-          <label class="form-label">Bazar (opcional)</label>
+          <label class="form-label" for="merma-bazar">Bazar (opcional)</label>
           <select id="merma-bazar" class="form-select"><option value="">— No fue en un bazar —</option></select>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
+        <label class="form-label" for="merma-notas">Notas</label>
         <textarea id="merma-notas" class="form-textarea" placeholder="Opcional"></textarea>
       </div>
     </div>
@@ -2433,7 +2425,7 @@
         <div class="form-switch">
           <span class="switch-label">🔗 Ligar playeras o stickers a este gasto</span>
           <label class="switch">
-            <input type="checkbox" id="gasto-ligar-toggle" onchange="toggleGastoLigarPlayeras(this.checked)">
+            <input type="checkbox" id="gasto-ligar-toggle" onchange="toggleGastoLigarPlayeras(this.checked)" aria-label="🔗 Ligar playeras o stickers a este gasto">
             <span class="slider"></span>
           </label>
         </div>
@@ -2461,7 +2453,7 @@
 
       <section class="gasto-form-section">
         <div class="gasto-section-heading">
-          <label class="form-label">🧾 Cotizaciones relacionadas</label>
+          <span class="form-label">🧾 Cotizaciones relacionadas</span>
           <p class="form-hint">Asigna el gasto a playeras o estampados; puedes elegir los stickers o estampados concretos.</p>
         </div>
         <div id="gasto-cotizaciones-list" class="gasto-ligar-list gasto-cotizaciones-list"></div>
@@ -2505,25 +2497,25 @@
     <div class="modal-body">
       <input type="hidden" id="compra-id">
       <div class="form-group">
-        <label class="form-label">Qué quieres comprar</label>
+        <label class="form-label" for="compra-nombre">Qué quieres comprar</label>
         <input type="text" id="compra-nombre" class="form-input" placeholder="Ej. Removedor de DTF / Apache profesional">
       </div>
       <div class="form-group">
-        <label class="form-label">Link del producto (opcional)</label>
+        <label class="form-label" for="compra-link">Link del producto (opcional)</label>
         <input type="url" id="compra-link" class="form-input" placeholder="https://...">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Meta de dinero</label>
+          <label class="form-label" for="compra-meta">Meta de dinero</label>
           <input type="number" id="compra-meta" class="form-input" min="0" step="0.01" placeholder="0.00">
         </div>
         <div class="form-group">
-          <label class="form-label">Ahorrado hasta ahora</label>
+          <label class="form-label" for="compra-ahorrado">Ahorrado hasta ahora</label>
           <input type="number" id="compra-ahorrado" class="form-input" min="0" step="0.01" placeholder="0.00">
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
+        <label class="form-label" for="compra-notas">Notas</label>
         <textarea id="compra-notas" class="form-textarea" placeholder="Opcional"></textarea>
       </div>
     </div>
@@ -2536,48 +2528,53 @@
 
 <!-- MODAL: BAZAR / LUGAR DE VENTA -->
 <div class="modal-overlay" id="modal-consignacion">
-  <div class="modal-box consignacion-modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-consignacion-title">
+  <div class="modal-box consignacion-modal-box modal-box-wide" role="dialog" aria-modal="true" aria-labelledby="modal-consignacion-title">
     <div class="modal-header">
       <h2 class="modal-title" id="modal-consignacion-title">Nueva consignación</h2>
-      <button class="modal-close" data-modal="modal-consignacion">✕</button>
+      <button class="modal-close" data-modal="modal-consignacion" aria-label="Cerrar">✕</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body pm-body">
       <input type="hidden" id="cons-id">
-      <div class="form-group">
-        <label class="form-label">Dueño del producto (persona / tienda)</label>
-        <input type="text" id="cons-nombre" class="form-input" placeholder="Ej. Marca o proveedor externo">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="cons-socio">Socio</label>
-        <select id="cons-socio" class="form-select" onchange="onConsSocioChange()"></select>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Fecha de entrega</label>
-          <input type="date" id="cons-fecha" class="form-input">
-        </div>
 
-        <div class="form-group">
-          <label class="form-label" id="cons-pct-label">% Comisión para LUCXSTUDIO (sobre venta)</label>
-          <input type="number" id="cons-pct" class="form-input" min="0" max="100" step="1" value="30" oninput="updateConsignacionProductosPreview()">
+      <section class="pm-section">
+        <h3 class="pm-section-title">🤝 Datos de la consignación</h3>
+        <div class="pm-grid">
+          <div class="form-group pm-6">
+            <label class="form-label" for="cons-nombre">Dueño del producto (persona / tienda)</label>
+            <input type="text" id="cons-nombre" class="form-input" placeholder="Ej. Marca o proveedor externo">
+          </div>
+          <div class="form-group pm-6">
+            <label class="form-label" for="cons-socio">Socio</label>
+            <select id="cons-socio" class="form-select" onchange="onConsSocioChange()"></select>
+          </div>
+          <div class="form-group pm-6">
+            <label class="form-label" for="cons-fecha">Fecha de entrega</label>
+            <input type="date" id="cons-fecha" class="form-input">
+          </div>
+          <div class="form-group pm-6">
+            <label class="form-label" id="cons-pct-label" for="cons-pct">% Comisión para LUCXSTUDIO (sobre venta)</label>
+            <input type="number" id="cons-pct" class="form-input" min="0" max="100" step="1" value="30" oninput="updateConsignacionProductosPreview()">
+          </div>
+          <div class="form-group pm-12">
+            <label class="form-label" for="cons-notas">Notas</label>
+            <textarea id="cons-notas" class="form-textarea pm-notas" placeholder="Opcional"></textarea>
+          </div>
         </div>
-      </div>
-      <div class="form-group">
-        <div style="margin-bottom:8px;">
-          <label class="form-label">Productos externos</label>
-          <p class="form-hint">Registra lo que te entregaron para vender. La comisión de LUCXSTUDIO se calcula sobre cada venta.</p>
-        </div>
+      </section>
+
+      <section class="pm-section">
+        <h3 class="pm-section-title">📦 Productos externos</h3>
+        <p class="form-hint" style="margin:-4px 0 var(--space-3);">Registra lo que te entregaron para vender. La comisión de LUCXSTUDIO se calcula sobre cada venta.</p>
         <div id="cons-productos-list" class="cons-productos-list"></div>
         <div class="cons-productos-footer">
-          <button type="button" class="btn-secondary" onclick="addConsignacionProducto()">+ Agregar producto</button>
+          <div class="cons-productos-botones">
+            <button type="button" class="btn-secondary" onclick="addConsignacionProducto()">+ Agregar producto</button>
+            <button type="button" class="btn-secondary" id="cons-llevar-bazar" onclick="llevarConsignacionABazarDesdeFormulario()">🏪 Llevar todo a la caja de un bazar</button>
+          </div>
           <span class="cons-productos-total">Valor total de venta <strong id="cons-valor-total">$0.00</strong></span>
         </div>
         <div class="consignment-split-preview" id="cons-reparto-preview" aria-live="polite"></div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notas</label>
-        <textarea id="cons-notas" class="form-textarea" placeholder="Opcional"></textarea>
-      </div>
+      </section>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-consignacion">Cancelar</button>
@@ -2585,6 +2582,7 @@
     </div>
   </div>
 </div>
+
 
 <div class="modal-overlay" id="modal-consignaciones-bazar">
   <div class="modal-box modal-box-sm">
@@ -2598,7 +2596,7 @@
         <select id="cb-bazar" class="form-select" onchange="updateConsignacionesBazarPreview()"></select>
       </div>
       <div class="form-group">
-        <label class="form-label">Consignaciones a incluir</label>
+        <span class="form-label">Consignaciones a incluir</span>
         <div id="cb-lista" class="gasto-ligar-list" style="max-height:220px;"></div>
       </div>
       <p class="cost-preview" id="cb-preview">—</p>
@@ -2648,11 +2646,11 @@
     <div class="modal-body">
       <input type="hidden" id="asc-playera-id">
       <div class="form-group">
-        <label class="form-label">Consignación</label>
+        <label class="form-label" for="asc-consignacion">Consignación</label>
         <select id="asc-consignacion" class="form-select" onchange="onAscConsignacionChange()"><option value="">— Ninguna —</option></select>
       </div>
       <div class="form-group" id="asc-estado-wrap" style="display:none;">
-        <label class="form-label">Estado en la consignación</label>
+        <label class="form-label" for="asc-estado">Estado en la consignación</label>
         <select id="asc-estado" class="form-select">
           <option value="En consignación">📦 En consignación (con el consignatario)</option>
           <option value="Vendida">✅ Vendida</option>
@@ -2660,7 +2658,7 @@
         </select>
       </div>
       <div class="form-group" id="asc-precio-wrap" style="display:none;">
-        <label class="form-label">Precio de venta acordado por pieza ($)</label>
+        <label class="form-label" for="asc-precio">Precio de venta acordado por pieza ($)</label>
         <input type="number" id="asc-precio" class="form-input" min="0" step="0.01" oninput="updateConsignacionPreview()">
       </div>
       <div class="consignment-split-preview" id="asc-reparto-preview" aria-live="polite" style="display:none;"></div>
@@ -2706,40 +2704,40 @@
     <div class="modal-body">
       <input type="hidden" id="b-id">
       <div class="form-group">
-        <label class="form-label">Nombre del bazar / evento</label>
+        <label class="form-label" for="b-nombre">Nombre del bazar / evento</label>
         <input type="text" id="b-nombre" class="form-input" placeholder="Ej. Bazar Navideño Plaza Central">
       </div>
       <div class="form-row">
         <div class="form-group">
-            <label class="form-label">Lugar</label>
+            <label class="form-label" for="b-lugar">Lugar</label>
             <input type="text" id="b-lugar" class="form-input" placeholder="Ej. Toluca, Edo. Méx.">
         </div>
         <div class="form-group">
-            <label class="form-label">Inicia el</label>
+            <label class="form-label" for="b-fecha">Inicia el</label>
             <input type="date" id="b-fecha" class="form-input" onchange="onBazarFechaInicioChange()">
           </div>
           <div class="form-group">
-            <label class="form-label">Finaliza el</label>
+            <label class="form-label" for="b-fecha-fin">Finaliza el</label>
             <input type="date" id="b-fecha-fin" class="form-input">
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Precio base del bazar ($)</label>
+        <label class="form-label" for="b-costo">Precio base del bazar ($)</label>
         <input type="number" id="b-costo" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateBazarCostTotal()">
       </div>
       <div class="form-group">
-        <label class="form-label">Ya pagado / apartado ($)</label>
+        <label class="form-label" for="b-pagado">Ya pagado / apartado ($)</label>
         <input type="number" id="b-pagado" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateBazarCostTotal()">
-        <p class="form-help">Captura lo que ya entregaste para restarlo del costo total.</p>
+        <p class="form-hint">Captura lo que ya entregaste para restarlo del costo total.</p>
       </div>
       <div class="form-group">
-        <label class="form-label">Fondo de caja inicial ($)</label>
+        <label class="form-label" for="b-fondo-caja">Fondo de caja inicial ($)</label>
         <input type="number" id="b-fondo-caja" class="form-input" min="0" step="0.01" placeholder="0.00">
-        <p class="form-help">El efectivo con el que abres el puesto (para cambio), para poder cuadrar la caja al cierre.</p>
+        <p class="form-hint">El efectivo con el que abres el puesto (para cambio), para poder cuadrar la caja al cierre.</p>
       </div>
       <div class="bazar-expenses-section">
         <div class="bazar-expenses-heading">
-          <label class="form-label">Gastos adicionales</label>
+          <span class="form-label">Gastos adicionales</span>
           <button type="button" class="btn-secondary add-expense-btn" onclick="addBazarExpense()" title="Agregar gasto">＋ Agregar gasto</button>
         </div>
         <div id="bazar-expenses-list" class="bazar-expenses-list"></div>
@@ -2758,7 +2756,7 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Notas</label>
+        <label class="form-label" for="b-notas">Notas</label>
         <textarea id="b-notas" class="form-textarea" placeholder="Opcional: horario, etc."></textarea>
       </div>
     </div>
@@ -2781,20 +2779,20 @@
       <input type="hidden" id="ab-playera-id">
       <div class="form-group">
         <div class="section-header assignment-header">
-          <label class="form-label">Bazares / lugares de venta</label>
+          <span class="form-label">Bazares / lugares de venta</span>
           <button type="button" class="btn-secondary assignment-add-btn" onclick="openModalBazarDesdeAsignacion()">+ Agregar bazar</button>
         </div>
         <div id="ab-bazares-list" class="assignment-bazares-list"></div>
         <p class="cost-preview">Marca uno o varios bazares. Puedes agregar un bazar nuevo desde aquí.</p>
       </div>
       <div class="form-group" id="ab-null-sale-wrap" style="display:none;">
-        <label class="form-label">Tipo de registro</label>
+        <span class="form-label">Tipo de registro</span>
         <label class="tag-checkbox" style="border-color:var(--color-danger);">
           <input type="checkbox" id="ab-venta-nula"> 🎁 Venta nula / cortesía
         </label>
       </div>
       <div class="form-group" id="ab-status-wrap" style="display:none;">
-        <label class="form-label">Estado de la playera</label>
+        <label class="form-label" for="ab-status">Estado de la playera</label>
         <select id="ab-status" class="form-select" onchange="onAbStatusChange()">
           <option value="Disponible">🟢 Disponible / se quedó</option>
           <option value="Vendida"> Vendida✅</option>
@@ -2802,7 +2800,7 @@
         </select>
       </div>
       <div class="form-group" id="ab-metodo-pago-wrap" style="display:none;">
-        <label class="form-label">Método de pago</label>
+        <label class="form-label" for="ab-metodo-pago">Método de pago</label>
         <select id="ab-metodo-pago" class="form-select">
           <option value="Efectivo">💵 Efectivo</option>
           <option value="Tarjeta">💳 Tarjeta</option>
@@ -2828,12 +2826,12 @@
     <div class="modal-body">
       <input type="hidden" id="ie-id">
       <div class="form-group">
-        <label class="form-label">Concepto</label>
+        <label class="form-label" for="ie-concepto">Concepto</label>
         <input type="text" id="ie-concepto" class="form-input" placeholder="Ej. Ruleta de premios">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Etiqueta</label>
+          <label class="form-label" for="ie-etiqueta">Etiqueta</label>
           <input type="text" id="ie-etiqueta" list="ie-etiqueta-list" class="form-input" placeholder="Ej. Juegos">
           <datalist id="ie-etiqueta-list">
             <option value="Juegos"><option value="Rifa"><option value="Venta de comida">
@@ -2841,7 +2839,7 @@
           </datalist>
         </div>
         <div class="form-group">
-          <label class="form-label">Monto ($)</label>
+          <label class="form-label" for="ie-monto">Monto ($)</label>
           <input type="number" id="ie-monto" class="form-input" min="0" step="0.01">
         </div>
       </div>
@@ -2863,14 +2861,14 @@
     <div class="modal-body">
       <input type="hidden" id="se-id">
       <div class="form-group">
-        <label class="form-label">Concepto</label>
+        <label class="form-label" for="se-concepto">Concepto</label>
         <input type="text" id="se-concepto" class="form-input" list="se-concepto-list" placeholder="Ej. Envío, empaque especial, urgencia">
         <datalist id="se-concepto-list">
           <option value="Envío"><option value="Empaque especial"><option value="Servicio urgente">
         </datalist>
       </div>
       <div class="form-group">
-        <label class="form-label">Monto ($)</label>
+        <label class="form-label" for="se-monto">Monto ($)</label>
         <input type="number" id="se-monto" class="form-input" min="0" step="0.01">
       </div>
     </div>
@@ -2890,16 +2888,16 @@
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">Producto</label>
+        <label class="form-label" for="qs-producto">Producto</label>
         <select id="qs-producto" class="form-select" onchange="onQuoteStickerProductoChange(this.value)"></select>
       </div>
       <div class="form-row" id="qs-manual-wrap">
         <div class="form-group" style="flex:2;">
-          <label class="form-label">Nombre del sticker</label>
+          <label class="form-label" for="qs-nombre">Nombre del sticker</label>
           <input type="text" id="qs-nombre" class="form-input" placeholder="Nombre del sticker" onchange="updateQuoteStickerFieldDesdeModal('nombre', this.value)">
         </div>
         <div class="form-group">
-          <label class="form-label">Tamaño</label>
+          <label class="form-label" for="qs-tamano">Tamaño</label>
           <select id="qs-tamano" class="form-select" onchange="updateQuoteStickerFieldDesdeModal('tamano', this.value)">
             <option>Chico</option><option>Mediano</option><option>Grande</option>
           </select>
@@ -2907,26 +2905,26 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Ancho (cm)</label>
+          <label class="form-label" for="qs-ancho">Ancho (cm)</label>
           <input type="number" id="qs-ancho" class="form-input" min="0" step="0.01" onchange="updateQuoteStickerFieldDesdeModal('anchoCm', this.value)">
         </div>
         <div class="form-group">
-          <label class="form-label">Largo (cm)</label>
+          <label class="form-label" for="qs-largo">Largo (cm)</label>
           <input type="number" id="qs-largo" class="form-input" min="0" step="0.01" onchange="updateQuoteStickerFieldDesdeModal('largoCm', this.value)">
         </div>
         <div class="form-group">
-          <label class="form-label">Cantidad</label>
+          <label class="form-label" for="qs-cantidad">Cantidad</label>
           <input type="number" id="qs-cantidad" class="form-input" min="1" step="1" onchange="updateQuoteStickerFieldDesdeModal('cantidad', this.value)">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Costo de producción c/u ($)</label>
+          <label class="form-label" for="qs-costo">Costo de producción c/u ($)</label>
           <input type="number" id="qs-costo" class="form-input" readonly>
           <span class="form-hint">DTF especial: área × costo por cm². DTF estándar: metros × precio por metro.</span>
         </div>
         <div class="form-group">
-          <label class="form-label">Precio de venta c/u ($)</label>
+          <label class="form-label" for="qs-precio">Precio de venta c/u ($)</label>
           <input type="number" id="qs-precio" class="form-input" min="0" step="0.01" onchange="updateQuoteStickerFieldDesdeModal('precioVenta', this.value)">
         </div>
       </div>
@@ -2935,7 +2933,7 @@
           <div class="form-switch">
             <span class="switch-label">✨ DTF especial</span>
             <label class="switch">
-              <input type="checkbox" id="qs-dtf-especial" onchange="onQuoteStickerDtfEspecialChange(this.checked)">
+              <input type="checkbox" id="qs-dtf-especial" onchange="onQuoteStickerDtfEspecialChange(this.checked)" aria-label="✨ DTF especial">
               <span class="slider"></span>
             </label>
           </div>
@@ -2969,28 +2967,28 @@
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">Producto</label>
+        <label class="form-label" for="qp-producto">Producto</label>
         <select id="qp-producto" class="form-select" onchange="onQuotePrendaProductoChange(this.value)"></select>
       </div>
       <div class="form-group" id="qp-nombre-wrap">
-        <label class="form-label">Nombre</label>
+        <label class="form-label" for="qp-nombre">Nombre</label>
         <input type="text" id="qp-nombre" class="form-input" placeholder="Nombre de la prenda" onchange="updateQuotePrendaField('nombre', this.value)">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Tipo de prenda</label>
+          <label class="form-label" for="qp-tipo">Tipo de prenda</label>
           <select id="qp-tipo" class="form-select" onchange="onQuotePrendaTipoChange(this.value)"></select>
         </div>
         <div class="form-group">
-          <label class="form-label">Talla</label>
+          <label class="form-label" for="qp-talla">Talla</label>
           <input type="text" id="qp-talla" class="form-input" onchange="updateQuotePrendaField('talla', this.value)">
         </div>
         <div class="form-group">
-          <label class="form-label">Color</label>
+          <label class="form-label" for="qp-color">Color</label>
           <select id="qp-color" class="form-select" onchange="onQuotePrendaColorChange(this.value)"></select>
         </div>
         <div class="form-group">
-          <label class="form-label">Cantidad</label>
+          <label class="form-label" for="qp-cantidad">Cantidad</label>
           <input type="number" id="qp-cantidad" class="form-input" min="1" step="1" onchange="updateQuotePrendaField('cantidad', this.value)">
         </div>
       </div>
@@ -2999,24 +2997,24 @@
           <div class="form-switch">
             <span class="switch-label">🎁 Prenda del cliente (costo $0.00)</span>
             <label class="switch">
-              <input type="checkbox" id="qp-prenda-cliente" onchange="onQuotePrendaClienteChange(this.checked)">
+              <input type="checkbox" id="qp-prenda-cliente" onchange="onQuotePrendaClienteChange(this.checked)" aria-label="🎁 Prenda del cliente (costo $0.00)">
               <span class="slider"></span>
             </label>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Costo de la playera ($)</label>
+          <label class="form-label" for="qp-costo">Costo de la playera ($)</label>
           <input type="number" id="qp-costo" class="form-input" min="0" step="0.01" onchange="updateQuotePrendaField('costoPlayera', this.value)">
           <span class="form-hint">Se carga desde inventario o del tipo de ropa; puedes ajustarlo para esta cotización.</span>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Impresión</label>
+          <span class="form-label">Impresión</span>
           <button type="button" class="area-edit-btn" id="qp-impresion-btn" onclick="abrirImpresionDesdePrenda()" style="padding:var(--space-3);width:100%;text-align:left;">—</button>
         </div>
         <div class="form-group">
-          <label class="form-label">Precio de venta c/u ($)</label>
+          <label class="form-label" for="qp-precio">Precio de venta c/u ($)</label>
           <input type="number" id="qp-precio" class="form-input" min="0" step="0.01" onchange="updateQuotePrendaField('precioVenta', this.value)">
         </div>
       </div>
@@ -3042,13 +3040,13 @@
           <div class="form-switch">
             <span class="switch-label">✨ DTF especial</span>
             <label class="switch">
-              <input type="checkbox" id="qe-dtf-especial" onchange="onQuoteDtfEspecialChange(this.checked)">
+              <input type="checkbox" id="qe-dtf-especial" onchange="onQuoteDtfEspecialChange(this.checked)" aria-label="✨ DTF especial">
               <span class="slider"></span>
             </label>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label"># de estampados</label>
+          <label class="form-label" for="qe-num-estampados"># de estampados</label>
           <input type="number" id="qe-num-estampados" class="form-input" min="1" value="1"
             onchange="updateQuoteEstampadosCountFromModal(this.value)" style="max-width:120px;">
         </div>
@@ -3085,11 +3083,11 @@
     <div class="modal-body">
       <input type="hidden" id="grafica-id">
       <div class="form-group">
-        <label class="form-label">Título</label>
+        <label class="form-label" for="grafica-titulo">Título</label>
         <input type="text" id="grafica-titulo" class="form-input" placeholder="Ej. Rendimiento por bazar">
       </div>
       <div class="form-group">
-        <label class="form-label">Datos</label>
+        <label class="form-label" for="grafica-fuente">Datos</label>
         <select id="grafica-fuente" class="form-select" onchange="toggleGraficaInventarioOptions()">
           <option value="ventas-bazares">Ventas por bazar</option>
           <option value="ganancias-bazares">Ganancias por bazar</option>
@@ -3101,7 +3099,7 @@
       </div>
       <div class="form-row" id="grafica-inventario-options" style="display:none;">
         <div class="form-group">
-          <label class="form-label">Comparar por</label>
+          <label class="form-label" for="grafica-dimension">Comparar por</label>
           <select id="grafica-dimension" class="form-select">
             <option value="etiqueta">Etiqueta</option>
             <option value="color">Color</option>
@@ -3112,7 +3110,7 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Comparar valor</label>
+          <label class="form-label" for="grafica-metrica">Comparar valor</label>
           <select id="grafica-metrica" class="form-select">
             <option value="stock">Piezas en stock</option>
             <option value="costo">Costo del inventario</option>
@@ -3122,7 +3120,7 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Tipo de gráfica</label>
+        <label class="form-label" for="grafica-tipo">Tipo de gráfica</label>
         <select id="grafica-tipo" class="form-select">
           <option value="bar">Barras</option>
           <option value="line">Líneas</option>
@@ -3165,13 +3163,13 @@
     </div>
     <div class="modal-body" id="ver-cot-body"></div>
     <div class="modal-footer">
-      <select class="filter-select" id="ver-cot-estado-select" onchange="updateCotizacionEstado()">
+      <select class="filter-select" id="ver-cot-estado-select" aria-label="Estado de la cotización" onchange="updateCotizacionEstado()">
         <option value="Pendiente">⏳ Pendiente</option>
         <option value="Confirmado">✅ Confirmado</option>
         <option value="Pagado">💰 Pagado</option>
         <option value="Entregado">📦 Entregado</option>
       </select>
-      <select class="filter-select" id="ver-cot-produccion-select" onchange="updateCotizacionProduccionDesdeModal()">
+      <select class="filter-select" id="ver-cot-produccion-select" aria-label="Etapa de producción" onchange="updateCotizacionProduccionDesdeModal()">
         <option value="Por hacer">🚦 Por hacer</option>
         <option value="En DTF">🚦 En DTF</option>
         <option value="Armando">🚦 Armando</option>
@@ -3308,6 +3306,11 @@
   .modal-box .btn-primary {
     border-radius: 12px;
   }
+
+  /* Alineación de formularios (respaldo: se aplica aunque el CSS externo esté en caché) */
+  .form-row{align-items:flex-start !important;}
+  .form-row > .form-group{display:block !important;}
+  .form-row > .form-group > .form-label{margin-top:0 !important;}
 </style>
 
 <script type="module" src="js/app.js"></script>

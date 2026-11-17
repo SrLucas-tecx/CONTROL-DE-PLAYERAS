@@ -2,18 +2,17 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, CONSIGNACION_ESTADOS } from "./config.js";
+import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
-  colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarEstadoBadgeClass,
-  bazarIdsDe, bazarTiene, bazaresOrdenados, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
-  comisionTerminalMonto, saldoPendienteCliente, desgloseCierreBazar, desgloseCierreCajaGeneral, clienteNombre, statsCliente,
+  colorNombre, colorHex, estadoBadgeClass, prioridadBadgeClass, bazarIdsDe, bazarTiene, bazaresOrdenados, nombresBazares, getBazarVentasYGanancia, gastosBazarPorTipo, costoBazarReal, saldoBazarPendiente, playerasSorpresaBajoStock,
+  comisionTerminalMonto, desgloseCierreBazar, desgloseCierreCajaGeneral, clienteNombre, statsCliente,
   totalMermas, totalMermasMesActual, totalMermasDeBazar, comisionConsignacion, statsConsignacion, nombreConsignacion,
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
-  datosGrafica, datosInventarioGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
+  datosGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
   totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, resumenConsignacionesExternas, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago
 } from "./calculator.js";
 
@@ -32,7 +31,7 @@ let bloqueItemsEdicion = [];
 /* ---------------------------------------------------------------
    HELPERS GENERALES DE DOM
 --------------------------------------------------------------- */
-function num(id) { const el = document.getElementById(id); return el ? (parseFloat(String(el.value).replace(",", ".")) || 0) : 0; }
+function num(id) { const el = document.getElementById(id); return el ? (Number.parseFloat(String(el.value).replace(",", ".")) || 0) : 0; }
 function val(id) { const el = document.getElementById(id); return el ? el.value : ""; }
 function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
 function checked(id) { const el = document.getElementById(id); return el ? el.checked : false; }
@@ -51,7 +50,7 @@ function tipoPrendaPorNombre(nombre) {
 }
 function esColorBlanco(colorId) {
   const color = (AppState.colores || []).find(item => item.id === colorId || item.nombre === colorId);
-  const nombre = (color ? color.nombre : colorId).normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase();
+  const nombre = (color ? color.nombre : colorId).normalize("NFD").replaceAll(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase();
   return nombre.includes("blanc") || nombre.includes("white");
 }
 function costoPredeterminadoPrenda(tipo, colorId = "") {
@@ -148,8 +147,8 @@ setToastHandler(showToast);
 let instantaneaDeshacer = null;
 async function pedirConfirmacion(mensaje, opciones) {
   const o = Object.assign({ titulo: "Confirmar eliminación", confirmLabel: "Eliminar", danger: true, deshacer: true, aviso: "Eliminado." }, opciones || {});
-  const ok = typeof window.confirmPopup === "function"
-    ? await window.confirmPopup({ title: o.titulo, message: mensaje, confirmLabel: o.confirmLabel, danger: o.danger })
+  const ok = typeof globalThis.confirmPopup === "function"
+    ? await globalThis.confirmPopup({ title: o.titulo, message: mensaje, confirmLabel: o.confirmLabel, danger: o.danger })
     : confirm(mensaje);
   if (ok && o.deshacer) {
     const copia = JSON.stringify(AppState);
@@ -254,8 +253,8 @@ export function switchPage(page) {
   document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.page === navHighlight));
   document.getElementById("page-title").textContent = PAGE_TITLES[page] || "LUCXSTUDIO";
   document.getElementById("header-cta").style.display = page === "cotizador" ? "none" : "inline-block";
-  if (page === "inicio" && typeof window.renderInicio === "function") window.renderInicio();
-  if (page === "ventas-rapidas" && typeof window.renderVentasRapidas === "function") window.renderVentasRapidas();
+  if (page === "inicio" && typeof globalThis.renderInicio === "function") globalThis.renderInicio();
+  if (page === "ventas-rapidas" && typeof globalThis.renderVentasRapidas === "function") globalThis.renderVentasRapidas();
   if (page === "bazares") renderBazares();
   if (page === "bloques-inventario") renderBloquesInventario();
   if (page === "caja") renderCaja();
@@ -319,7 +318,7 @@ export function applySavedTheme() {
    RESPALDO JSON
 --------------------------------------------------------------- */
 function exportarJSON() {
-  if (typeof window.descargarRespaldoCompleto === "function") return window.descargarRespaldoCompleto();
+  if (typeof globalThis.descargarRespaldoCompleto === "function") return globalThis.descargarRespaldoCompleto();
   const blob = new Blob([JSON.stringify(AppState, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -352,7 +351,7 @@ document.querySelectorAll("[data-export-section]").forEach(button => {
 document.getElementById("import-json-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  if (typeof window.importarRespaldoArchivo === "function") { window.importarRespaldoArchivo(file); e.target.value = ""; return; }
+  if (typeof globalThis.importarRespaldoArchivo === "function") { globalThis.importarRespaldoArchivo(file); e.target.value = ""; return; }
   const reader = new FileReader();
   reader.onload = (evt) => {
     try {
@@ -579,7 +578,7 @@ function renderEtiquetas() {
     </div>`).join("") || `<p class="empty-hint">Aún no hay etiquetas.</p>`;
 }
 
-window.addEventListener("storage", event => {
+globalThis.addEventListener("storage", event => {
     if (event.key !== STORAGE_KEY || !event.newValue) return;
     try {
       const etiquetas = JSON.parse(event.newValue).etiquetas;
@@ -657,7 +656,7 @@ function saveTallaEtiqueta() {
   const talla = val("te-talla").trim();
   if (!talla) return showToast("Indica la talla.", "error");
   const id = val("te-id");
-  const data = { talla, color: val("te-color"), cantidad: parseInt(num("te-cantidad")) || 0 };
+  const data = { talla, color: val("te-color"), cantidad: Number.parseInt(num("te-cantidad")) || 0 };
   if (id) {
     Object.assign(AppState.tallaEtiquetas.find(x => x.id === id), data);
   } else {
@@ -731,8 +730,8 @@ function saveArtista() {
   const id = val("a-id");
   const data = {
     nombre, modo: val("a-modo"),
-    pctArtista: parseFloat(num("a-pct-artista")) || 0,
-    pctEstudio: parseFloat(num("a-pct-estudio")) || 0,
+    pctArtista: Number.parseFloat(num("a-pct-artista")) || 0,
+    pctEstudio: Number.parseFloat(num("a-pct-estudio")) || 0,
     notas: val("a-notas")
   };
   if (id) {
@@ -1544,7 +1543,7 @@ function onMermaPlayeraChange() {
   updateMermaCostoPreview();
 }
 function updateMermaCostoPreview() {
-  const cantidad = Math.max(1, parseInt(num("merma-cantidad")) || 1);
+  const cantidad = Math.max(1, Number.parseInt(num("merma-cantidad")) || 1);
   const costoUnitario = num("merma-costo-unitario") || 0;
   const preview = document.getElementById("merma-costo-preview");
   if (preview) preview.innerHTML = `Costo total de la merma: <b>${fmt(cantidad * costoUnitario)}</b>`;
@@ -1582,7 +1581,7 @@ function saveMerma() {
   if (!nombre) return showToast("Indica qué pieza se perdió.", "error");
   const id = val("merma-id") || uid();
   const existing = AppState.mermas.find(x => x.id === id);
-  const cantidad = Math.max(1, parseInt(num("merma-cantidad")) || 1);
+  const cantidad = Math.max(1, Number.parseInt(num("merma-cantidad")) || 1);
   const costoUnitario = Math.max(0, num("merma-costo-unitario") || 0);
   // Si estaba ligada a una playera del inventario, primero se revierte la cantidad
   // descontada anteriormente antes de aplicar la nueva (por si cambiaron cantidad/playera).
@@ -1693,7 +1692,7 @@ function addAhorroCompra(id) {
   if (!c) return;
   const entrada = prompt("¿Cuánto quieres agregar al ahorro?", "0");
   if (entrada === null) return;
-  const monto = parseFloat(entrada) || 0;
+  const monto = Number.parseFloat(entrada) || 0;
   if (monto <= 0) return;
   c.ahorrado = (c.ahorrado || 0) + monto;
   saveState(); renderComprasPendientes();
@@ -1773,7 +1772,7 @@ function renderGangSheetTipos() {
       <td data-label="Acciones"><button type="button" class="danger" title="Eliminar tipo de DTF" aria-label="Eliminar tipo ${escapeHtml(tipo.nombre)}" onclick="deleteGangSheetTipo('${escapeHtml(tipo.id)}')"><i class="lucide-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" class="settings-type-empty">Aún no agregas tipos personalizados.</td></tr>`;
-  if (window.lucide) window.lucide.createIcons();
+  if (globalThis.lucide) globalThis.lucide.createIcons();
 }
 function addGangSheetTipo() {
   const nombre = val("set-gangsheet-tipo-nombre").trim();
@@ -1820,8 +1819,8 @@ async function deleteGangSheetTipo(id) {
   showToast("Tipo eliminado. Guarda todos los ajustes para confirmar.");
 }
 function updateCostPreview() {
-  const precio = parseFloat(document.getElementById("set-dtf-precio").value) || 0;
-  const ancho = parseFloat(document.getElementById("set-dtf-ancho").value) || 1;
+  const precio = Number.parseFloat(document.getElementById("set-dtf-precio").value) || 0;
+  const ancho = Number.parseFloat(document.getElementById("set-dtf-ancho").value) || 1;
   const cm2 = precio / (100 * ancho);
   document.getElementById("preview-costo-cm2").textContent = "$" + cm2.toFixed(4);
   document.getElementById("preview-costo-ejemplo").textContent = fmt(cm2 * 30 * 40);
@@ -1831,13 +1830,13 @@ function updateCostPreview() {
 document.getElementById("set-dtf-precio").addEventListener("input", updateCostPreview);
 document.getElementById("set-dtf-ancho").addEventListener("input", updateCostPreview);
 function saveSettings() {
-  AppState.settings.dtfPrecioMetro = parseFloat(num("set-dtf-precio")) || 0;
-  AppState.settings.dtfAnchoRolloCm = parseFloat(num("set-dtf-ancho")) || 1;
-  AppState.settings.sobrecargo2XLMonto = parseFloat(num("set-sobrecargo-2xl")) || 0;
-  AppState.settings.stockMinimoDefault = parseInt(num("set-stock-minimo-default")) || 0;
-  AppState.settings.recargoUrgentePct = Math.max(0, parseFloat(num("set-recargo-urgente")) || 0);
-  AppState.settings.comisionTerminalPct = Math.max(0, parseFloat(num("set-comision-terminal")) || 0);
-  AppState.settings.umbralLlenadoPct = Math.max(0, Math.min(100, parseFloat(num("set-umbral-llenado")) || 0));
+  AppState.settings.dtfPrecioMetro = Number.parseFloat(num("set-dtf-precio")) || 0;
+  AppState.settings.dtfAnchoRolloCm = Number.parseFloat(num("set-dtf-ancho")) || 1;
+  AppState.settings.sobrecargo2XLMonto = Number.parseFloat(num("set-sobrecargo-2xl")) || 0;
+  AppState.settings.stockMinimoDefault = Number.parseInt(num("set-stock-minimo-default")) || 0;
+  AppState.settings.recargoUrgentePct = Math.max(0, Number.parseFloat(num("set-recargo-urgente")) || 0);
+  AppState.settings.comisionTerminalPct = Math.max(0, Number.parseFloat(num("set-comision-terminal")) || 0);
+  AppState.settings.umbralLlenadoPct = Math.max(0, Math.min(100, Number.parseFloat(num("set-umbral-llenado")) || 0));
   AppState.settings.moneda = val("set-moneda") || "MXN";
   AppState.stickers.forEach(sticker => {
     if (sticker.dtfMetrosUsados !== undefined && !sticker.gastoVinculadoId) {
@@ -2036,7 +2035,7 @@ function editActiveBazar() {
 function updateEfectivoContadoBazar(value) {
   const b = AppState.bazares.find(x => x.id === activeBazarId);
   if (!b) return;
-  b.efectivoContado = value === "" ? null : Math.max(0, parseFloat(value) || 0);
+  b.efectivoContado = value === "" ? null : Math.max(0, Number.parseFloat(value) || 0);
   saveState();
   renderBazarDetalle();
 }
@@ -2090,7 +2089,7 @@ function renderCaja() {
 // Guarda el fondo de caja donde corresponda: en la caja general, o en el bazar elegido
 // (el mismo campo que usa el modal de bazar, para que ambos lugares queden sincronizados).
 function updateFondoCaja(value) {
-  const monto = value === "" ? 0 : Math.max(0, parseFloat(value) || 0);
+  const monto = value === "" ? 0 : Math.max(0, Number.parseFloat(value) || 0);
   if (cajaSeleccion === "general") {
     AppState.cajaGeneral = Object.assign({ fondoCaja: 0, efectivoContado: null }, AppState.cajaGeneral, { fondoCaja: monto });
   } else {
@@ -2100,7 +2099,7 @@ function updateFondoCaja(value) {
   saveState(); renderCaja(); renderBazarDetalle();
 }
 function updateEfectivoContadoCaja(value) {
-  const monto = value === "" ? null : Math.max(0, parseFloat(value) || 0);
+  const monto = value === "" ? null : Math.max(0, Number.parseFloat(value) || 0);
   if (cajaSeleccion === "general") {
     AppState.cajaGeneral = Object.assign({ fondoCaja: 0, efectivoContado: null }, AppState.cajaGeneral, { efectivoContado: monto });
   } else {
@@ -2180,8 +2179,8 @@ function renderInteres() {
         <span class="card-badge badge-media">${r.total} consulta(s)</span>
       </div>
       <div class="card-actions">
-        <button class="danger" onclick="quickSubtractConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replace(/'/g, "\\'")}')">➖ −1 pregunta</button>
-        <button onclick="quickAddConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replace(/'/g, "\\'")}')">➕ +1 pregunta</button>
+        <button class="danger" onclick="quickSubtractConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replaceAll(/'/g, "\\'")}')">➖ −1 pregunta</button>
+        <button onclick="quickAddConsulta('${escapeHtml(r.productoKey)}', '${escapeHtml(r.nombre).replaceAll(/'/g, "\\'")}')">➕ +1 pregunta</button>
       </div>
     </div>`).join("") || estadoVacio("❓", "Aún no hay consultas", "Registra lo que preguntan los clientes para ver qué diseños tienen más interés.", { label: "+ Registrar consulta", onclick: "openModalConsulta()" });
 
@@ -2240,7 +2239,7 @@ function saveConsulta() {
   if (!nombre) return showToast("Indica por qué producto preguntaron.", "error");
   AppState.consultas.push({
     id: uid(), productoKey, nombre,
-    cantidad: Math.max(1, parseInt(num("consulta-cantidad")) || 1),
+    cantidad: Math.max(1, Number.parseInt(num("consulta-cantidad")) || 1),
     fecha: val("consulta-fecha"), bazarId: val("consulta-bazar") || "",
     tags: Array.from(document.querySelectorAll(".consulta-tag-cb:checked")).map(cb => cb.value),
     notas: val("consulta-notas")
@@ -2491,7 +2490,7 @@ function onPlayeraDtfMetrosChange() {
   updatePlayeraPreview();
 }
 function onPlayeraNumEstampadosChange() {
-  const n = Math.max(1, parseInt(num("p-num-estampados")) || 1);
+  const n = Math.max(1, Number.parseInt(num("p-num-estampados")) || 1);
   while (playeraEstampadosDraft.length < n) playeraEstampadosDraft.push({ id: uid(), anchoCm: 0, largoCm: 0 });
   while (playeraEstampadosDraft.length > n) playeraEstampadosDraft.pop();
   renderPlayeraEstampadosList();
@@ -2499,7 +2498,7 @@ function onPlayeraNumEstampadosChange() {
 }
 function updatePlayeraEstampadoField(estId, field, value) {
   const e = playeraEstampadosDraft.find(x => x.id === estId);
-  if (e) e[field] = parseFloat(String(value).replace(",", ".")) || 0;
+  if (e) e[field] = Number.parseFloat(String(value).replace(",", ".")) || 0;
   if (!playeraMetrosManuales) setVal("p-dtf-metros", metrosEstimadosPorArea(areaTotalCm2(playeraEstampadosDraft)).toFixed(5));
   updatePlayeraPreview();
 }
@@ -2729,7 +2728,7 @@ function savePlayera() {
     : 0;
   const seVuelveAVender = !(existing && existing.ventaRapida) && val("p-estado-venta") === "Reventa";
   const estadoVenta = (existing && existing.ventaRapida) ? "Vendida" : (seVuelveAVender ? "Disponible" : (val("p-estado-venta") || "Disponible"));
-  const stockCapturado = seVuelveAVender ? 1 : (parseInt(num("p-stock")) || 0);
+  const stockCapturado = seVuelveAVender ? 1 : (Number.parseInt(num("p-stock")) || 0);
   const estadoPrenda = existing && estadoVentaAnterior === "Vendida" && estadoVenta === "Vendida"
     && stockCapturado > 0 && val("p-estado") === "Agotado"
     ? (existing.estadoAntesVenta && existing.estadoAntesVenta !== "Agotado" ? existing.estadoAntesVenta : "En stock")
@@ -2738,23 +2737,23 @@ function savePlayera() {
     return showToast("No puedes marcar como vendida una playera sin stock.", "error");
   }
   const metodoVenta = estadoVenta === "Vendida" ? (val("p-metodo-pago") || "Efectivo") : "";
-  const montoTarjetaVenta = metodoVenta === "Tarjeta" ? (parseFloat(num("p-precio-venta")) || 0) : 0;
+  const montoTarjetaVenta = metodoVenta === "Tarjeta" ? (Number.parseFloat(num("p-precio-venta")) || 0) : 0;
   const data = {
     nombre, tipo: val("p-tipo"), talla: val("p-talla").trim(), colorId: val("p-color"),
     stock: stockCapturado,
-    costoPlayera: prendaCliente ? 0 : (parseFloat(num("p-costo-playera")) || 0),
+    costoPlayera: prendaCliente ? 0 : (Number.parseFloat(num("p-costo-playera")) || 0),
     estampados: JSON.parse(JSON.stringify(playeraEstampadosDraft)),
     modoCosteo: "metros",
-    dtfMetrosUsados: parseFloat(num("p-dtf-metros")) || 0,
+    dtfMetrosUsados: Number.parseFloat(num("p-dtf-metros")) || 0,
     dtfTipoId,
     tieneEtiquetaTalla: checked("p-tiene-etiqueta"),
     prendaCliente, dtfEspecial: checked("p-dtf-especial"),
-    stockMinimo: parseInt(num("p-stock-minimo")) || 0,
-    precioVenta: parseFloat(num("p-precio-venta")) || 0,
-    precioMayoreo: parseFloat(num("p-precio-mayoreo")) || 0,
+    stockMinimo: Number.parseInt(num("p-stock-minimo")) || 0,
+    precioVenta: Number.parseFloat(num("p-precio-venta")) || 0,
+    precioMayoreo: Number.parseFloat(num("p-precio-mayoreo")) || 0,
     prioridad: val("p-prioridad"), estado: seVuelveAVender ? "En stock" : estadoPrenda,
     artistaId: val("p-artista") || "",
-    pctArtista: Math.max(0, Math.min(100, parseFloat(num("p-pct-artista")) || 0)),
+    pctArtista: Math.max(0, Math.min(100, Number.parseFloat(num("p-pct-artista")) || 0)),
     clienteId: val("p-cliente") || "",
     costoImpresionManual: (existing && existing.costoImpresionManual != null) ? existing.costoImpresionManual : null,
     gastoVinculadoId: (existing && existing.gastoVinculadoId) || "",
@@ -3580,7 +3579,7 @@ function saveAsignarCliente() {
 }
 function verDetallePlayera(id) {
   const p = AppState.playeras.find(x => x.id === id);
-  if (!p || typeof window.openQuickDetail !== "function") return;
+  if (!p || typeof globalThis.openQuickDetail !== "function") return;
   const cEst = costoImpresion(p);
   const cTotal = costoTotalPlayera(p);
   const ganancia = (p.precioVenta || 0) - cTotal;
@@ -3654,14 +3653,14 @@ function verDetallePlayera(id) {
   if (p.ventaRapida) {
     acciones.push({ label: "↩️ Anular venta", onClick: async () => {
       const ok = await pedirConfirmacion("Se borrará esta venta y las piezas regresarán al stock. ¿Seguro?", { titulo: "Anular venta", confirmLabel: "Anular", deshacer: false });
-      if (ok && typeof window.anularVenta === "function") window.anularVenta("playera", id);
+      if (ok && typeof globalThis.anularVenta === "function") globalThis.anularVenta("playera", id);
     } });
   } else {
     acciones.push({ label: "🔄 Estado de venta", onClick: () => cambiarEstadoVenta(id) });
   }
   acciones.push({ label: "🗑️ Eliminar", variant: "danger", onClick: () => deletePlayera(id) });
 
-  window.openQuickDetail({
+  globalThis.openQuickDetail({
     icon: "👕", title: p.nombre,
     subtitle: `${p.tipo} · Talla ${p.talla || "—"} · ${colorNombre(p.colorId)}`,
     sections: secciones, actions: acciones
@@ -3732,7 +3731,7 @@ function aplicarEstadoVenta(id, estado, metodo) {
 }
 function cambiarEstadoVenta(id) {
   const p = AppState.playeras.find(x => x.id === id);
-  if (!p || typeof window.openQuickDetail !== "function") return;
+  if (!p || typeof globalThis.openQuickDetail !== "function") return;
   const estado = p.bazarEstado || "Disponible";
   const opciones = [
     { clave: "d", label: "🟢 En inventario", activa: estado === "Disponible", run: () => aplicarEstadoVenta(id, "Disponible") },
@@ -3740,7 +3739,7 @@ function cambiarEstadoVenta(id) {
     { clave: "t", label: "💳 Vendida · tarjeta", activa: estado === "Vendida" && p.metodoPago === "Tarjeta", run: () => aplicarEstadoVenta(id, "Vendida", "Tarjeta") },
     { clave: "r", label: "🎁 Regalada", activa: estado === "Venta nula", run: () => aplicarEstadoVenta(id, "Venta nula") }
   ];
-  window.openQuickDetail({
+  globalThis.openQuickDetail({
     icon: "🔄", title: "Estado de venta", subtitle: `${p.nombre} · ahora: ${etiquetaEstadoVenta(p)}`,
     sections: [{ text: "Elige qué pasó con esta pieza. Se moverá sola a la pestaña que le corresponde y lo puedes cambiar cuando quieras." }],
     actions: [
@@ -3868,7 +3867,7 @@ function saveSticker() {
     nombre, tamano: val("s-tamano"), anchoCm, largoCm, costo: costoCalculado,
     dtfEspecial, dtfTipoId, dtfMetrosUsados,
     precioVenta: Math.round(num("s-precio-venta") * 100) / 100,
-    stock: parseInt(num("s-stock")) || 0, stockMinimo: parseInt(num("s-stock-minimo")) || 0,
+    stock: Number.parseInt(num("s-stock")) || 0, stockMinimo: Number.parseInt(num("s-stock-minimo")) || 0,
     prioridad: val("s-prioridad"), estado: val("s-estado"),
     clienteId: val("s-cliente") || "",
     notas: val("s-notas")
@@ -3902,7 +3901,7 @@ function quoteStickerFromInventory(id) {
   });
   switchPage("cotizador");
   renderQuoteItems();
-  if (typeof window.irAPasoCotizador === "function") window.irAPasoCotizador(2);
+  if (typeof globalThis.irAPasoCotizador === "function") globalThis.irAPasoCotizador(2);
   showToast("Sticker agregado al cotizador.");
 }
 function setStickerSizeFilter(size, btn) {
@@ -4327,7 +4326,7 @@ function updateQuoteItemField(rowId, field, value) {
   const item = quoteItems.find(i => i.rowId === rowId);
   if (!item) return;
   const numericFields = ["cantidad","costoPlayera","precioVenta","costoEstampadoManual"];
-  item[field] = numericFields.includes(field) ? (parseFloat(value) || 0) : value;
+  item[field] = numericFields.includes(field) ? (Number.parseFloat(value) || 0) : value;
   renderQuoteItems();
 }
 
@@ -4339,7 +4338,7 @@ function updateQuoteItemField(rowId, field, value) {
 function updateQuoteItemNumEstampados(rowId, value) {
   const item = quoteItems.find(i => i.rowId === rowId);
   if (!item) return;
-  const n = Math.max(1, parseInt(value) || 1);
+  const n = Math.max(1, Number.parseInt(value) || 1);
   const estampados = item.estampados || [];
   while (estampados.length < n) estampados.push({ id: uid(), anchoCm: 0, largoCm: 0 });
   while (estampados.length > n) estampados.pop();
@@ -4422,7 +4421,7 @@ function updateQuoteEstampadoField(estId, field, value) {
   const item = quoteItems.find(i => i.rowId === editingQuoteItemRowId);
   if (!item) return;
   const e = (item.estampados || []).find(x => x.id === estId);
-  if (e) e[field] = parseFloat(value) || 0;
+  if (e) e[field] = Number.parseFloat(value) || 0;
   item.dtfMetrosUsados = metrosEstimadosPorArea(areaTotalCm2(item.estampados));
   setVal("qe-dtf-metros", Number(item.dtfMetrosUsados).toFixed(5));
   updateQuoteDtfPreview(item);
@@ -4438,7 +4437,7 @@ function updateQuoteGangSheetField(field, value) {
     item.gangSheetTipoId = selection.tipoId;
     item.gangSheetBlancoSolido = selection.blancoSolido;
   } else {
-    item[field] = parseFloat(value) || 0;
+    item[field] = Number.parseFloat(value) || 0;
   }
   renderQuoteItems();
 }
@@ -4627,8 +4626,8 @@ function updateQuoteSummary() {
     document.getElementById("sum-saldo-pendiente").textContent = fmt(t.saldoPendiente);
   }
   // Barra de pasos del cotizador (steps.js): totales y contadores
-  if (typeof window.actualizarPasosCotizador === "function") {
-    window.actualizarPasosCotizador({
+  if (typeof globalThis.actualizarPasosCotizador === "function") {
+    globalThis.actualizarPasosCotizador({
       prendas: quoteItems.length, stickers: quoteStickerItems.length, extras: quoteServiciosExtra.length,
       total: fmt(t.totalVenta), ganancia: fmt(t.ganancia)
     });
@@ -4688,7 +4687,7 @@ function verCostosReales() {
   } else {
     secciones.push({ text: "Esta cotización no tiene gastos ligados. Guárdala y, en Gastos generales, liga un gasto real a ella para ver aquí cuánto queda el costo real." });
   }
-  window.openQuickDetail({
+  globalThis.openQuickDetail({
     icon: "🔍", title: "Costos reales", subtitle: "Estimado vs. gastos reales ligados",
     sections: secciones, actions: [{ label: "Cerrar", variant: "primary" }]
   });
@@ -4731,7 +4730,7 @@ function saveServicioExtra() {
   const concepto = val("se-concepto").trim();
   if (!concepto) return showToast("Ponle un concepto al servicio extra.", "error");
   const id = val("se-id");
-  const data = { concepto, monto: parseFloat(num("se-monto")) || 0 };
+  const data = { concepto, monto: Number.parseFloat(num("se-monto")) || 0 };
   if (id) {
     Object.assign(quoteServiciosExtra.find(x => x.id === id), data);
   } else {
@@ -4775,7 +4774,7 @@ function renderServiciosExtra() {
 }
 // Siguiente folio = mayor folio existente + 1 (no se repite aunque borres cotizaciones).
 function siguienteFolio() {
-  const mayor = AppState.cotizaciones.reduce((m, c) => Math.max(m, parseInt(String(c.folio || "").replace(/\D/g, "")) || 0), 1000);
+  const mayor = AppState.cotizaciones.reduce((m, c) => Math.max(m, Number.parseInt(String(c.folio || "").replaceAll(/\D/g, "")) || 0), 1000);
   return "LX-" + (mayor + 1);
 }
 function resetQuoteForm() {
@@ -4799,7 +4798,7 @@ function resetQuoteForm() {
   document.getElementById("venta-nula-banner").style.display = "none";
   renderQuoteTagsOperativos();
   renderQuoteItems();
-  if (typeof window.irAPasoCotizador === "function") window.irAPasoCotizador(1);
+  if (typeof globalThis.irAPasoCotizador === "function") globalThis.irAPasoCotizador(1);
 }
 function saveQuote() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker.", "error");
@@ -4861,7 +4860,7 @@ function saveQuote() {
 }
 function exportQuotePDF() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker antes de exportar.", "error");
-  window.generarPdfCotizacion(buildQuoteContextDesdeForm());
+  globalThis.generarPdfCotizacion(buildQuoteContextDesdeForm());
 }
 // Arma el resumen de la cotización en texto plano (sin HTML — WhatsApp no lo soporta),
 // usado tanto para el mensaje de WhatsApp como para la vista previa antes de compartir.
@@ -4936,12 +4935,12 @@ function buildQuoteContextDesdeGuardada(c) {
   };
 }
 function telParaWhatsApp(telefonoCrudo) {
-  const telCrudo = (telefonoCrudo || "").replace(/\D/g, "");
+  const telCrudo = (telefonoCrudo || "").replaceAll(/\D/g, "");
   return telCrudo.length === 10 ? "52" + telCrudo : telCrudo;
 }
 function abrirWhatsAppConTexto(texto, telefono) {
   const url = `https://wa.me/${telParaWhatsApp(telefono)}?text=${encodeURIComponent(texto)}`;
-  window.open(url, "_blank");
+  globalThis.open(url, "_blank");
 }
 function exportQuoteWhatsApp() {
   if (!quoteItems.length && !quoteStickerItems.length) return showToast("Agrega al menos una prenda o sticker antes de enviar.", "error");
@@ -4979,7 +4978,7 @@ function openPreviewCotizacionGuardada() {
 }
 function confirmarExportarPDF() {
   if (!previewQuoteContext) return;
-  window.generarPdfCotizacion(previewQuoteContext);
+  globalThis.generarPdfCotizacion(previewQuoteContext);
   closeModal("modal-preview-cotizacion");
 }
 function confirmarExportarWhatsApp() {
@@ -5146,7 +5145,7 @@ function editCotizacion() {
   renderQuoteTagsOperativos();
   renderQuoteItems();
   switchPage("cotizador");
-  if (typeof window.irAPasoCotizador === "function") window.irAPasoCotizador(1);
+  if (typeof globalThis.irAPasoCotizador === "function") globalThis.irAPasoCotizador(1);
 }
 function duplicateCotizacion(id) {
   const c = AppState.cotizaciones.find(x => x.id === id);
@@ -5289,34 +5288,34 @@ function addConsignacionProducto(producto = {}) {
       <strong>Producto consignado</strong>
       <button type="button" class="remove-row" title="Quitar producto" onclick="this.closest('.cons-producto-card').remove(); updateConsignacionProductosPreview();">✕</button>
     </div>
-    <div class="cons-producto-grid">
-      <div class="form-group">
+    <div class="pm-grid">
+      <div class="form-group pm-6">
         <label class="form-label">Producto / descripción</label>
         <input type="text" class="form-input cons-producto-nombre" value="${escapeHtml(producto.nombre || "")}" placeholder="Ej. Figura, llavero, merch">
       </div>
-      <div class="form-group">
-        <label class="form-label">Cantidad recibida</label>
-          <input type="number" class="form-input cons-producto-cantidad" min="1" step="1" value="${esPiezaUnica ? 1 : Number(producto.cantidadRecibida) || 1}" ${esPiezaUnica ? "disabled" : ""}>
+      <div class="form-group pm-2">
+        <label class="form-label">Cantidad</label>
+        <input type="number" class="form-input cons-producto-cantidad" min="1" step="1" value="${esPiezaUnica ? 1 : Number(producto.cantidadRecibida) || 1}" ${esPiezaUnica ? "disabled" : ""}>
       </div>
-      <div class="form-group">
-        <label class="form-label">Precio de venta c/u ($)</label>
+      <div class="form-group pm-2">
+        <label class="form-label">Precio c/u ($)</label>
         <input type="number" class="form-input cons-producto-precio" min="0" step="0.01" value="${Number(producto.precioVenta) || 0}">
       </div>
-      <div class="form-group">
-        <label class="form-label">Valor unitario del dueño ($)</label>
+      <div class="form-group pm-2">
+        <label class="form-label">Valor del dueño ($)</label>
         <input type="number" class="form-input cons-producto-valor" min="0" step="0.01" value="${Number(producto.valorDueno) || 0}">
       </div>
-        <label class="cons-producto-unico">
-          <input type="checkbox" class="cons-producto-unico-toggle" ${esPiezaUnica ? "checked" : ""} onchange="onConsignacionPiezaUnicaChange(this)">
-          <span>Es una sola pieza</span>
-        </label>
-        <div class="cons-producto-total"><span>Valor total de venta</span><strong class="cons-producto-total-valor">${fmt((Number(producto.cantidadRecibida) || 1) * (Number(producto.precioVenta) || 0))}</strong></div>
-      </div>
-      <div class="cons-bazar-asignaciones" data-producto-id="${escapeHtml(id)}">
-        <span class="cons-bazar-label">Ubicación y cantidades</span>
-      </div>
-      <button type="button" class="btn-secondary" onclick="addConsignacionBazarAsignacion('${escapeHtml(id)}')">+ Agregar bazar o caja</button>
-      <div class="cons-producto-summary"></div>`;
+      <label class="cons-producto-unico pm-6">
+        <input type="checkbox" class="cons-producto-unico-toggle" ${esPiezaUnica ? "checked" : ""} onchange="onConsignacionPiezaUnicaChange(this)">
+        <span>Es una sola pieza</span>
+      </label>
+      <div class="cons-producto-total pm-6"><span>Valor total de venta</span><strong class="cons-producto-total-valor">${fmt((Number(producto.cantidadRecibida) || 1) * (Number(producto.precioVenta) || 0))}</strong></div>
+    </div>
+    <div class="cons-bazar-asignaciones" data-producto-id="${escapeHtml(id)}">
+      <span class="cons-bazar-label">Ubicación y cantidades</span>
+    </div>
+    <button type="button" class="btn-secondary" onclick="addConsignacionBazarAsignacion('${escapeHtml(id)}')">+ Agregar bazar o caja</button>
+    <div class="cons-producto-summary"></div>`;
   list.appendChild(card);
   if (!producto.id) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
   card.querySelectorAll(".cons-producto-nombre,.cons-producto-cantidad,.cons-producto-precio,.cons-producto-valor")
@@ -5491,6 +5490,8 @@ function openModalConsignacion(id) {
     addConsignacionProducto();
   }
   updateConsignacionProductosPreview();
+  const btnBazar = document.getElementById("cons-llevar-bazar");
+  if (btnBazar) { btnBazar.disabled = !id; btnBazar.title = id ? "" : "Guarda la consignación primero"; }
   openModal("modal-consignacion");
 }
 function saveConsignacion() {
@@ -5519,7 +5520,7 @@ function saveConsignacion() {
   const data = {
     nombre, fecha: val("cons-fecha"),
     socioId: socio?.id || "",
-    pctComision: Math.max(0, Math.min(100, parseFloat(num("cons-pct")) || 0)),
+    pctComision: Math.max(0, Math.min(100, Number.parseFloat(num("cons-pct")) || 0)),
     notas: val("cons-notas"),
     productos: resultadoProductos.error ? (existing.productos || []) : resultadoProductos.productos
   };
@@ -5607,7 +5608,7 @@ function resumenConsignacion(consignacion) {
     valorTotal: playeras.reduce((total, playera) => total + ((Number(playera.precioConsignacion ?? playera.precioVenta) || 0) * (playera.stock || 0)), 0)
   };
 }
-window.verDetalleConsignacion = function(id) {
+globalThis.verDetalleConsignacion = function(id) {
   openModalConsignacion(id);
 };
 function renderConsignaciones() {
@@ -5648,7 +5649,7 @@ function openModalConsignacionesBazar() {
   const lista = document.getElementById("cb-lista");
   if (!bazarSelect || !lista) return;
   bazarSelect.innerHTML = `<option value="">Selecciona un bazar</option>` +
-    AppState.bazares.map(bazar => `<option value="${escapeHtml(bazar.id)}">${escapeHtml(bazar.nombre)}</option>`).join("");
+    bazaresOrdenados().map(bazar => `<option value="${escapeHtml(bazar.id)}">${escapeHtml(bazar.nombre)}</option>`).join("");
   lista.innerHTML = AppState.consignaciones.map(consignacion => {
     const libres = (consignacion.productos || []).reduce((total, producto) => total + unidadesLibresConsignacion(producto).total, 0);
     if (!libres) return "";
@@ -5678,6 +5679,12 @@ function updateConsignacionesBazarPreview() {
     return acumulado + (consignacion.productos || []).reduce((sum, producto) => sum + unidadesLibresConsignacion(producto).total, 0);
   }, 0);
   preview.textContent = `Se moverán ${total} unidad(es) a ${bazar ? bazar.nombre : "el bazar seleccionado"}.`;
+}
+// Desde el formulario: lleva TODO lo libre de esta consignación a la caja de un bazar.
+function llevarConsignacionABazarDesdeFormulario() {
+  const id = val("cons-id");
+  if (!id) return showToast("Guarda la consignación primero y después podrás llevarla a la caja de un bazar.", "error");
+  openModalConsignacionesBazar(id);
 }
 function confirmarConsignacionesBazar() {
   const bazarId = document.getElementById("cb-bazar")?.value;
@@ -5709,7 +5716,7 @@ function confirmarConsignacionesBazar() {
       producto.asignaciones = asignaciones;
     });
   });
-  saveState(); closeModal("modal-consignaciones-bazar"); refreshAllSelects(); renderConsignaciones(); renderPlayeras();
+  saveState(); closeModal("modal-consignaciones-bazar"); closeModal("modal-consignacion"); refreshAllSelects(); renderConsignaciones(); renderPlayeras();
   showToast("Consignaciones movidas al bazar.");
 }
 // Modal para ligar UNA playera del inventario a una consignación existente (o quitarla).
@@ -5906,8 +5913,8 @@ function renderClientes() {
       <div class="card-row"><span>Total gastado</span><span>${fmt(cl.totalGastado)}</span></div>
       <div class="card-row"><span>Última compra</span><span>${cl.ultimaFecha || "—"}</span></div>
       <div class="card-actions">
-        <button onclick="openModalClienteDetalleLegacy('${cl.nombre.replace(/'/g, "\\'")}')">📜 Ver historial</button>
-        <button onclick="guardarClienteLegacy('${cl.nombre.replace(/'/g, "\\'")}')">+ Guardar como cliente</button>
+        <button onclick="openModalClienteDetalleLegacy('${cl.nombre.replaceAll(/'/g, "\\'")}')">📜 Ver historial</button>
+        <button onclick="guardarClienteLegacy('${cl.nombre.replaceAll(/'/g, "\\'")}')">+ Guardar como cliente</button>
       </div>
     </div>`).join("");
 }
@@ -6330,7 +6337,7 @@ function saveIngresoExtra() {
   if (!concepto) return showToast("Ponle un concepto al ingreso extra.", "error");
   if (!b.ingresosExtra) b.ingresosExtra = [];
   const id = val("ie-id");
-  const data = { concepto, etiqueta: val("ie-etiqueta").trim() || "Otro", monto: parseFloat(num("ie-monto")) || 0 };
+  const data = { concepto, etiqueta: val("ie-etiqueta").trim() || "Otro", monto: Number.parseFloat(num("ie-monto")) || 0 };
   if (id) {
     Object.assign(b.ingresosExtra.find(x => x.id === id), data);
   } else {
@@ -6648,8 +6655,8 @@ export function renderAll(opciones) {
   renderStickers();
   renderCotizacionesGuardadas();
   if (!(opciones && opciones.conservarCotizador)) resetQuoteForm();
-  if (typeof window.renderInicio === "function") window.renderInicio();
-  if (window.lucide) window.lucide.createIcons();
+  if (typeof globalThis.renderInicio === "function") globalThis.renderInicio();
+  if (globalThis.lucide) globalThis.lucide.createIcons();
 }
 
 /* =================================================================
@@ -6659,7 +6666,7 @@ export function renderAll(opciones) {
    dinámicamente aquí mismo vía innerHTML), y en un módulo ES6 las
    funciones ya no son globales por defecto.
 ================================================================= */
-Object.assign(window, {
+Object.assign(globalThis, {
   onBazarFechaInicioChange,
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
@@ -6703,5 +6710,5 @@ Object.assign(window, {
   updatePlayeraEstampadoField, updatePlayeraPreview, updateGastoLigarPreview,
   updateQuoteDtfMetros, updateQuoteDtfTipo, updateQuoteEstampadoField, updateQuoteEstampadosCountFromModal, updateQuoteGangSheetField, updateQuoteItemField, updateQuoteStickerField, updateQuoteSummary, updateStickerCostPreview,
   viewCotizacion, recalcularCostosCotizacionesPorGastos, verCostosReales,
-  openModalAsignarCliente, saveAsignarCliente, confirmarNuevaCotizacion
+  openModalAsignarCliente, saveAsignarCliente, confirmarNuevaCotizacion, llevarConsignacionABazarDesdeFormulario
 });

@@ -372,3 +372,81 @@ button svg,button i,label svg,a svg{pointer-events:none;}
   .vs-row{grid-template-columns:minmax(0,1fr) auto;}
   .vs-acciones{grid-column:1/-1;justify-content:flex-start;}
 }
+
+
+/* ============================================================
+   FORMULARIOS EN CUADRÍCULA (playera y consignación)
+   ============================================================ */
+.modal-box.modal-box-wide{max-width:980px;}
+.pm-body{padding:var(--space-4) var(--space-5);}
+#modal-playera .modal-body,#modal-consignacion .modal-body{max-height:calc(100dvh - 190px);}
+.pm-section{
+  border:1px solid color-mix(in srgb,var(--color-text) 12%,transparent);border-radius:var(--radius-lg);
+  padding:var(--space-4);margin-bottom:var(--space-3);
+  background:color-mix(in srgb,var(--color-text) 3%,transparent);
+}
+.pm-section:last-child{margin-bottom:0;}
+.pm-section-title{font-family:var(--font-display);font-size:var(--fs-md);font-weight:700;margin-bottom:var(--space-3);display:flex;align-items:center;gap:8px;}
+.pm-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--space-3) var(--space-4);align-items:start;}
+.pm-grid > .form-group{margin:0;min-width:0;}
+.pm-grid > .form-hint,.pm-grid > .cost-preview{margin:0;}
+.pm-2{grid-column:span 2;}.pm-3{grid-column:span 3;}.pm-4{grid-column:span 4;}
+.pm-6{grid-column:span 6;}.pm-8{grid-column:span 8;}.pm-12{grid-column:1 / -1;}
+.pm-subfield{margin-top:var(--space-3);}
+.pm-switch{padding:10px 14px;border:1px solid color-mix(in srgb,var(--color-text) 16%,transparent);border-radius:var(--radius-md);min-height:46px;background:color-mix(in srgb,var(--color-text) 3%,transparent);}
+.pm-area{display:grid;grid-template-columns:150px minmax(0,1fr);gap:var(--space-3) var(--space-4);align-items:start;}
+.pm-area .form-group{margin:0;}
+.pm-area .estampados-list{margin-top:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;}
+.pm-notas{min-height:64px;}
+@media (max-width:760px){
+  .pm-2,.pm-3,.pm-4{grid-column:span 6;}
+  .pm-6,.pm-8{grid-column:1 / -1;}
+  .pm-area{grid-template-columns:minmax(0,1fr);}
+}
+@media (max-width:420px){.pm-2,.pm-3,.pm-4{grid-column:1 / -1;}}
+
+/* ---- Consignación: tarjeta de producto ordenada ---- */
+.modal-box.consignacion-modal-box{width:min(980px,100%);max-width:980px;max-height:calc(100dvh - 40px);}
+.cons-productos-list{gap:var(--space-3);}
+.cons-producto-card{padding:var(--space-4);background:color-mix(in srgb,var(--color-text) 4%,transparent);}
+.cons-producto-card > .pm-grid{margin-bottom:var(--space-3);}
+.cons-producto-unico{display:flex;align-items:center;gap:10px;min-height:46px;margin:0;}
+.cons-producto-total{flex-direction:row;align-items:center;justify-content:space-between;min-height:46px;padding:8px 14px;}
+.cons-producto-total strong{font-size:var(--fs-md);}
+.cons-productos-footer{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-3) 0;}
+.cons-productos-botones{display:flex;gap:var(--space-2);flex-wrap:wrap;}
+.cons-productos-total{display:flex;flex-direction:column;align-items:flex-end;font-size:var(--fs-xs);color:var(--color-text-muted);}
+.cons-productos-total strong{font-family:var(--font-display);font-size:var(--fs-lg);color:var(--color-text);}
+#cons-llevar-bazar:disabled{opacity:.5;cursor:not-allowed;}
+@media (max-width:560px){.cons-productos-botones .btn-secondary{flex:1 1 100%;}.cons-productos-total{align-items:flex-start;}}
+
+/* ---- Casillas de verificación con color (ya no salen blancas) ---- */
+.cons-producto-unico input[type="checkbox"],.tag-checkbox input[type="checkbox"],
+.assignment-bazar-option input[type="checkbox"],.gasto-ligar-item input[type="checkbox"],
+.mb-chk input[type="checkbox"],.gasto-cotizacion-head input[type="checkbox"]{
+  -webkit-appearance:none;appearance:none;display:inline-grid;place-content:center;
+  width:20px;height:20px;flex:0 0 20px;margin:0;border-radius:6px;cursor:pointer;
+  border:2px solid color-mix(in srgb,var(--color-text) 40%,transparent);background:transparent;
+  transition:background var(--transition),border-color var(--transition);
+}
+.cons-producto-unico input[type="checkbox"]:checked,.tag-checkbox input[type="checkbox"]:checked,
+.assignment-bazar-option input[type="checkbox"]:checked,.gasto-ligar-item input[type="checkbox"]:checked,
+.mb-chk input[type="checkbox"]:checked,.gasto-cotizacion-head input[type="checkbox"]:checked{
+  background:var(--color-accent);border-color:var(--color-accent);
+}
+.cons-producto-unico input[type="checkbox"]:checked::after,.tag-checkbox input[type="checkbox"]:checked::after,
+.assignment-bazar-option input[type="checkbox"]:checked::after,.gasto-ligar-item input[type="checkbox"]:checked::after,
+.mb-chk input[type="checkbox"]:checked::after,.gasto-cotizacion-head input[type="checkbox"]:checked::after{
+  content:"";width:10px;height:6px;margin-top:-2px;
+  border-left:2.5px solid var(--color-accent-contrast,#fff);border-bottom:2.5px solid var(--color-accent-contrast,#fff);
+  transform:rotate(-45deg);
+}
+.cons-producto-unico input[type="checkbox"]:focus-visible,.tag-checkbox input[type="checkbox"]:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;}
+
+/* ---- Playera: filas que llenan el ancho ---- */
+.pm-inline{display:flex;gap:var(--space-4);align-items:flex-start;flex-wrap:wrap;}
+.pm-inline > .pm-switch{flex:1 1 300px;align-self:flex-end;}
+.pm-inline > #p-etiqueta-talla-wrap{flex:1 1 300px;min-width:0;}
+.pm-inline > #p-etiqueta-talla-wrap .form-label{min-height:0;}
+#p-area-wrap .pm-num{max-width:120px;}
+#p-area-wrap .estampados-list{margin-top:var(--space-2);}

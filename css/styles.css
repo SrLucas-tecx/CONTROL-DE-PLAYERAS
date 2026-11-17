@@ -612,7 +612,7 @@ ul{list-style:none;}
   border:1px solid var(--color-border);background:var(--color-surface);overflow:hidden;
 }
 .sticker-count-label{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--color-text-muted);}
-.sticker-count-value{font-family:var(--font-display);font-size:clamp(1.5rem, 2vw + 1rem, 2.6rem);font-weight:800;line-height:1.1;word-break:break-word;}
+.sticker-count-value{font-family:var(--font-display);font-size:clamp(1.5rem, 2vw + 1rem, 2.6rem);font-weight:800;line-height:1.1;overflow-wrap:anywhere;}
 .sticker-count-sub{font-size:var(--fs-xs);color:var(--color-text-muted);line-height:1.4;}
 .sticker-count-net{padding:var(--space-4);}
 .sticker-count-net .sticker-count-value{font-size:clamp(1.45rem, 1.4vw + .75rem, 2.1rem);white-space:nowrap;}
@@ -913,3 +913,5 @@ ul{list-style:none;}
   .guia-tallas-leyenda{grid-template-columns:1fr 1fr;}
   .guia-tallas-tabla{min-width:620px;}
 }
+/* fieldset usado como grupo accesible (reemplaza role="group") */
+fieldset.inventory-cost-mode{border:0;padding:0;margin:0;min-width:0;}

@@ -370,7 +370,7 @@ function crearSecciones() {
   const wrap = document.createElement("div");
   wrap.id = "sh-wrap";
   wrap.innerHTML = `
-    <div class="section-header" style="margin-top:32px;">
+    <div class="section-header">
       <div>
         <h2 class="section-title">☁️ Google Sheets (backend)</h2>
         <p class="section-sub">Respaldo automático de tus datos en una hoja de Google. Revisa aquí si está conectado y sube tus cambios cuando quieras.</p>

@@ -1973,7 +1973,7 @@ function actualizarFab() {
   if (!fab) return;
   const s = document.querySelector(".page-section.active");
   const pagina = s ? s.id.replace("page-", "") : "";
-  fab.style.display = pagina === "cotizador" ? "none" : "flex"; // en el cotizador estorba a la barra de totales
+  fab.classList.toggle("fab-oculto", pagina === "cotizador"); // en el cotizador estorba a la barra de totales
 }
 function insertarBotonesMenu() {
   const pie = document.querySelector(".sidebar-footer");
