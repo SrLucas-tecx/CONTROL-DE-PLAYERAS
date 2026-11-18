@@ -208,6 +208,36 @@ function estadoVacio(icono, titulo, texto, accion) {
   return `<div class="empty-state"><div class="empty-ico">${icono}</div><strong>${escapeHtml(titulo)}</strong><span>${escapeHtml(texto)}</span>${boton}</div>`;
 }
 
+
+/* ---------------------------------------------------------------
+   PANTALLA DE CARGA (spinner) — se usa al generar PDFs
+--------------------------------------------------------------- */
+export function mostrarCarga(mensaje = "Procesando...") {
+  let overlay = document.getElementById("carga-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "carga-overlay";
+    overlay.className = "carga-overlay";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.innerHTML = '<div class="carga-box"><span class="carga-spinner" aria-hidden="true"></span><p class="carga-texto"></p></div>';
+    document.body.appendChild(overlay);
+  }
+  overlay.querySelector(".carga-texto").textContent = mensaje;
+  overlay.classList.add("open");
+}
+export function ocultarCarga() {
+  const overlay = document.getElementById("carga-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+// Deja que el navegador pinte el spinner antes de empezar trabajo pesado.
+export function conCarga(mensaje, tarea) {
+  mostrarCarga(mensaje);
+  return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 30)))
+    .then(tarea)
+    .finally(ocultarCarga);
+}
+
 function openModal(id) { document.getElementById(id).classList.add("open"); }
 function closeModal(id) { document.getElementById(id).classList.remove("open"); }
 document.addEventListener("click", (e) => {
@@ -256,6 +286,12 @@ export function switchPage(page) {
   if (page === "inicio" && typeof globalThis.renderInicio === "function") globalThis.renderInicio();
   if (page === "ventas-rapidas" && typeof globalThis.renderVentasRapidas === "function") globalThis.renderVentasRapidas();
   if (page === "bazares") renderBazares();
+  if (page === "playeras") renderPlayeras();
+  if (page === "stickers") renderStickers();
+  if (page === "consignaciones") { renderConsignaciones(); renderSocios(); }
+  if (page === "gastos") renderGastos();
+  if (page === "mermas") renderMermas();
+  if (page === "cotizaciones") renderCotizacionesGuardadas();
   if (page === "bloques-inventario") renderBloquesInventario();
   if (page === "caja") renderCaja();
   if (page === "interes") renderInteres();
@@ -5243,7 +5279,7 @@ function renderProduccionKanban() {
    CONSIGNACIÓN DE PRODUCTOS EXTERNOS
 ================================================================= */
 function opcionesBazarConsignacion(selectedId = "") {
-  return `<option value="" ${!selectedId ? "selected" : ""}>— Sin bazar / fuera del bazar —</option>` +
+  return `<option value="" ${!selectedId ? "selected" : ""}>💰 Caja general (sin bazar)</option>` +
     AppState.bazares.map(bazar => `<option value="${escapeHtml(bazar.id)}" ${bazar.id === selectedId ? "selected" : ""}>${escapeHtml(bazar.nombre)}</option>`).join("");
 }
 function renderConsignacionSocios(selectedId = "") {
@@ -5260,6 +5296,13 @@ function onConsSocioChange() {
 function addConsignacionBazarAsignacion(productoId, asignacion = {}) {
   const container = document.querySelector(`.cons-bazar-asignaciones[data-producto-id="${productoId}"]`);
   if (!container) return;
+  if (asignacion.cantidadEntregada === undefined) {
+    // Fila nueva: propone las unidades que todavía no están en ninguna caja (antes quedaba en 0 y no se guardaba).
+    const tarjeta = container.closest(".cons-producto-card");
+    const recibidas = Number(tarjeta?.querySelector(".cons-producto-cantidad")?.value) || 0;
+    const yaAsignadas = [...container.querySelectorAll(".cons-bazar-entregadas")].reduce((t, i) => t + (Number(i.value) || 0), 0);
+    asignacion = { ...asignacion, cantidadEntregada: Math.max(0, recibidas - yaAsignadas) };
+  }
   const row = document.createElement("div");
   row.className = "cons-bazar-row";
   row.innerHTML = `
@@ -5273,6 +5316,7 @@ function addConsignacionBazarAsignacion(productoId, asignacion = {}) {
     control.addEventListener("input", updateConsignacionProductosPreview);
     control.addEventListener("change", updateConsignacionProductosPreview);
   });
+  updateConsignacionProductosPreview();
 }
 function addConsignacionProducto(producto = {}) {
   const list = document.getElementById("cons-productos-list");
@@ -5529,7 +5573,7 @@ function saveConsignacion() {
   } else {
     AppState.consignaciones.push(Object.assign({ id: uid() }, data));
   }
-  saveState(); closeModal("modal-consignacion"); refreshAllSelects(); renderConsignaciones(); renderSocios();
+  saveState(); closeModal("modal-consignacion"); refrescarVistaActual();
   showToast("Consignación guardada.");
 }
 // Al borrar la consignación, las playeras que seguían con ella vuelven a quedar libres
@@ -5540,7 +5584,7 @@ async function deleteConsignacion(id) {
     if (p.consignacionId === id) { p.consignacionId = ""; p.consignacionEstado = ""; }
   });
   AppState.consignaciones = AppState.consignaciones.filter(x => x.id !== id);
-  saveState(); refreshAllSelects(); renderConsignaciones(); renderPlayeras(); renderSocios();
+  saveState(); refrescarVistaActual();
 }
 const restanteAsignacion = asignacion => Math.max(0, (Number(asignacion.cantidadEntregada) || 0) - (Number(asignacion.cantidadVendida) || 0) - (Number(asignacion.cantidadDevuelta) || 0));
 function unidadesLibresConsignacion(producto) {
@@ -5620,6 +5664,12 @@ function renderConsignaciones() {
     const resumen = resumenConsignacion(consignacion);
     const socio = AppState.socios.find(item => item.id === consignacion.socioId);
     const id = escapeHtml(consignacion.id);
+    const ubicaciones = (consignacion.productos || []).slice(0, 3).map(p => {
+      const lugares = ubicacionesProductoConsignacion(p).filter(l => l.restantes > 0).map(l => `${escapeHtml(l.nombre)}: ${l.restantes}`);
+      const libres = Math.max(0, (Number(p.cantidadRecibida) || 0) - (p.asignaciones || []).reduce((t, a) => t + (Number(a.cantidadEntregada) || 0), 0));
+      if (libres && (p.asignaciones || []).some(a => !a.bazarId)) lugares.push(`Sin asignar: ${libres}`);
+      return `<div class="ccard-ubic"><b>${escapeHtml(p.nombre)}</b> · ${lugares.join(" · ") || "sin unidades disponibles"}</div>`;
+    }).join("") + ((consignacion.productos || []).length > 3 ? `<div class="ccard-ubic">y ${(consignacion.productos || []).length - 3} producto(s) más</div>` : "");
     return `
       <article class="card pcard ccard">
         <span class="pcard-swatch ccard-icon">🤝</span>
@@ -5630,6 +5680,7 @@ function renderConsignaciones() {
             <span class="card-badge badge-media">${resumen.pct}% comisión</span>
             ${resumen.sinAsignar ? `<span class="card-badge badge-baja">📦 ${resumen.sinAsignar} sin asignar</span>` : ""}
           </div>
+          ${ubicaciones}
         </div>
         <div class="pcard-nums">
           <div class="pcard-num"><span class="pcard-num-label">Disponibles</span><span class="pcard-num-value">${resumen.disponibles}</span></div>
@@ -5644,81 +5695,108 @@ function renderConsignaciones() {
       </article>`;
   }).join("");
 }
-function openModalConsignacionesBazar() {
-  const bazarSelect = document.getElementById("cb-bazar");
-  const lista = document.getElementById("cb-lista");
-  if (!bazarSelect || !lista) return;
-  bazarSelect.innerHTML = `<option value="">Selecciona un bazar</option>` +
-    bazaresOrdenados().map(bazar => `<option value="${escapeHtml(bazar.id)}">${escapeHtml(bazar.nombre)}</option>`).join("");
-  lista.innerHTML = AppState.consignaciones.map(consignacion => {
-    const libres = (consignacion.productos || []).reduce((total, producto) => total + unidadesLibresConsignacion(producto).total, 0);
-    if (!libres) return "";
-    return `
-      <label class="gasto-ligar-item">
-        <input type="checkbox" value="${escapeHtml(consignacion.id)}" checked>
-        <span>${escapeHtml(consignacion.nombre)}</span>
-        <small>${libres} libres</small>
-      </label>`;
-  }).join("") || `<p class="empty-hint">No hay consignaciones con unidades libres para mover.</p>`;
-  updateConsignacionesBazarPreview();
+// Mueve las unidades disponibles de un producto consignado a una caja:
+// destinoId "" = caja general (sin bazar), o el id de un bazar.
+// Siempre toma lo "sin asignar"; con incluirOtros también lo que no se ha vendido en otras cajas.
+function planMoverProducto(producto, destinoId, incluirOtros) {
+  const asigs = producto.asignaciones || [];
+  const asignado = asigs.reduce((t, a) => t + (Number(a.cantidadEntregada) || 0), 0);
+  let total = Math.max(0, (Number(producto.cantidadRecibida) || 0) - asignado);
+  asigs.forEach(a => {
+    const origen = a.bazarId || "";
+    if (origen === destinoId) return;
+    if (!origen || incluirOtros) total += restanteAsignacion(a);
+  });
+  return total;
+}
+function moverProductoACaja(producto, destinoId, incluirOtros) {
+  const asigs = producto.asignaciones || (producto.asignaciones = []);
+  let mover = Math.max(0, (Number(producto.cantidadRecibida) || 0) - asigs.reduce((t, a) => t + (Number(a.cantidadEntregada) || 0), 0));
+  asigs.forEach(a => {
+    const origen = a.bazarId || "";
+    if (origen === destinoId || (origen && !incluirOtros)) return;
+    const libres = restanteAsignacion(a);
+    if (libres > 0) { a.cantidadEntregada = (Number(a.cantidadEntregada) || 0) - libres; mover += libres; }
+  });
+  if (mover > 0) {
+    const destino = asigs.find(a => (a.bazarId || "") === destinoId);
+    if (destino) destino.cantidadEntregada = (Number(destino.cantidadEntregada) || 0) + mover;
+    else asigs.push({ bazarId: destinoId, cantidadEntregada: mover, cantidadVendida: 0, cantidadDevuelta: 0, ventas: [] });
+  }
+  producto.asignaciones = asigs.filter(a => (a.bazarId || "") === destinoId
+    || (Number(a.cantidadEntregada) || 0) + (Number(a.cantidadVendida) || 0) + (Number(a.cantidadDevuelta) || 0) > 0
+    || (a.ventas || []).length);
+  return mover;
+}
+const nombreCaja = id => id ? (AppState.bazares.find(b => b.id === id)?.nombre || "el bazar") : "la caja general";
+let cbSoloConsignacion = "";
+function openModalConsignacionesBazar(soloId = "") {
+  const destino = document.getElementById("cb-bazar");
+  if (!destino || !document.getElementById("cb-lista")) return;
+  cbSoloConsignacion = typeof soloId === "string" ? soloId : "";
+  destino.innerHTML = `<option value="">💰 Caja general (sin bazar)</option>` +
+    bazaresOrdenados().map(bazar => `<option value="${escapeHtml(bazar.id)}">🏪 ${escapeHtml(bazar.nombre)}</option>`).join("");
+  destino.value = AppState.bazares.some(b => b.id === activeBazarId) ? activeBazarId : "";
+  const otros = document.getElementById("cb-incluir-otros");
+  if (otros) otros.checked = false;
+  renderListaConsignacionesBazar(true);
   openModal("modal-consignaciones-bazar");
 }
-function updateConsignacionesBazarPreview() {
-  const preview = document.getElementById("cb-preview");
-  const bazarId = document.getElementById("cb-bazar")?.value || "";
-  const bazar = AppState.bazares.find(item => item.id === bazarId);
-  if (!preview) return;
-  const checked = [...document.querySelectorAll('#cb-lista input[type="checkbox"]:checked')];
-  if (!checked.length || !bazarId) {
-    preview.textContent = bazarId ? `Selecciona al menos una consignación para mover a ${bazar ? bazar.nombre : "este bazar"}.` : "—";
-    return;
-  }
-  const total = checked.reduce((acumulado, item) => {
-    const consignacion = AppState.consignaciones.find(cons => cons.id === item.value);
-    if (!consignacion) return acumulado;
-    return acumulado + (consignacion.productos || []).reduce((sum, producto) => sum + unidadesLibresConsignacion(producto).total, 0);
-  }, 0);
-  preview.textContent = `Se moverán ${total} unidad(es) a ${bazar ? bazar.nombre : "el bazar seleccionado"}.`;
+function renderListaConsignacionesBazar(primeraVez) {
+  const lista = document.getElementById("cb-lista");
+  const destinoId = val("cb-bazar");
+  const incluirOtros = checked("cb-incluir-otros");
+  const desmarcadas = new Set(primeraVez ? [] : [...lista.querySelectorAll("input:not(:checked)")].map(i => i.value));
+  lista.innerHTML = AppState.consignaciones.map(consignacion => {
+    const movibles = (consignacion.productos || []).reduce((t, p) => t + planMoverProducto(p, destinoId, incluirOtros), 0);
+    if (!movibles) return "";
+    const marcada = primeraVez ? (!cbSoloConsignacion || cbSoloConsignacion === consignacion.id) : !desmarcadas.has(consignacion.id);
+    return `<label class="gasto-ligar-item">
+      <input type="checkbox" value="${escapeHtml(consignacion.id)}" ${marcada ? "checked" : ""} onchange="updateConsignacionesBazarPreview()">
+      <span>${escapeHtml(consignacion.nombre)}</span><small>${movibles} por mover</small>
+    </label>`;
+  }).join("") || `<p class="empty-hint">No hay unidades para mover a ${escapeHtml(nombreCaja(destinoId))}.</p>`;
+  actualizarResumenConsignacionesBazar();
 }
-// Desde el formulario: lleva TODO lo libre de esta consignación a la caja de un bazar.
+function actualizarResumenConsignacionesBazar() {
+  const preview = document.getElementById("cb-preview");
+  if (!preview) return;
+  const destinoId = val("cb-bazar");
+  const incluirOtros = checked("cb-incluir-otros");
+  const marcadas = [...document.querySelectorAll('#cb-lista input[type="checkbox"]:checked')];
+  const total = marcadas.reduce((t, item) => {
+    const c = AppState.consignaciones.find(x => x.id === item.value);
+    return t + (c ? (c.productos || []).reduce((s, p) => s + planMoverProducto(p, destinoId, incluirOtros), 0) : 0);
+  }, 0);
+  preview.textContent = marcadas.length
+    ? `Se moverán ${total} unidad(es) de ${marcadas.length} consignación(es) a ${nombreCaja(destinoId)}.`
+    : "Selecciona al menos una consignación.";
+}
+function updateConsignacionesBazarPreview() { renderListaConsignacionesBazar(false); }
 function llevarConsignacionABazarDesdeFormulario() {
   const id = val("cons-id");
-  if (!id) return showToast("Guarda la consignación primero y después podrás llevarla a la caja de un bazar.", "error");
+  if (!id) return showToast("Guarda la consignación primero y después podrás llevarla a una caja.", "error");
   openModalConsignacionesBazar(id);
 }
 function confirmarConsignacionesBazar() {
-  const bazarId = document.getElementById("cb-bazar")?.value;
-  if (!bazarId) return showToast("Selecciona un bazar antes de mover las consignaciones.", "error");
-  const checked = [...document.querySelectorAll('#cb-lista input[type="checkbox"]:checked')];
-  if (!checked.length) return showToast("Debes elegir al menos una consignación.", "error");
-  checked.forEach(item => {
-    const consignacion = AppState.consignaciones.find(cons => cons.id === item.value);
-    if (!consignacion || !consignacion.productos) return;
-    consignacion.productos.forEach(producto => {
-      const libres = unidadesLibresConsignacion(producto);
-      const cantidad = libres.total;
-      if (!cantidad) return;
-      const asignaciones = producto.asignaciones || [];
-      const general = asignaciones.find(asignacion => !asignacion.bazarId);
-      const destino = asignaciones.find(asignacion => asignacion.bazarId === bazarId);
-      if (general) {
-        general.cantidadEntregada = Math.max(0, (Number(general.cantidadEntregada) || 0) - cantidad);
-        if (general.cantidadEntregada === 0 && !general.ventas?.length) {
-          const idx = asignaciones.indexOf(general);
-          if (idx >= 0) asignaciones.splice(idx, 1);
-        }
-      }
-      if (destino) {
-        destino.cantidadEntregada = (Number(destino.cantidadEntregada) || 0) + cantidad;
-      } else {
-        asignaciones.push({ bazarId, cantidadEntregada: cantidad, cantidadVendida: 0, cantidadDevuelta: 0, ventas: [] });
-      }
-      producto.asignaciones = asignaciones;
-    });
+  const destinoId = val("cb-bazar");
+  const incluirOtros = checked("cb-incluir-otros");
+  const marcadas = [...document.querySelectorAll('#cb-lista input[type="checkbox"]:checked')];
+  if (!marcadas.length) return showToast("Debes elegir al menos una consignación.", "error");
+  const copia = tomarCopiaEstado();
+  let movidas = 0;
+  marcadas.forEach(item => {
+    const consignacion = AppState.consignaciones.find(c => c.id === item.value);
+    (consignacion?.productos || []).forEach(p => { movidas += moverProductoACaja(p, destinoId, incluirOtros); });
   });
-  saveState(); closeModal("modal-consignaciones-bazar"); closeModal("modal-consignacion"); refreshAllSelects(); renderConsignaciones(); renderPlayeras();
-  showToast("Consignaciones movidas al bazar.");
+  if (!movidas) return showToast("No había unidades por mover.", "error");
+  saveState();
+  closeModal("modal-consignaciones-bazar");
+  closeModal("modal-consignacion");
+  refrescarVistaActual();
+  ofrecerDeshacer(`${movidas} unidad(es) movidas a ${nombreCaja(destinoId)}.`, copia);
 }
+
 // Modal para ligar UNA playera del inventario a una consignación existente (o quitarla).
 function onAscConsignacionChange() {
   const asignada = !!val("asc-consignacion");
@@ -6629,6 +6707,30 @@ function renderGraficasPersonalizadas() {
   });
 }
 
+
+/* ---------------------------------------------------------------
+   CONEXIÓN ENTRE VISTAS: cada vez que se guarda algo, la pantalla que
+   estás viendo (y Modo bazar / venta rápida) se vuelven a dibujar solas.
+--------------------------------------------------------------- */
+let temporizadorRefresco = null;
+function refrescarDerivados() {
+  const activa = document.querySelector(".page-section.active");
+  if (!activa) return;
+  const vistas = {
+    playeras: renderPlayeras, stickers: renderStickers, caja: renderCaja, bazares: renderBazares,
+    consignaciones: () => { renderConsignaciones(); renderSocios(); },
+    "bloques-inventario": renderBloquesInventario, "bazar-detalle": renderBazarDetalle,
+    gastos: renderGastos, mermas: renderMermas, cotizaciones: renderCotizacionesGuardadas,
+    inicio: () => globalThis.renderInicio?.()
+  };
+  vistas[activa.id.replace("page-", "")]?.();
+  document.dispatchEvent(new CustomEvent("lucx:estado-cambio"));
+}
+document.addEventListener("lucx:guardado", () => {
+  clearTimeout(temporizadorRefresco);
+  temporizadorRefresco = setTimeout(refrescarDerivados, 80);
+});
+
 /* =================================================================
    INICIALIZACIÓN
 ================================================================= */
@@ -6688,7 +6790,7 @@ Object.assign(globalThis, {
   openPreviewCotizacion, openPreviewCotizacionGuardada, confirmarExportarPDF, confirmarExportarWhatsApp,
   openModalArtista, openModalSocio, saveSocio, deleteSocio, assignConsignacionToSocio, unassignConsignacionFromSocio, openModalAsignarBazar, openModalAsignarBazarDesdeVista, openModalAsignarPlayeraBazar, openModalAsignarConsignacion, openModalBazar,
   openModalBazarDesdeAsignacion, openModalCliente, openModalClienteDetalle, openModalClienteDetalleLegacy, openModalClienteEtiqueta,
-  openModalColor, openModalTipoPrenda, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalMerma, openModalMermaDesdePlayera,
+  openModalColor, openModalTipoPrenda, openModalEtiqueta, openModalEtiquetaOp, openModalGrafica, openModalConsignacion, openModalConsignacionesBazar, updateConsignacionesBazarPreview, confirmarConsignacionesBazar, openModalMerma, openModalMermaDesdePlayera,
   openModalIngresoExtra, openModalInventarioColores, openModalInventarioResumen, openModalPlayera, openModalProveedor, openModalQuoteEstampados, openModalServicioExtra,
   openModalSticker, openModalTallaEtiqueta, openModalGasto, openModalCompra, quoteStickerFromInventory,
   addBazarExpense, removeBazarExpense, updateBazarCostTotal, updateEfectivoContadoBazar, updateMermaCostoPreview,

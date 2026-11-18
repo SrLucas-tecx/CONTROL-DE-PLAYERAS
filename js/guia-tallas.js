@@ -1,6 +1,6 @@
 import { GUIA_TALLAS_DEFAULTS } from "./config.js";
 import { AppState, saveState } from "./storage.js";
-import { showToast } from "./ui.js";
+import { showToast, conCarga } from "./ui.js";
 
 const TALLAS_KEY = "guiaTallasMulti";
 let prendaActual = "playera"; // Opciones: 'playera', 'dama', 'oversize', 'cuello_v', 'manga_larga', 'polo', 'sudadera_crew', 'sudadera_hoodie'
@@ -423,7 +423,10 @@ function imprimirPdf(html) {
   ventana.document.close();
 }
 
-async function descargarPdf() {
+function descargarPdf() {
+  return conCarga("Generando la guía de tallas...", generarGuiaPdf);
+}
+async function generarGuiaPdf() {
   const tallas = getTallas(prendaActual);
   const [logo, letras] = await Promise.all([
     imagenDataUrl("assets/images/LOGO-crop.png", 180),
@@ -519,8 +522,10 @@ function clavesOrdenadas() {
 }
 
 // Catálogo para enviar: una página por prenda (alfabético), con las medidas que tengas editadas.
-async function descargarCatalogo() {
-  showToast("Generando catálogo…");
+function descargarCatalogo() {
+  return conCarga("Generando el catálogo de tallas...", generarCatalogoPdf);
+}
+async function generarCatalogoPdf() {
   const [logo, letras] = await Promise.all([
     imagenDataUrl("assets/images/LOGO-crop.png", 180),
     imagenDataUrl("assets/images/Letras-crop.png", 600)

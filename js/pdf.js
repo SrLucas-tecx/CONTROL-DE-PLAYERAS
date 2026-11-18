@@ -5,7 +5,7 @@
    Letras-crop.png (letras blancas) y OJITOS-crop.png.
    ============================================================ */
 import { fmt, escapeHtml, colorNombre, resumenPagoCotizacion, etiquetaMetodoPago } from "./calculator.js";
-import { showToast } from "./ui.js";
+import { showToast, conCarga } from "./ui.js";
 
 /* ---------------------------------------------------------------
    IMÁGENES: se reducen y se convierten a data URL
@@ -182,7 +182,10 @@ function abrirImpresion(html, titulo) {
 /* ---------------------------------------------------------------
    API PÚBLICA
 --------------------------------------------------------------- */
-export async function generarPdfCotizacion(q) {
+export function generarPdfCotizacion(q) {
+  return conCarga("Generando el PDF de la cotización...", () => crearPdfCotizacion(q));
+}
+async function crearPdfCotizacion(q) {
   const [logo, letras, ojitos] = await Promise.all([
     imagenChica("assets/images/LOGO-crop.png", 260), imagenChica("assets/images/Letras-crop.png", 560), imagenChica("assets/images/OJITOS-crop.png", 260)
   ]);

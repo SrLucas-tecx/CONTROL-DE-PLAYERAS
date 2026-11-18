@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="dist/styles.css?v=20261109b">
+<link rel="stylesheet" href="dist/styles.css?v=20261118a">
 </head>
 <body>
 
@@ -1019,7 +1019,7 @@
             <p class="section-sub">Inventario de socios y productos recibidos. Revisa existencias por bazar, precios y ventas cobradas.</p>
           </div>
           <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;">
-            <button type="button" class="btn-secondary" onclick="openModalConsignacionesBazar()">🏪 Llevar a la caja de un bazar</button>
+            <button type="button" class="btn-secondary" onclick="openModalConsignacionesBazar()">🏪 Llevar a una caja</button>
             <button class="btn-primary" onclick="openModalConsignacion()">+ Nueva consignación</button>
           </div>
         </div>
@@ -2539,23 +2539,23 @@
       <section class="pm-section">
         <h3 class="pm-section-title">🤝 Datos de la consignación</h3>
         <div class="pm-grid">
-          <div class="form-group pm-6">
+          <div class="form-group pm-4">
             <label class="form-label" for="cons-nombre">Dueño del producto (persona / tienda)</label>
             <input type="text" id="cons-nombre" class="form-input" placeholder="Ej. Marca o proveedor externo">
           </div>
-          <div class="form-group pm-6">
+          <div class="form-group pm-4">
             <label class="form-label" for="cons-socio">Socio</label>
             <select id="cons-socio" class="form-select" onchange="onConsSocioChange()"></select>
           </div>
-          <div class="form-group pm-6">
+          <div class="form-group pm-4">
             <label class="form-label" for="cons-fecha">Fecha de entrega</label>
             <input type="date" id="cons-fecha" class="form-input">
           </div>
-          <div class="form-group pm-6">
+          <div class="form-group pm-4">
             <label class="form-label" id="cons-pct-label" for="cons-pct">% Comisión para LUCXSTUDIO (sobre venta)</label>
             <input type="number" id="cons-pct" class="form-input" min="0" max="100" step="1" value="30" oninput="updateConsignacionProductosPreview()">
           </div>
-          <div class="form-group pm-12">
+          <div class="form-group pm-8">
             <label class="form-label" for="cons-notas">Notas</label>
             <textarea id="cons-notas" class="form-textarea pm-notas" placeholder="Opcional"></textarea>
           </div>
@@ -2569,7 +2569,7 @@
         <div class="cons-productos-footer">
           <div class="cons-productos-botones">
             <button type="button" class="btn-secondary" onclick="addConsignacionProducto()">+ Agregar producto</button>
-            <button type="button" class="btn-secondary" id="cons-llevar-bazar" onclick="llevarConsignacionABazarDesdeFormulario()">🏪 Llevar todo a la caja de un bazar</button>
+            <button type="button" class="btn-secondary" id="cons-llevar-bazar" onclick="llevarConsignacionABazarDesdeFormulario()">🏪 Llevar a una caja</button>
           </div>
           <span class="cons-productos-total">Valor total de venta <strong id="cons-valor-total">$0.00</strong></span>
         </div>
@@ -2587,20 +2587,23 @@
 <div class="modal-overlay" id="modal-consignaciones-bazar">
   <div class="modal-box modal-box-sm">
     <div class="modal-header">
-      <h2 class="modal-title">Llevar a la caja de un bazar</h2>
+      <h2 class="modal-title">Llevar consignaciones a una caja</h2>
       <button class="modal-close" data-modal="modal-consignaciones-bazar">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label" for="cb-bazar">Bazar</label>
+        <label class="form-label" for="cb-bazar">Caja de destino</label>
         <select id="cb-bazar" class="form-select" onchange="updateConsignacionesBazarPreview()"></select>
       </div>
+      <label class="tag-checkbox" style="margin-bottom:var(--space-3);">
+        <input type="checkbox" id="cb-incluir-otros" onchange="updateConsignacionesBazarPreview()"> Incluir también lo que no se ha vendido en otras cajas
+      </label>
       <div class="form-group">
         <span class="form-label">Consignaciones a incluir</span>
         <div id="cb-lista" class="gasto-ligar-list" style="max-height:220px;"></div>
       </div>
       <p class="cost-preview" id="cb-preview">—</p>
-      <p class="form-hint">Se mueven las unidades de la caja general o sin asignar a la caja del bazar. Lo que ya está asignado a otro bazar o ya se vendió no se toca. Después aparecen en Modo bazar → Consignación.</p>
+      <p class="form-hint">Elige la caja general o la de un bazar. Siempre se mueven las unidades sin asignar (y las de la caja general si el destino es un bazar). Con la casilla de arriba también se traen las que siguen sin vender en otros bazares. Lo ya vendido o devuelto no se toca. Después aparecen en Modo bazar → Consignación.</p>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-consignaciones-bazar">Cancelar</button>

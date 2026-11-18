@@ -213,6 +213,17 @@
   .inline-flex {
     display: inline-flex;
   }
+  .table {
+    display: table;
+  }
+  .border {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+  }
+  .outline {
+    outline-style: var(--tw-outline-style);
+    outline-width: 1px;
+  }
   .ease-in-out {
     --tw-ease: var(--ease-in-out);
     transition-timing-function: var(--ease-in-out);
@@ -474,7 +485,7 @@ ul {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6) calc(var(--space-4) + 4px);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
 }
@@ -2273,7 +2284,7 @@ ul {
   font-size: clamp(1.5rem, 2vw + 1rem, 2.6rem);
   font-weight: 800;
   line-height: 1.1;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .sticker-count-sub {
   font-size: var(--fs-xs);
@@ -2820,7 +2831,7 @@ ul {
     display: block;
   }
   .header {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + 4px);
     flex-wrap: wrap;
   }
   .search-bar {
@@ -3333,6 +3344,22 @@ ul {
     min-width: 620px;
   }
 }
+fieldset.inventory-cost-mode {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --tw-outline-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
 @property --tw-ease {
   syntax: "*";
   inherits: false;
@@ -3340,6 +3367,8 @@ ul {
 @layer properties {
   @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
     *, ::before, ::after, ::backdrop {
+      --tw-border-style: solid;
+      --tw-outline-style: solid;
       --tw-ease: initial;
     }
   }
