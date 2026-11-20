@@ -1764,3 +1764,139 @@ body.light input:focus, body.light select:focus, body.light textarea:focus {
 .ccard-ubic{font-size:var(--fs-xs);color:var(--color-text-muted);line-height:1.4;overflow-wrap:anywhere;}
 .ccard-ubic b{color:var(--color-text);}
 .ccard .pcard-main{gap:4px;}
+
+
+/* ============================================================
+   RESPONSIVE · FICHAS DEL MODO BAZAR, TABLETAS Y CELULARES CHICOS
+   (va al final para ganar la cascada sin usar !important)
+   ============================================================ */
+
+/* ---- Fichas: nada se encoge, el nombre se lee completo ---- */
+.mb-tile{height:auto;min-width:0;overflow:hidden;}
+.mb-tile > *{flex-shrink:0;min-width:0;}
+.mb-dot{width:16px;height:16px;flex:0 0 16px;border-radius:50%;}
+.mb-tile-name{
+  -webkit-line-clamp:3;line-clamp:3;min-height:2.4em;
+  overflow-wrap:anywhere;hyphens:auto;
+}
+.mb-tile-price{margin-top:auto;}
+.mb-tile-motivo{overflow-wrap:anywhere;}
+
+/* ---- Nunca desbordar a lo ancho ---- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+img,svg,canvas,video{max-width:100%;}
+.main-area,.page-content,.cards-grid > *,.card{min-width:0;}
+.card-title,.card-meta,.vr-fila-name{overflow-wrap:anywhere;}
+
+/* ---- Tabletas (601–1024 px) ---- */
+@media (min-width:601px) and (max-width:1024px){
+  .page-content{padding:var(--space-5);}
+  .cards-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));}
+  .mb-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+  .mb-top{gap:var(--space-3);}
+  .bazar-charts-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .metrics-combinations-layout{grid-template-columns:minmax(0,1fr);}
+  .recommended-combinations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .quote-bar-totals{gap:var(--space-5);}
+}
+@media (min-width:601px) and (max-width:900px){
+  .kanban-board{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .home-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+/* ---- Celulares (hasta 600 px) ---- */
+@media (max-width:600px){
+  /* encabezado en 3 filas: menú + título + cotizar / bazar / búsqueda */
+  .header{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3);}
+  #sidebar-toggle{order:1;}
+  .header-title{order:2;flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #header-cta{order:3;padding:var(--space-2) var(--space-3);font-size:var(--fs-xs);}
+  .bazar-activo-bar{order:4;flex:1 0 100%;}
+  .bazar-picker-btn{max-width:none;flex:1;min-width:0;}
+  .search-bar{order:5;flex:1 0 100%;max-width:none;margin-left:0;}
+
+  .page-content{padding:var(--space-3);padding-bottom:calc(var(--space-6) + 88px);}
+  .cards-grid{grid-template-columns:minmax(0,1fr);}
+  .form-row .form-group{min-width:min(100%,140px);}
+
+  /* ventanas emergentes aprovechan la pantalla */
+  .modal-overlay{padding:var(--space-2);}
+  .modal-header,.modal-footer{padding:var(--space-3) var(--space-4);}
+  .modal-body{padding:var(--space-4);max-height:calc(100vh - 170px);max-height:calc(100dvh - 170px);}
+
+  /* nombres largos: hasta 2 líneas en vez de cortarse con "..." */
+  .pcard-name,.qitem-name,.vr-fila-name,.sp-main{
+    white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;
+    -webkit-line-clamp:2;line-clamp:2;overflow:hidden;overflow-wrap:anywhere;
+  }
+  .pcard-meta{white-space:normal;overflow-wrap:anywhere;}
+  .pcard-num-value{font-size:var(--fs-base);}
+
+  /* Modo bazar */
+  .mb-tile-name{font-size:var(--fs-sm);}
+  .mb-tile-price{font-size:clamp(1.25rem,6vw,1.6rem);}
+  .mb-chip-text{overflow-wrap:anywhere;}
+}
+
+/* ---- Celulares muy chicos (hasta 380 px) ---- */
+@media (max-width:380px){
+  .page-content{padding:var(--space-2);padding-bottom:calc(var(--space-6) + 76px);}
+  .header-title{font-size:var(--fs-base);}
+  .home-kpis{grid-template-columns:minmax(0,1fr);}
+  .kpi-value{font-size:clamp(1.4rem,8vw,1.8rem);}
+  .qstep{padding:var(--space-2);}
+  .summary-card,.sticker-count-card{padding:var(--space-3);}
+  .fab{width:48px;height:48px;right:12px;font-size:1.3rem;}
+  .mb-grid{gap:6px;padding:var(--space-2);}
+  .mb-tile{min-height:112px;padding:var(--space-2);gap:2px;}
+  .mb-tile-name{font-size:.78rem;}
+  .mb-tile-meta,.mb-tile-stock{font-size:.66rem;}
+  .mb-tile-badge{min-width:26px;height:26px;top:6px;right:6px;font-size:.8rem;}
+  .modal-title{font-size:var(--fs-md);}
+  .pm-body{padding:var(--space-3);}
+  .pm-section{padding:var(--space-3);}
+}
+
+/* ---- Celular de lado (poca altura) ---- */
+@media (max-height:500px) and (orientation:landscape){
+  .modal-body{max-height:calc(100dvh - 120px);}
+  .mb-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));}
+  .mb-tile{min-height:104px;}
+}
+
+
+/* ============================================================
+   ESTAMPADOS COMPACTOS (formulario de playera)
+   ============================================================ */
+.pm-estampados-head{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-2);}
+.pm-estampados-head .form-label{margin:0;min-height:0;white-space:nowrap;}
+.pm-estampados-head .pm-num{width:76px;max-width:76px;padding:var(--space-2) var(--space-3);}
+#p-area-wrap .estampados-list{margin-top:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;}
+#p-area-wrap .estampado-row{grid-template-columns:auto minmax(60px,1fr) auto minmax(60px,1fr);padding:4px 8px;min-height:40px;gap:6px;}
+#p-area-wrap .estampado-row input{height:32px;padding:0 10px;}
+
+/* ============================================================
+   SELECCIÓN MÚLTIPLE EN INVENTARIO
+   ============================================================ */
+#inv-seleccionar-btn.is-on{border-color:var(--color-accent);background:var(--color-accent-soft);}
+.pcard{position:relative;}
+.pcard.is-selected{border-color:var(--color-accent);box-shadow:0 0 0 1px var(--color-accent);}
+.pcard-select{position:absolute;top:10px;right:10px;z-index:2;display:flex;cursor:pointer;}
+.pcard-select input{width:22px;height:22px;margin:0;accent-color:var(--color-accent);cursor:pointer;}
+.vista-lista .pcard.con-seleccion{padding-left:44px;}
+.vista-lista .pcard-select{top:50%;right:auto;left:12px;transform:translateY(-50%);}
+.bulk-bar{
+  position:sticky;bottom:var(--space-3);z-index:25;margin-top:var(--space-4);
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-3);
+  padding:var(--space-3) var(--space-4);background:var(--color-surface);
+  border:1px solid var(--color-accent);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+}
+.bulk-bar[hidden]{display:none;}
+.bulk-bar-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);}
+.bulk-bar button:disabled{opacity:.5;cursor:not-allowed;}
+body:has(.bulk-bar:not([hidden])) .fab{display:none;}
+@media (max-width:600px){
+  .bulk-bar{padding:var(--space-3);}
+  .bulk-bar-actions{width:100%;}
+  .bulk-bar-actions button{flex:1 1 calc(50% - var(--space-2));min-height:44px;}
+}

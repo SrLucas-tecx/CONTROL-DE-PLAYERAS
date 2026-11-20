@@ -516,6 +516,7 @@ function onPlayeraTipoChange() {
 }
 function onPlayeraColorChange() {
   onPlayeraTipoChange();
+  sugerirEtiquetaTallaPlayera();
 }
 
 /* =================================================================
@@ -2557,7 +2558,7 @@ function openModalPlayera(id) {
   if (id) {
     const p = AppState.playeras.find(x => x.id === id);
     cargarTiposPrenda(document.getElementById("p-tipo"), p.tipo);
-    setVal("p-nombre", p.nombre); setVal("p-tipo", p.tipo); setVal("p-talla", p.talla);
+    setVal("p-nombre", p.nombre); setVal("p-tipo", p.tipo); llenarSelectTallaPlayera(p.talla);
     setVal("p-color", p.colorId); setVal("p-stock", p.stock);
     setVal("p-costo-playera", p.costoPlayera);
     setChecked("p-tiene-etiqueta", p.tieneEtiquetaTalla);
@@ -2579,7 +2580,7 @@ function openModalPlayera(id) {
   } else {
     ["p-nombre","p-notas"].forEach(f => setVal(f, ""));
     const tipoDefault = tipoPrendaPorNombre(AppState.tiposPrenda[0]?.nombre) || AppState.tiposPrenda[0];
-    setVal("p-tipo", tipoDefault?.nombre || ""); setVal("p-talla", ""); setVal("p-stock", 1);
+    setVal("p-tipo", tipoDefault?.nombre || ""); llenarSelectTallaPlayera(""); setVal("p-stock", 1);
     setVal("p-costo-playera", costoPredeterminadoPrenda(tipoDefault, val("p-color")));
     setChecked("p-tiene-etiqueta", true);
     setChecked("p-prenda-cliente", false); setChecked("p-dtf-especial", false);
@@ -2638,7 +2639,7 @@ function updatePlayeraPreview() {
   };
   const cEst = costoImpresion(draft);
   const costoBase = checked("p-prenda-cliente") ? 0 : num("p-costo-playera");
-  const sobrecargo = sobrecargoTalla(val("p-talla"));
+  const sobrecargo = sobrecargoTalla(tallaPlayera());
   // Si esta playera ya está vinculada a un gasto real (ej. "1 metro de DTF" repartido
   // entre varias piezas), el costo real vinculado manda sobre el estimado por área —
   // tanto en el costo total como en la ganancia — igual que hace costoImpresionEfectivoPlayera()
@@ -2685,7 +2686,7 @@ function liberarEtiquetaTallaDePlayera(playera) {
 // sumando de vuelta lo que ella misma tiene apartado (para no verlo artificialmente
 // bajo), y queda preseleccionada; si no, se sugiere la que coincide por talla/color,
 // pero el usuario puede elegir cualquier otra a mano.
-function renderPlayeraEtiquetaTallaOptions(playeraIdActual) {
+function renderPlayeraEtiquetaTallaOptions(playeraIdActual, forzarSugerida = false) {
   const sel = document.getElementById("p-etiqueta-talla-id");
   if (!sel) return;
   const p = playeraIdActual ? AppState.playeras.find(x => x.id === playeraIdActual) : null;
@@ -2698,14 +2699,65 @@ function renderPlayeraEtiquetaTallaOptions(playeraIdActual) {
     const disponible = (t.cantidad || 0) + (consumoActual && consumoActual.tallaEtiquetaId === t.id ? consumoActual.cantidad : 0);
     return `<option value="${t.id}">${escapeHtml(t.talla)} · ${escapeHtml(t.color)} (quedan ${disponible})</option>`;
   }).join("");
-  if (consumoActual) {
+  if (consumoActual && !forzarSugerida) {
     sel.value = consumoActual.tallaEtiquetaId;
   } else {
-    const colorTxt = colorNombre(val("p-color"));
-    const sugerida = AppState.tallaEtiquetas.find(t =>
-      t.talla.trim().toLowerCase() === (val("p-talla") || "").trim().toLowerCase() && t.color === colorTxt);
-    if (sugerida) sel.value = sugerida.id;
+    sugerirEtiquetaTallaPlayera();
   }
+}
+/* ---------------------------------------------------------------
+   TALLA COMO SELECTOR + ETIQUETA DE TALLA AUTOMÁTICA
+--------------------------------------------------------------- */
+const TALLAS_BASE = ["CH", "MD", "G", "XG", "XXG"];
+const normalizaTalla = t => String(t || "").trim().toUpperCase();
+function llenarSelectTallaPlayera(valor = "") {
+  const sel = document.getElementById("p-talla");
+  const otra = document.getElementById("p-talla-otra");
+  if (!sel || !otra) return;
+  const actual = String(valor || "").trim();
+  const lista = [...TALLAS_BASE];
+  AppState.tallaEtiquetas.forEach(t => {
+    if (t.talla && !lista.some(x => normalizaTalla(x) === normalizaTalla(t.talla))) lista.push(t.talla.trim());
+  });
+  const coincide = actual ? lista.find(x => normalizaTalla(x) === normalizaTalla(actual)) : "";
+  sel.innerHTML = `<option value="">— Elige talla —</option>` +
+    lista.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("") +
+    `<option value="__otra__">Otra talla…</option>`;
+  if (actual && !coincide) {
+    sel.value = "__otra__"; otra.value = actual; otra.style.display = "";
+  } else {
+    sel.value = coincide || ""; otra.value = ""; otra.style.display = "none";
+  }
+}
+function tallaPlayera() {
+  const sel = document.getElementById("p-talla");
+  if (!sel) return "";
+  return sel.value === "__otra__" ? val("p-talla-otra").trim() : sel.value;
+}
+// Elige sola la etiqueta de talla que coincide con la talla (y el color, si hay) de la prenda.
+function sugerirEtiquetaTallaPlayera() {
+  const sel = document.getElementById("p-etiqueta-talla-id");
+  const hint = document.getElementById("p-etiqueta-talla-hint");
+  if (!sel || !checked("p-tiene-etiqueta")) return;
+  const talla = normalizaTalla(tallaPlayera());
+  if (hint) hint.textContent = "";
+  if (!talla) return;
+  const candidatas = AppState.tallaEtiquetas.filter(t => normalizaTalla(t.talla) === talla);
+  const colorTxt = colorNombre(val("p-color"));
+  const elegida = candidatas.find(t => t.color === colorTxt) || candidatas.find(t => (t.cantidad || 0) > 0) || candidatas[0];
+  if (elegida) {
+    sel.value = elegida.id;
+    if (hint) hint.textContent = `Se eligió la etiqueta ${elegida.talla} · ${elegida.color} (quedan ${elegida.cantidad || 0}).`;
+  } else if (hint) {
+    hint.textContent = `No hay etiquetas registradas para la talla ${tallaPlayera()}; elige otra o créala en Etiquetas y colores.`;
+  }
+}
+function onPlayeraTallaChange() {
+  const otra = document.getElementById("p-talla-otra");
+  const esOtra = val("p-talla") === "__otra__";
+  if (otra) { otra.style.display = esOtra ? "" : "none"; if (esOtra) otra.focus(); }
+  updatePlayeraPreview();
+  if (checked("p-tiene-etiqueta")) renderPlayeraEtiquetaTallaOptions(val("p-id"), true);
 }
 function onPlayeraTieneEtiquetaChange() {
   const on = checked("p-tiene-etiqueta");
@@ -2775,7 +2827,7 @@ function savePlayera() {
   const metodoVenta = estadoVenta === "Vendida" ? (val("p-metodo-pago") || "Efectivo") : "";
   const montoTarjetaVenta = metodoVenta === "Tarjeta" ? (Number.parseFloat(num("p-precio-venta")) || 0) : 0;
   const data = {
-    nombre, tipo: val("p-tipo"), talla: val("p-talla").trim(), colorId: val("p-color"),
+    nombre, tipo: val("p-tipo"), talla: tallaPlayera(), colorId: val("p-color"),
     stock: stockCapturado,
     costoPlayera: prendaCliente ? 0 : (Number.parseFloat(num("p-costo-playera")) || 0),
     estampados: JSON.parse(JSON.stringify(playeraEstampadosDraft)),
@@ -3020,8 +3072,12 @@ function renderPlayeras() {
     btnVacio.onclick = hayAlgo ? () => limpiarFiltrosPlayeras() : () => openModalPlayera();
   }
   grid.classList.toggle("vista-lista", uiFilters.playeraVista === "lista");
+  playerasVisiblesIds = list.filter(p => !p.ventaRapida).map(p => p.id);
+  const idsExistentes = new Set(AppState.playeras.map(p => p.id));
+  playerasSeleccionadas.forEach(id => { if (!idsExistentes.has(id)) playerasSeleccionadas.delete(id); });
   grid.innerHTML = list.map(playeraCardCompacta).join("");
   actualizarBarraFiltrosPlayeras();
+  actualizarBarraSeleccionPlayeras();
 }
 
 /* ---------------------------------------------------------------
@@ -3551,6 +3607,110 @@ async function eliminarBloqueInventario(id) {
    REDISEÑO SPRINT 2 — tarjeta compacta + pop-up "Ver más"
    La tarjeta solo muestra lo esencial; el detalle sale en un pop-up.
 --------------------------------------------------------------- */
+/* ---------------------------------------------------------------
+   SELECCIÓN MÚLTIPLE DE PLAYERAS (bazares y estado en lote)
+--------------------------------------------------------------- */
+let modoSeleccionPlayeras = false;
+const playerasSeleccionadas = new Set();
+let playerasVisiblesIds = [];
+let loteModo = "bazar";
+function actualizarBarraSeleccionPlayeras() {
+  const bar = document.getElementById("inv-bulk-bar");
+  const btn = document.getElementById("inv-seleccionar-btn");
+  if (btn) { btn.classList.toggle("is-on", modoSeleccionPlayeras); btn.setAttribute("aria-pressed", String(modoSeleccionPlayeras)); }
+  if (!bar) return;
+  bar.hidden = !modoSeleccionPlayeras;
+  const n = playerasSeleccionadas.size;
+  document.getElementById("inv-bulk-count").textContent = n ? `${n} seleccionada(s)` : "Elige playeras";
+  bar.querySelectorAll("[data-requiere-seleccion]").forEach(b => { b.disabled = n === 0; });
+}
+function toggleModoSeleccionPlayeras() {
+  modoSeleccionPlayeras = !modoSeleccionPlayeras;
+  if (!modoSeleccionPlayeras) playerasSeleccionadas.clear();
+  renderPlayeras();
+}
+function togglePlayeraSeleccion(id, marcada) {
+  if (marcada) playerasSeleccionadas.add(id); else playerasSeleccionadas.delete(id);
+  document.querySelectorAll("#playeras-grid .pcard").forEach(card => {
+    if (card.dataset.id === id) card.classList.toggle("is-selected", marcada);
+  });
+  actualizarBarraSeleccionPlayeras();
+}
+function seleccionarTodasPlayeras() {
+  playerasVisiblesIds.forEach(id => playerasSeleccionadas.add(id));
+  renderPlayeras();
+}
+function limpiarSeleccionPlayeras() {
+  playerasSeleccionadas.clear();
+  renderPlayeras();
+}
+function openModalLotePlayeras(modo) {
+  if (!playerasSeleccionadas.size) return showToast("Selecciona al menos una playera.", "error");
+  loteModo = modo === "estado" ? "estado" : "bazar";
+  document.getElementById("lote-title").textContent = loteModo === "estado" ? "Cambiar estado en lote" : "Agregar a bazares en lote";
+  document.getElementById("lote-resumen").textContent = `Se aplicará a ${playerasSeleccionadas.size} playera(s) seleccionada(s).`;
+  document.getElementById("lote-seccion-bazar").style.display = loteModo === "bazar" ? "block" : "none";
+  document.getElementById("lote-seccion-estado").style.display = loteModo === "estado" ? "block" : "none";
+  document.getElementById("lote-bazares-list").innerHTML = AppState.bazares.length
+    ? bazaresOrdenados().map(b => `
+      <label class="assignment-bazar-option">
+        <input type="checkbox" class="lote-bazar-option" value="${escapeHtml(b.id)}">
+        <span>🏪 ${escapeHtml(b.nombre)}</span>
+      </label>`).join("")
+    : `<div class="assignment-bazar-empty">Aún no hay bazares. Crea uno en “Mis Bazares”.</div>`;
+  setVal("lote-modo-bazar", "agregar");
+  setVal("lote-estado", "");
+  openModal("modal-lote-playeras");
+}
+function aplicarLotePlayeras() {
+  const piezas = AppState.playeras.filter(p => playerasSeleccionadas.has(p.id) && !p.ventaRapida);
+  if (!piezas.length) return showToast("No hay playeras seleccionadas.", "error");
+  const copia = tomarCopiaEstado();
+  let cambiadas = 0, omitidas = 0, aviso = "";
+  if (loteModo === "bazar") {
+    const elegidos = [...document.querySelectorAll(".lote-bazar-option:checked")].map(o => o.value);
+    const modo = val("lote-modo-bazar");
+    if (!elegidos.length && modo !== "reemplazar") return showToast("Elige al menos un bazar.", "error");
+    piezas.forEach(p => {
+      const actuales = bazarIdsDe(p);
+      const nuevos = modo === "reemplazar" ? elegidos
+        : modo === "quitar" ? actuales.filter(id => !elegidos.includes(id))
+        : [...new Set([...actuales, ...elegidos])];
+      if (nuevos.length === actuales.length && nuevos.every(id => actuales.includes(id))) return;
+      p.bazarIds = nuevos; p.bazarId = nuevos[0] || "";
+      cambiadas++;
+    });
+    aviso = modo === "quitar" ? "quitada(s) de los bazares elegidos" : "actualizada(s) con sus bazares";
+  } else {
+    const valor = val("lote-estado");
+    if (!valor) return showToast("Elige el nuevo estado.", "error");
+    const [estado, metodo] = valor.split("|");
+    piezas.forEach(p => {
+      const estadoAnterior = p.bazarEstado || "Disponible";
+      if (estadoAnterior === estado && (estado !== "Vendida" || (p.metodoPago || "Efectivo") === metodo)) return;
+      if (estadoAnterior !== "Vendida" && estado === "Vendida" && (Number(p.stock) || 0) < 1) { omitidas++; return; }
+      if (!actualizarStockPorCambioEstadoVenta(p, estadoAnterior, estado, p.estado)) { omitidas++; return; }
+      p.bazarEstado = estado;
+      if (estado === "Vendida") {
+        p.metodoPago = metodo || "Efectivo";
+        p.montoTarjeta = p.metodoPago === "Tarjeta" ? (p.precioVenta || 0) : 0;
+        p.comisionTerminal = comisionTerminalMonto(p.montoTarjeta, AppState.settings.comisionTerminalPct);
+        if (!p.fechaVenta) p.fechaVenta = new Date().toLocaleDateString("sv-SE");
+      } else {
+        p.metodoPago = ""; p.montoTarjeta = 0; p.comisionTerminal = 0;
+      }
+      cambiadas++;
+    });
+    aviso = "con el estado actualizado";
+  }
+  closeModal("modal-lote-playeras");
+  if (!cambiadas) return showToast(omitidas ? `No se pudo aplicar: ${omitidas} playera(s) sin stock.` : "No hubo cambios que aplicar.", "error");
+  playerasSeleccionadas.clear();
+  saveState();
+  refrescarVistaActual();
+  ofrecerDeshacer(`${cambiadas} playera(s) ${aviso}${omitidas ? ` · ${omitidas} omitida(s)` : ""}.`, copia);
+}
+
 function playeraCardCompacta(p) {
   const cTotal = costoTotalPlayera(p);
   const ganancia = (p.precioVenta || 0) - cTotal;
@@ -3566,7 +3726,8 @@ function playeraCardCompacta(p) {
   if (bazarEstado === "Vendida") badges.push(`<span class="card-badge badge-agotado">Vendida ✅</span>`);
   else if (bazarEstado === "Venta nula") badges.push(`<span class="card-badge badge-agotado">🎁 Venta nula</span>`);
   return `
-  <div class="card pcard">
+  <div class="card pcard${playerasSeleccionadas.has(p.id) ? " is-selected" : ""}${modoSeleccionPlayeras ? " con-seleccion" : ""}" data-id="${p.id}">
+    ${modoSeleccionPlayeras && !p.ventaRapida ? `<label class="pcard-select"><input type="checkbox" ${playerasSeleccionadas.has(p.id) ? "checked" : ""} onchange="togglePlayeraSeleccion('${p.id}', this.checked)" aria-label="Seleccionar ${escapeHtml(p.nombre)}"></label>` : ""}
     <span class="pcard-swatch" style="background:${colorHex(p.colorId)}" title="${escapeHtml(colorNombre(p.colorId))}"></span>
     <div class="pcard-main">
       <div class="pcard-name">${escapeHtml(p.nombre)}</div>
@@ -6773,7 +6934,7 @@ Object.assign(globalThis, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera,   cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
+  verDetallePlayera, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
   openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, cambiarEtiquetaPlayeraBloque, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,

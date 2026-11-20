@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="dist/styles.css?v=20261118a">
+<link rel="stylesheet" href="dist/styles.css?v=20261118c">
 </head>
 <body>
 
@@ -635,6 +635,7 @@
           <button type="button" class="btn-secondary" onclick="openModalInventarioResumen()">📊 Ver resumen</button>
           <input type="search" class="filter-select inventory-search" id="inventory-playera-search" placeholder="Buscar playera por nombre, talla o color..." aria-label="Buscar playeras en el inventario" oninput="renderPlayeras()">
           <button type="button" class="btn-secondary" id="inv-filtros-limpiar" onclick="limpiarFiltrosPlayeras()" style="display:none;">Limpiar filtros</button>
+          <button type="button" class="btn-secondary" id="inv-seleccionar-btn" onclick="toggleModoSeleccionPlayeras()" aria-pressed="false">✅ Seleccionar</button>
           <div class="view-toggle" id="inv-vista-toggle">
             <button type="button" data-vista="cuadricula" onclick="cambiarVistaPlayeras('cuadricula')" title="Ver en cuadrícula">▦</button>
             <button type="button" data-vista="lista" onclick="cambiarVistaPlayeras('lista')" title="Ver en lista">☰</button>
@@ -658,6 +659,16 @@
           </select>
         </div>
         <div id="playeras-grid" class="cards-grid"></div>
+        <div class="bulk-bar" id="inv-bulk-bar" hidden>
+          <strong id="inv-bulk-count">Elige playeras</strong>
+          <div class="bulk-bar-actions">
+            <button type="button" class="btn-secondary" onclick="seleccionarTodasPlayeras()">Seleccionar todo</button>
+            <button type="button" class="btn-secondary" data-requiere-seleccion onclick="limpiarSeleccionPlayeras()">Limpiar</button>
+            <button type="button" class="btn-primary" data-requiere-seleccion onclick="openModalLotePlayeras('bazar')">🏪 Agregar a bazar</button>
+            <button type="button" class="btn-primary" data-requiere-seleccion onclick="openModalLotePlayeras('estado')">🔄 Cambiar estado</button>
+            <button type="button" class="btn-secondary" onclick="toggleModoSeleccionPlayeras()">Salir</button>
+          </div>
+        </div>
         <div class="empty-state" id="playeras-empty-hint"><div class="empty-ico">👕</div><strong id="playeras-empty-title">Aún no hay playeras</strong><span id="playeras-empty-text">Registra tu primera playera para empezar a controlar tu inventario.</span><button type="button" class="btn-primary" id="playeras-empty-btn" onclick="openModalPlayera()">+ Nueva playera</button></div>
       </section>
       <!-- ======================= /INVENTARIO PLAYERAS ======================= -->
@@ -1708,7 +1719,8 @@
           <p class="form-hint pm-12">Al cambiar el tipo o el color se cargan el costo y el precio sugeridos; puedes modificarlos para esta prenda.</p>
           <div class="form-group pm-3">
             <label class="form-label" for="p-talla">Talla</label>
-            <input type="text" id="p-talla" list="talla-list" class="form-input" placeholder="Ej. CH, MD, G, XG" oninput="updatePlayeraPreview()">
+            <select id="p-talla" class="form-select" onchange="onPlayeraTallaChange()"></select>
+            <input type="text" id="p-talla-otra" class="form-input" style="display:none;margin-top:6px;" placeholder="Escribe la talla" aria-label="Otra talla" oninput="updatePlayeraPreview()">
             <datalist id="talla-list">
               <option value="CH"><option value="MD"><option value="G"><option value="XG"><option value="XXG">
             </datalist>
@@ -1771,7 +1783,7 @@
             </div>
           </div>
 
-          <div class="form-group pm-6">
+          <div class="form-group pm-4">
             <div id="p-dtf-especial-wrap" style="display:none;">
               <label class="form-label" for="p-dtf-tipo">Tipo de DTF especial</label>
               <select id="p-dtf-tipo" class="form-select" onchange="onPlayeraDtfTipoChange()"></select>
@@ -1782,9 +1794,11 @@
             </div>
             <span class="form-hint" id="p-dtf-precio-hint">Se calcula con los metros y el precio del DTF estándar.</span>
           </div>
-          <div id="p-area-wrap" class="form-group pm-6">
-            <label class="form-label" for="p-num-estampados"># de estampados</label>
-            <input type="number" id="p-num-estampados" class="form-input pm-num" min="1" value="1" onchange="onPlayeraNumEstampadosChange()">
+          <div id="p-area-wrap" class="form-group pm-8">
+            <div class="pm-estampados-head">
+              <label class="form-label" for="p-num-estampados"># de estampados</label>
+              <input type="number" id="p-num-estampados" class="form-input pm-num" min="1" value="1" onchange="onPlayeraNumEstampadosChange()">
+            </div>
             <div id="p-estampados-list" class="estampados-list"></div>
           </div>
 
@@ -1838,6 +1852,7 @@
               <div id="p-etiqueta-talla-wrap" style="display:none;">
                 <label class="form-label" for="p-etiqueta-talla-id">Etiqueta de talla a usar (su stock se descuenta al guardar)</label>
                 <select id="p-etiqueta-talla-id" class="form-select" onchange="updatePlayeraPreview()"></select>
+                <span class="form-hint" id="p-etiqueta-talla-hint"></span>
               </div>
             </div>
           </div>
@@ -2694,6 +2709,49 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-asignar-cliente">Cancelar</button>
       <button class="btn-primary" onclick="saveAsignarCliente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-lote-playeras">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="lote-title">Cambios en lote</h2>
+      <button class="modal-close" data-modal="modal-lote-playeras" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="section-sub" id="lote-resumen"></p>
+      <div id="lote-seccion-bazar">
+        <div class="form-group">
+          <span class="form-label">Bazares</span>
+          <div id="lote-bazares-list" class="assignment-bazares-list"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="lote-modo-bazar">¿Qué hacer con los bazares?</label>
+          <select id="lote-modo-bazar" class="form-select">
+            <option value="agregar">Agregar a estos bazares (conserva los que ya tienen)</option>
+            <option value="reemplazar">Reemplazar por estos bazares</option>
+            <option value="quitar">Quitar de estos bazares</option>
+          </select>
+        </div>
+      </div>
+      <div id="lote-seccion-estado">
+        <div class="form-group">
+          <label class="form-label" for="lote-estado">Nuevo estado de venta</label>
+          <select id="lote-estado" class="form-select">
+            <option value="">— Elige un estado —</option>
+            <option value="Disponible|">🟢 En inventario (disponible)</option>
+            <option value="Vendida|Efectivo">💵 Vendida · efectivo</option>
+            <option value="Vendida|Tarjeta">💳 Vendida · tarjeta</option>
+            <option value="Venta nula|">🎁 Regalada (venta nula)</option>
+          </select>
+          <span class="form-hint">Las que no tengan stock no se pueden marcar como vendidas y se omiten.</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal="modal-lote-playeras">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="aplicarLotePlayeras()">Aplicar a la selección</button>
     </div>
   </div>
 </div>
