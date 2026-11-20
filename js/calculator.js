@@ -305,6 +305,14 @@ export function costoBazarReal(bazar) {
   const base = (bazar && bazar.costoBaseBazar) || 0;
   return base + gastosBazarPorTipo(bazar).total;
 }
+// Juegos del bazar (ruleta, lotería, tiro...): ingreso por jugadas menos el costo de premios.
+export function resumenJuegosBazar(bazar) {
+  const juegos = (bazar && bazar.juegos) || [];
+  const jugadas = juegos.reduce((s, j) => s + (Number(j.jugadas) || 0), 0);
+  const ingreso = juegos.reduce((s, j) => s + (Number(j.precio) || 0) * (Number(j.jugadas) || 0), 0);
+  const premios = juegos.reduce((s, j) => s + (Number(j.costoPremios) || 0), 0);
+  return { count: juegos.length, jugadas, ingreso, premios, neto: ingreso - premios };
+}
 export function saldoBazarPendiente(bazar) {
   return Math.max(0, costoBazarReal(bazar) - ((bazar && bazar.montoPagadoBazar) || 0));
 }

@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="dist/styles.css?v=20261118c">
+<link rel="stylesheet" href="dist/styles.css?v=20261118d">
 </head>
 <body>
 
@@ -1270,6 +1270,36 @@
           </table>
         </div>
         <p class="empty-hint" id="bd-ingresos-extra-empty">Aún no registras ingresos extra en este bazar.</p>
+
+        <div class="section-header" style="justify-content:space-between;margin-top:32px;">
+          <div>
+            <h2 class="section-title">🎲 Juegos del bazar</h2>
+            <p class="section-sub">Ruleta, lotería, tiro al blanco... Suma una jugada con cada toque; el ingreso menos el costo de premios entra a “Ingresos extra”.</p>
+          </div>
+          <button class="btn-primary" onclick="openModalJuego()">+ Agregar juego</button>
+        </div>
+        <div id="bd-juegos-grid" class="cards-grid"></div>
+        <p class="empty-hint" id="bd-juegos-empty">Aún no agregas juegos a este bazar.</p>
+
+        <div class="section-header" style="justify-content:space-between;margin-top:32px;">
+          <div>
+            <h2 class="section-title">🧳 Maleta del bazar</h2>
+            <p class="section-sub">Checklist de lo que llevas. Marca cada cosa al empacarla para no olvidar nada.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-secondary" onclick="desmarcarMaleta()">Desmarcar todo</button>
+            <button class="btn-secondary" onclick="agregarMaletaSugerida()">+ Lista sugerida</button>
+          </div>
+        </div>
+        <div class="quote-meta-card" id="bd-maleta-card">
+          <div class="savings-label"><span id="bd-maleta-texto">Maleta vacía</span><span id="bd-maleta-pct">0%</span></div>
+          <div class="savings-bar"><div class="savings-bar-fill" id="bd-maleta-fill" style="width:0%;"></div></div>
+          <div id="bd-maleta-lista" class="maleta-lista"></div>
+          <div class="maleta-add">
+            <input type="text" id="maleta-nuevo" class="form-input" maxlength="80" placeholder="Agregar a la maleta (ej. Extensión)" aria-label="Agregar a la maleta" onkeydown="if(event.key==='Enter'){agregarMaletaItem();}">
+            <button type="button" class="btn-primary" onclick="agregarMaletaItem()">Agregar</button>
+          </div>
+        </div>
 
         <div class="section-header" style="margin-top:32px;">
           <h2 class="section-title">Ventas por fecha</h2>
@@ -2709,6 +2739,41 @@
     <div class="modal-footer">
       <button class="btn-secondary" data-modal="modal-asignar-cliente">Cancelar</button>
       <button class="btn-primary" onclick="saveAsignarCliente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-juego">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-juego-title">Nuevo juego</h2>
+      <button class="modal-close" data-modal="modal-juego" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="juego-id">
+      <div class="form-group">
+        <label class="form-label" for="juego-nombre">Nombre del juego</label>
+        <input type="text" id="juego-nombre" class="form-input" maxlength="60" placeholder="Ej. Ruleta de premios">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="juego-precio">Precio por jugada ($)</label>
+          <input type="number" id="juego-precio" class="form-input" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="juego-jugadas">Jugadas hasta ahora</label>
+          <input type="number" id="juego-jugadas" class="form-input" min="0" step="1" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="juego-premios">Costo de premios y material ($)</label>
+        <input type="number" id="juego-premios" class="form-input" min="0" step="0.01" value="0">
+        <span class="form-hint">Lo que gastaste en premios para este juego; se resta de lo que ganó.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal="modal-juego">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="saveJuego()">Guardar juego</button>
     </div>
   </div>
 </div>

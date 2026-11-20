@@ -24,7 +24,7 @@ const EMOJI_A_ICONO = new Map([
   ["🖤", "heart"], ["🖨", "printer"], ["🗂", "folders"],
   ["🗑", "trash-2"], ["🚀", "rocket"], ["🚚", "truck"], ["🚦", "traffic-cone"],
   ["🛍", "shopping-bag"],
-  ["🤝", "handshake"], ["🧮", "calculator"], ["🧵", "spool"],
+  ["🤝", "handshake"], ["🧮", "calculator"], ["🧵", "spool"], ["🧳", "luggage"], ["🎲", "dices"],
   ["🧻", "package"], ["🧾", "receipt-text"], ["✕", "x"], ["✖", "x"],
   ["✔", "check"], ["☰", "menu"], ["＋", "plus"]
 ]);

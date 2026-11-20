@@ -70,7 +70,7 @@ function cargarCss() {
   const link = document.createElement("link");
   link.id = "redesign-css";
   link.rel = "stylesheet";
-  link.href = "dist/redesign.css?v=20261118c";   // cambia este número si el navegador no refleja tus cambios de estilo
+  link.href = "dist/redesign.css?v=20261118d";   // cambia este número si el navegador no refleja tus cambios de estilo
   document.head.appendChild(link);
 }
 

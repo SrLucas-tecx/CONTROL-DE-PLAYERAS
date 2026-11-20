@@ -65,12 +65,12 @@ function migrarDatosAntiguos() {
 let toastHandler = null;
 export function setToastHandler(fn) { toastHandler = fn; }
 
-export function saveState() {
+export function saveState(opciones) {
   try {
     AppState.ultimaModificacion = new Date().toISOString();   // sirve para comparar respaldos entre dispositivos
     localStorage.setItem(STORAGE_KEY, JSON.stringify(AppState));
     // Aviso para sheets.js (antes nadie lo emitía y los cambios no se subían solos)
-    document.dispatchEvent(new Event("lucx:guardado"));
+    document.dispatchEvent(new CustomEvent("lucx:guardado", { detail: { sinRefresco: !!(opciones && opciones.sinRefresco) } }));
   } catch (e) {
     console.error("Error guardando estado:", e);
     if (toastHandler) toastHandler("No se pudo guardar (almacenamiento lleno).", "error");

@@ -4387,3 +4387,116 @@ body:has(.bulk-bar:not([hidden])) .fab {
     min-height: 44px;
   }
 }
+.juego-contador {
+  display: grid;
+  grid-template-columns: 56px minmax(0,1fr) 56px;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+}
+.juego-contador button {
+  min-height: 56px;
+  border-radius: var(--radius-md);
+  font-size: 1.6rem;
+  font-weight: 800;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+.juego-contador button:last-child {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+.juego-contador button:active {
+  transform: scale(.96);
+}
+.juego-contador > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+.juego-contador b {
+  font-family: var(--font-display);
+  font-size: var(--fs-2xl);
+}
+.juego-contador span {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+.maleta-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(240px,1fr));
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+.maleta-lista .empty-hint {
+  grid-column: 1 / -1;
+}
+.maleta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+}
+.maleta-item label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.maleta-item label span {
+  overflow-wrap: anywhere;
+}
+.maleta-item input {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+.maleta-item.hecho {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+.maleta-item.hecho label span {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+.maleta-quitar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+}
+.maleta-quitar:hover {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+.maleta-add {
+  display: flex;
+  gap: var(--space-2);
+}
+.maleta-add .form-input {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width:480px) {
+  .maleta-lista {
+    grid-template-columns: minmax(0,1fr);
+  }
+  .maleta-add {
+    flex-direction: column;
+  }
+}

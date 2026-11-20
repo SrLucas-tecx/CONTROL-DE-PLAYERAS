@@ -13,7 +13,7 @@ import {
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
-  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, resumenConsignacionesExternas, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, resumenConsignacionesExternas, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago, resumenJuegosBazar
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
@@ -2371,7 +2371,9 @@ function renderBazares() {
     const costoReal = costoBazarReal(b);
     const saldoPendiente = saldoBazarPendiente(b);
     const desglose = gastosBazarPorTipo(b);
-    const sumIngresosExtra = (b.ingresosExtra || []).reduce((s, i) => s + (i.monto || 0), 0);
+    const sumIngresosExtra = (b.ingresosExtra || []).reduce((s, i) => s + (i.monto || 0), 0) + resumenJuegosBazar(b).neto;
+    const maleta = b.maleta || [];
+    const juegosResumen = resumenJuegosBazar(b);
     const comisionTerminal = desgloseCierreBazar(b).comisionTerminal;
     const mermasBazar = totalMermasDeBazar(b.id);
     // Ganancia real = dinero que de verdad entró y salió del bolsillo (nunca usa el costeo
@@ -2393,6 +2395,7 @@ function renderBazares() {
       <div class="card-row"><span>Por pagar del bazar</span><span>${fmt(saldoPendiente)}</span></div>
       <div class="card-row"><span>Ventas / unidades</span><span>${stats.cotsCount}</span></div>
       ${costoReal ? `<div class="card-meta">Costo real ${fmt(costoReal)} · 🧵 ${fmt(desglose.produccion)} · 🎪 ${fmt(desglose.evento)}</div>` : ""}
+      ${(maleta.length || juegosResumen.count) ? `<div class="card-meta">${maleta.length ? `🧳 Maleta ${maleta.filter(i => i.hecho).length}/${maleta.length}` : ""}${maleta.length && juegosResumen.count ? " · " : ""}${juegosResumen.count ? `🎲 ${juegosResumen.count} juego(s) · ${fmt(juegosResumen.neto)}` : ""}</div>` : ""}
       <div class="card-actions">
         <button type="button" class="btn-primary" onclick="goToBazarDetalle('${id}')">Abrir</button>
         <button type="button" onclick="openModalBazar('${id}')">Editar</button>
@@ -6274,7 +6277,7 @@ function renderBazarDetalle() {
   const costoReal = costoBazarReal(b);
   const saldoPendiente = saldoBazarPendiente(b);
   const ingresosExtra = b.ingresosExtra || [];
-  const sumIngresosExtra = ingresosExtra.reduce((s, i) => s + (i.monto || 0), 0);
+  const sumIngresosExtra = ingresosExtra.reduce((s, i) => s + (i.monto || 0), 0) + resumenJuegosBazar(b).neto;
   // Ganancia REAL en efectivo: lo que de verdad entró (ventas + extra) menos lo que
   // de verdad salió de tu bolsillo (puesto + producción + evento) y la comisión de
   // terminal de las ventas con tarjeta. No usa el costeo estimado de cada playera, así
@@ -6376,6 +6379,8 @@ function renderBazarDetalle() {
   renderPlayerasEnBazar("bd-playeras-disponibles-grid", "bd-playeras-disponibles-empty", playerasDisponibles, false);
 
   // Tabla de ingresos extra
+  renderJuegosBazar(b);
+  renderMaletaBazar(b);
   const ieBody = document.getElementById("bd-ingresos-extra-body");
   document.getElementById("bd-ingresos-extra-empty").style.display = ingresosExtra.length ? "none" : "block";
   ieBody.innerHTML = ingresosExtra.map(i => `
@@ -6459,6 +6464,170 @@ function renderBazarDetalle() {
         <button onclick="viewCotizacion('${c.id}')">👁️ Ver</button>
       </div>
     </div>`).join("") || `<p class="empty-hint">Este bazar todavía no tiene cotizaciones ligadas. Ve a "Cotizaciones guardadas" y usa "🏪 Asignar a bazar".</p>`;
+}
+
+/* =================================================================
+   JUEGOS DEL BAZAR Y MALETA (CHECKLIST)
+   Ambos viven dentro del bazar: b.juegos y b.maleta
+================================================================= */
+const MALETA_SUGERIDA = [
+  "Mesa y mantel", "Playeras (inventario)", "Stickers y estampados", "Perchero / exhibidores",
+  "Letrero o lona con el logo", "Terminal bancaria y cargador", "Fondo de caja (cambio)",
+  "Bolsas y papel de empaque", "Cinta, tijeras y marcador", "Etiquetas de precio",
+  "Extensión y multicontacto", "Tarjetas de contacto / QR de redes", "Sillas", "Agua y snacks"
+];
+function bazarActivoObj() {
+  return AppState.bazares.find(x => x.id === activeBazarId);
+}
+function renderJuegosBazar(b) {
+  const grid = document.getElementById("bd-juegos-grid");
+  const empty = document.getElementById("bd-juegos-empty");
+  if (!grid || !empty) return;
+  const juegos = b.juegos || [];
+  empty.style.display = juegos.length ? "none" : "block";
+  grid.innerHTML = juegos.map(j => {
+    const ingreso = (Number(j.precio) || 0) * (Number(j.jugadas) || 0);
+    const neto = ingreso - (Number(j.costoPremios) || 0);
+    const id = escapeHtml(j.id);
+    return `
+    <div class="card">
+      <div class="card-top">
+        <span class="card-title">🎲 ${escapeHtml(j.nombre)}</span>
+        <span class="card-badge badge-media">${fmt(j.precio)} / jugada</span>
+      </div>
+      <div class="juego-contador">
+        <button type="button" aria-label="Quitar una jugada" onclick="ajustarJugadas('${id}', -1)">−</button>
+        <div><b>${Number(j.jugadas) || 0}</b><span>jugadas</span></div>
+        <button type="button" aria-label="Sumar una jugada" onclick="ajustarJugadas('${id}', 1)">+</button>
+      </div>
+      <div class="card-row"><span>Ingreso</span><span>${fmt(ingreso)}</span></div>
+      <div class="card-row"><span>Premios / material</span><span style="color:var(--color-danger)">− ${fmt(j.costoPremios || 0)}</span></div>
+      <div class="card-row"><span>Ganancia del juego</span><span style="color:${neto >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(neto)}</span></div>
+      <div class="card-actions">
+        <button type="button" onclick="openModalJuego('${id}')">✏️ Editar</button>
+        <button type="button" class="danger" onclick="deleteJuego('${id}')">🗑️ Eliminar</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+function openModalJuego(id) {
+  const b = bazarActivoObj();
+  if (!b) return;
+  const j = id ? (b.juegos || []).find(x => x.id === id) : null;
+  setVal("juego-id", id || "");
+  document.getElementById("modal-juego-title").textContent = j ? "Editar juego" : "Nuevo juego";
+  setVal("juego-nombre", j ? j.nombre : "");
+  setVal("juego-precio", j ? j.precio : "");
+  setVal("juego-jugadas", j ? j.jugadas : 0);
+  setVal("juego-premios", j ? j.costoPremios : 0);
+  openModal("modal-juego");
+}
+function saveJuego() {
+  const b = bazarActivoObj();
+  if (!b) return;
+  const nombre = val("juego-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre al juego.", "error");
+  const precio = Number.parseFloat(num("juego-precio")) || 0;
+  const jugadas = Math.max(0, Number.parseInt(num("juego-jugadas")) || 0);
+  const costoPremios = Math.max(0, Number.parseFloat(num("juego-premios")) || 0);
+  if (precio < 0) return showToast("El precio por jugada no puede ser negativo.", "error");
+  if (!b.juegos) b.juegos = [];
+  const id = val("juego-id");
+  const datos = { nombre, precio, jugadas, costoPremios };
+  if (id) Object.assign(b.juegos.find(x => x.id === id), datos);
+  else b.juegos.push({ id: uid(), ...datos });
+  saveState({ sinRefresco: true });
+  closeModal("modal-juego");
+  renderBazarDetalle();
+  showToast("Juego guardado.");
+}
+async function deleteJuego(id) {
+  const b = bazarActivoObj();
+  if (!b || !(await pedirConfirmacion("¿Eliminar este juego? Sus jugadas dejarán de contar en los ingresos del bazar.", { aviso: "Juego eliminado." }))) return;
+  b.juegos = (b.juegos || []).filter(x => x.id !== id);
+  saveState({ sinRefresco: true });
+  renderBazarDetalle();
+}
+function ajustarJugadas(id, delta) {
+  const b = bazarActivoObj();
+  const j = b && (b.juegos || []).find(x => x.id === id);
+  if (!j) return;
+  j.jugadas = Math.max(0, (Number(j.jugadas) || 0) + delta);
+  saveState({ sinRefresco: true });
+  renderBazarDetalle();
+}
+
+function renderMaletaBazar(b) {
+  const lista = document.getElementById("bd-maleta-lista");
+  if (!lista) return;
+  const items = b.maleta || [];
+  const hechos = items.filter(i => i.hecho).length;
+  const pct = items.length ? Math.round(hechos / items.length * 100) : 0;
+  document.getElementById("bd-maleta-texto").textContent = items.length
+    ? (hechos === items.length ? "🎉 ¡Maleta lista!" : `${hechos} de ${items.length} cosas listas`)
+    : "Maleta vacía";
+  document.getElementById("bd-maleta-pct").textContent = `${pct}%`;
+  const fill = document.getElementById("bd-maleta-fill");
+  fill.style.width = `${pct}%`;
+  fill.classList.toggle("complete", items.length > 0 && pct === 100);
+  lista.innerHTML = items.map(i => `
+    <div class="maleta-item${i.hecho ? " hecho" : ""}">
+      <label>
+        <input type="checkbox" ${i.hecho ? "checked" : ""} onchange="toggleMaletaItem('${escapeHtml(i.id)}', this.checked)" aria-label="${escapeHtml(i.texto)}">
+        <span>${escapeHtml(i.texto)}</span>
+      </label>
+      <button type="button" class="maleta-quitar" aria-label="Quitar ${escapeHtml(i.texto)}" title="Quitar" onclick="borrarMaletaItem('${escapeHtml(i.id)}')">✕</button>
+    </div>`).join("") || `<p class="empty-hint">Tu maleta está vacía. Agrega cosas abajo o usa “+ Lista sugerida”.</p>`;
+}
+function guardarMaleta(b) {
+  saveState({ sinRefresco: true });
+  renderMaletaBazar(b);
+}
+function toggleMaletaItem(id, hecho) {
+  const b = bazarActivoObj();
+  const item = b && (b.maleta || []).find(x => x.id === id);
+  if (!item) return;
+  item.hecho = !!hecho;
+  guardarMaleta(b);
+}
+function agregarMaletaItem() {
+  const b = bazarActivoObj();
+  if (!b) return;
+  const texto = val("maleta-nuevo").trim();
+  if (!texto) return showToast("Escribe qué quieres agregar a la maleta.", "error");
+  if (!b.maleta) b.maleta = [];
+  if (b.maleta.some(i => i.texto.toLowerCase() === texto.toLowerCase())) return showToast("Eso ya está en la maleta.", "error");
+  b.maleta.push({ id: uid(), texto, hecho: false });
+  setVal("maleta-nuevo", "");
+  guardarMaleta(b);
+  document.getElementById("maleta-nuevo")?.focus();
+}
+function borrarMaletaItem(id) {
+  const b = bazarActivoObj();
+  if (!b) return;
+  b.maleta = (b.maleta || []).filter(x => x.id !== id);
+  guardarMaleta(b);
+}
+function agregarMaletaSugerida() {
+  const b = bazarActivoObj();
+  if (!b) return;
+  if (!b.maleta) b.maleta = [];
+  const existentes = new Set(b.maleta.map(i => i.texto.toLowerCase()));
+  const sugeridas = [...MALETA_SUGERIDA, ...(b.juegos || []).map(j => `Premios y material: ${j.nombre}`)];
+  let nuevas = 0;
+  sugeridas.forEach(texto => {
+    if (existentes.has(texto.toLowerCase())) return;
+    b.maleta.push({ id: uid(), texto, hecho: false });
+    nuevas++;
+  });
+  guardarMaleta(b);
+  showToast(nuevas ? `Se agregaron ${nuevas} cosas a la maleta.` : "La lista sugerida ya estaba completa.");
+}
+function desmarcarMaleta() {
+  const b = bazarActivoObj();
+  if (!b || !(b.maleta || []).length) return;
+  b.maleta.forEach(i => { i.hecho = false; });
+  guardarMaleta(b);
 }
 
 /* =================================================================
@@ -6887,7 +7056,8 @@ function refrescarDerivados() {
   vistas[activa.id.replace("page-", "")]?.();
   document.dispatchEvent(new CustomEvent("lucx:estado-cambio"));
 }
-document.addEventListener("lucx:guardado", () => {
+document.addEventListener("lucx:guardado", evento => {
+  if (evento.detail?.sinRefresco) return;
   clearTimeout(temporizadorRefresco);
   temporizadorRefresco = setTimeout(refrescarDerivados, 80);
 });
@@ -6934,7 +7104,7 @@ Object.assign(globalThis, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
+  verDetallePlayera, openModalJuego, saveJuego, deleteJuego, ajustarJugadas, toggleMaletaItem, agregarMaletaItem, borrarMaletaItem, agregarMaletaSugerida, desmarcarMaleta, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
   openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, cambiarEtiquetaPlayeraBloque, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,
