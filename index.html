@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="dist/styles.css?v=20261118d">
+<link rel="stylesheet" href="dist/styles.css?v=20261118e">
 </head>
 <body>
 
@@ -1083,10 +1083,15 @@
             <span class="sticker-count-value" id="caja-tarjeta">$0</span>
             <span class="sticker-count-sub" id="caja-comision-sub">comisión de terminal: $0</span>
           </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">🎲 Juegos (efectivo)</span>
+            <span class="sticker-count-value" id="caja-juegos">$0</span>
+            <span class="sticker-count-sub" id="caja-juegos-sub">sin juegos en esta caja</span>
+          </div>
           <div class="sticker-count-card sticker-count-net" style="background:var(--color-accent-soft);border-color:var(--color-accent);">
             <span class="sticker-count-label">🧮 Debería haber en caja</span>
             <span class="sticker-count-value" id="caja-esperado">$0</span>
-            <span class="sticker-count-sub">fondo de caja + ventas en efectivo</span>
+            <span class="sticker-count-sub">fondo + ventas en efectivo + juegos</span>
           </div>
         </div>
 
@@ -1106,6 +1111,94 @@
         </div>
       </section>
       <!-- ======================= /CAJA ======================= -->
+
+      <!-- ======================= JUEGOS ======================= -->
+      <section id="page-juegos" class="page-section">
+        <div class="section-header" style="justify-content:space-between;">
+          <div>
+            <h2 class="section-title">Juegos</h2>
+            <p class="section-sub">Cada intento suma el dinero recaudado. Elige el tipo de juego, la caja (general o de un bazar) y, si la ganancia se reparte con alguien, su porcentaje. Todo cuenta en la caja y en las métricas.</p>
+          </div>
+          <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
+            <div class="form-group" style="margin:0;min-width:220px;">
+              <select id="juegos-filtro" aria-label="Filtrar juegos por caja" class="form-select" onchange="renderJuegos()"></select>
+            </div>
+            <button class="btn-primary" onclick="openModalJuego()">+ Nuevo juego</button>
+          </div>
+        </div>
+        <div class="sticker-count-row">
+          <div class="sticker-count-card size-chico">
+            <span class="sticker-count-label">Intentos</span>
+            <span class="sticker-count-value" id="juegos-total-intentos">0</span>
+            <span class="sticker-count-sub">jugadas registradas</span>
+          </div>
+          <div class="sticker-count-card size-total">
+            <span class="sticker-count-label">Recaudado</span>
+            <span class="sticker-count-value" id="juegos-total-recaudado">$0</span>
+            <span class="sticker-count-sub">entra a la caja en efectivo</span>
+          </div>
+          <div class="sticker-count-card size-mediano">
+            <span class="sticker-count-label">Parte de socios</span>
+            <span class="sticker-count-value" id="juegos-total-socios">$0</span>
+            <span class="sticker-count-sub">lo que toca repartir</span>
+          </div>
+          <div class="sticker-count-card size-grande">
+            <span class="sticker-count-label">Tu ganancia</span>
+            <span class="sticker-count-value" id="juegos-total-tuyo">$0</span>
+            <span class="sticker-count-sub">después de premios y reparto</span>
+          </div>
+        </div>
+        <div id="juegos-grid" class="cards-grid"></div>
+        <div class="empty-state" id="juegos-empty-hint"><div class="empty-ico">🎲</div><strong>Aún no hay juegos</strong><span>Agrega uno para contar intentos y ver cuánto recauda.</span><button type="button" class="btn-primary" onclick="openModalJuego()">+ Nuevo juego</button></div>
+      </section>
+      <!-- ======================= /JUEGOS ======================= -->
+
+      <!-- ======================= MALETA ======================= -->
+      <section id="page-maleta" class="page-section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Maleta</h2>
+            <p class="section-sub">Checklist de lo que llevas a cada bazar. Define tu maleta predeterminada y cárgala en cualquier bazar; los bazares nuevos ya arrancan con ella.</p>
+          </div>
+        </div>
+        <div class="quote-meta-card">
+          <div class="section-header" style="justify-content:space-between;margin-bottom:var(--space-3);">
+            <h3 class="section-title" style="font-size:var(--fs-md);">🧳 Maleta de un bazar</h3>
+            <div class="form-group" style="margin:0;min-width:240px;">
+              <select id="maleta-bazar" class="form-select" aria-label="Bazar de la maleta" onchange="onMaletaBazarChange()"></select>
+            </div>
+          </div>
+          <p class="empty-hint" id="maleta-sin-bazar" style="display:none;">Crea un bazar para armar su maleta.</p>
+          <div id="maleta-checklist-wrap">
+            <div class="savings-label"><span id="maleta-texto">Maleta vacía</span><span id="maleta-pct">0%</span></div>
+            <div class="savings-bar"><div class="savings-bar-fill" id="maleta-fill" style="width:0%;"></div></div>
+            <div id="maleta-lista" class="maleta-lista"></div>
+            <div class="maleta-add">
+              <input type="text" id="maleta-nuevo" class="form-input" maxlength="80" placeholder="Agregar a esta maleta (ej. Extensión)" aria-label="Agregar a esta maleta" onkeydown="if(event.key==='Enter'){agregarMaletaItem();}">
+              <button type="button" class="btn-primary" onclick="agregarMaletaItem()">Agregar</button>
+            </div>
+            <div class="maleta-acciones">
+              <button type="button" class="btn-secondary" onclick="cargarPlantillaEnBazar()">+ Cargar mi plantilla</button>
+              <button type="button" class="btn-secondary" onclick="desmarcarMaleta()">Desmarcar todo</button>
+            </div>
+          </div>
+        </div>
+        <div class="quote-meta-card">
+          <div class="section-header" style="justify-content:space-between;margin-bottom:var(--space-3);">
+            <div>
+              <h3 class="section-title" style="font-size:var(--fs-md);">⭐ Mi maleta predeterminada</h3>
+              <p class="section-sub">Edita, agrega o quita cosas. No cambia las maletas que ya armaste en cada bazar. <b id="plantilla-count">0 cosa(s)</b></p>
+            </div>
+            <button type="button" class="btn-secondary" onclick="restaurarPlantillaSugerida()">Restaurar sugerida</button>
+          </div>
+          <div id="plantilla-lista" class="plantilla-lista"></div>
+          <div class="maleta-add">
+            <input type="text" id="plantilla-nuevo" class="form-input" maxlength="80" placeholder="Agregar a mi plantilla (ej. Cobija)" aria-label="Agregar a mi plantilla" onkeydown="if(event.key==='Enter'){agregarPlantillaItem();}">
+            <button type="button" class="btn-primary" onclick="agregarPlantillaItem()">Agregar</button>
+          </div>
+        </div>
+      </section>
+      <!-- ======================= /MALETA ======================= -->
 
       <!-- ======================= INTERÉS POR PRODUCTO ======================= -->
       <section id="page-interes" class="page-section">
@@ -1235,10 +1328,14 @@
               <span class="form-label">Comisión de terminal</span>
               <p class="cost-preview" id="bd-cierre-comision" style="margin:0;color:var(--color-danger);">− $0.00</p>
             </div>
+            <div class="form-group">
+              <span class="form-label">🎲 Juegos (efectivo)</span>
+              <p class="cost-preview" id="bd-cierre-juegos" style="margin:0;">$0.00</p>
+            </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <span class="form-label">Fondo de caja + ventas efectivo = efectivo esperado</span>
+              <span class="form-label">Fondo + ventas efectivo + juegos = efectivo esperado</span>
               <p class="cost-preview" id="bd-cierre-esperado" style="margin:0;">$0.00</p>
             </div>
             <div class="form-group">
@@ -1273,32 +1370,18 @@
 
         <div class="section-header" style="justify-content:space-between;margin-top:32px;">
           <div>
-            <h2 class="section-title">🎲 Juegos del bazar</h2>
-            <p class="section-sub">Ruleta, lotería, tiro al blanco... Suma una jugada con cada toque; el ingreso menos el costo de premios entra a “Ingresos extra”.</p>
-          </div>
-          <button class="btn-primary" onclick="openModalJuego()">+ Agregar juego</button>
-        </div>
-        <div id="bd-juegos-grid" class="cards-grid"></div>
-        <p class="empty-hint" id="bd-juegos-empty">Aún no agregas juegos a este bazar.</p>
-
-        <div class="section-header" style="justify-content:space-between;margin-top:32px;">
-          <div>
-            <h2 class="section-title">🧳 Maleta del bazar</h2>
-            <p class="section-sub">Checklist de lo que llevas. Marca cada cosa al empacarla para no olvidar nada.</p>
+            <h2 class="section-title">Juegos y maleta de este bazar</h2>
+            <p class="section-sub">Resumen. Para contar intentos o editar la lista, abre cada apartado.</p>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn-secondary" onclick="desmarcarMaleta()">Desmarcar todo</button>
-            <button class="btn-secondary" onclick="agregarMaletaSugerida()">+ Lista sugerida</button>
+            <button class="btn-secondary" onclick="abrirJuegosDeBazar()">🎲 Abrir juegos</button>
+            <button class="btn-secondary" onclick="abrirMaletaDeBazar()">🧳 Abrir maleta</button>
           </div>
         </div>
-        <div class="quote-meta-card" id="bd-maleta-card">
-          <div class="savings-label"><span id="bd-maleta-texto">Maleta vacía</span><span id="bd-maleta-pct">0%</span></div>
+        <div class="quote-meta-card">
+          <p class="section-sub" id="bd-juegos-resumen" style="max-width:none;margin:0 0 var(--space-3);">—</p>
+          <div class="savings-label"><span id="bd-maleta-texto">🧳 Maleta vacía</span><span id="bd-maleta-pct">0%</span></div>
           <div class="savings-bar"><div class="savings-bar-fill" id="bd-maleta-fill" style="width:0%;"></div></div>
-          <div id="bd-maleta-lista" class="maleta-lista"></div>
-          <div class="maleta-add">
-            <input type="text" id="maleta-nuevo" class="form-input" maxlength="80" placeholder="Agregar a la maleta (ej. Extensión)" aria-label="Agregar a la maleta" onkeydown="if(event.key==='Enter'){agregarMaletaItem();}">
-            <button type="button" class="btn-primary" onclick="agregarMaletaItem()">Agregar</button>
-          </div>
         </div>
 
         <div class="section-header" style="margin-top:32px;">
@@ -1414,6 +1497,11 @@
             <span class="sticker-count-label">🎁 Regalado / venta nula</span>
             <span class="sticker-count-value" id="stat-total-regalado">$0</span>
             <span class="sticker-count-sub">costo perdido por regalos</span>
+          </div>
+          <div class="sticker-count-card size-grande">
+            <span class="sticker-count-label">🎲 Juegos recaudado</span>
+            <span class="sticker-count-value" id="stat-total-juegos">$0</span>
+            <span class="sticker-count-sub" id="stat-total-juegos-sub">0 intentos</span>
           </div>
         </div>
 
@@ -2753,23 +2841,45 @@
       <input type="hidden" id="juego-id">
       <div class="form-group">
         <label class="form-label" for="juego-nombre">Nombre del juego</label>
-        <input type="text" id="juego-nombre" class="form-input" maxlength="60" placeholder="Ej. Ruleta de premios">
+        <input type="text" id="juego-nombre" class="form-input" maxlength="60" placeholder="Ej. Ruleta de premios" oninput="updateJuegoPreview()">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="juego-precio">Precio por jugada ($)</label>
-          <input type="number" id="juego-precio" class="form-input" min="0" step="0.01" placeholder="0.00">
+          <label class="form-label" for="juego-tipo">Tipo de juego</label>
+          <select id="juego-tipo" class="form-select"></select>
         </div>
         <div class="form-group">
-          <label class="form-label" for="juego-jugadas">Jugadas hasta ahora</label>
-          <input type="number" id="juego-jugadas" class="form-input" min="0" step="1" value="0">
+          <label class="form-label" for="juego-caja">Caja donde entra el dinero</label>
+          <select id="juego-caja" class="form-select"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="juego-precio">Precio por intento ($)</label>
+          <input type="number" id="juego-precio" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateJuegoPreview()">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="juego-jugadas">Intentos hasta ahora</label>
+          <input type="number" id="juego-jugadas" class="form-input" min="0" step="1" value="0" oninput="updateJuegoPreview()">
         </div>
       </div>
       <div class="form-group">
         <label class="form-label" for="juego-premios">Costo de premios y material ($)</label>
-        <input type="number" id="juego-premios" class="form-input" min="0" step="0.01" value="0">
-        <span class="form-hint">Lo que gastaste en premios para este juego; se resta de lo que ganó.</span>
+        <input type="number" id="juego-premios" class="form-input" min="0" step="0.01" value="0" oninput="updateJuegoPreview()">
+        <span class="form-hint">Lo que gastaste en premios; se resta de la ganancia.</span>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="juego-socio">¿Se reparte con alguien?</label>
+          <select id="juego-socio" class="form-select" onchange="onJuegoSocioChange()"></select>
+        </div>
+        <div class="form-group" id="juego-pct-wrap" style="display:none;">
+          <label class="form-label" for="juego-pct">% para esa persona</label>
+          <input type="number" id="juego-pct" class="form-input" min="0" max="100" step="1" value="50" oninput="updateJuegoPreview()">
+        </div>
+      </div>
+      <p class="cost-preview" id="juego-preview">—</p>
+      <p class="form-hint">Los socios se crean en Negocio → Socios. El reparto solo aplica si el juego tiene ganancia.</p>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn-secondary" data-modal="modal-juego">Cancelar</button>
@@ -3220,6 +3330,10 @@
           <option value="tipo-venta">Ventas por tipo (menudeo / mayoreo)</option>
           <option value="estado-playeras">Playeras por estado</option>
           <option value="venta-nula">Costo perdido por ventas nulas</option>
+          <option value="juegos-ingresos">Juegos: recaudado por juego</option>
+          <option value="juegos-jugadas">Juegos: intentos por juego</option>
+          <option value="juegos-tipos">Juegos: recaudado por tipo</option>
+          <option value="juegos-dias">Juegos: recaudado por día</option>
           <option value="inventario">Comparar inventario</option>
         </select>
       </div>

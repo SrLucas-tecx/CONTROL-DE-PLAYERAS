@@ -231,7 +231,7 @@ export function saldoPendienteCliente(cotizacion) {
 // contar y de dónde sacar el fondo de caja/efectivo contado, arma el mismo desglose
 // (ventas en efectivo, en tarjeta, comisión de terminal, efectivo esperado vs. contado).
 // Lo usan tanto el cierre de un bazar como la Caja general (sin bazar) — Sprint 4.
-function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCaja, efectivoContadoRaw, filtroConsignacion) {
+function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCaja, efectivoContadoRaw, filtroConsignacion, filtroJuego) {
   const cots = AppState.cotizaciones.filter(c => !c.ventaNula && filtroCot(c));
   const playerasVendidas = AppState.playeras.filter(p => cantidadVendidaPlayera(p) > 0 && filtroPlayera(p));
   let ventasTarjeta = 0, comisionTerminal = 0, totalVendido = 0;
@@ -257,16 +257,18 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCa
   ventasTarjeta += consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.ventasTarjeta, 0);
   comisionTerminal += consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.comisionTerminal, 0);
   const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
-  const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo;
+  const juegos = resumenJuegos(filtroJuego || (() => false));
+  const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo + juegos.ingreso;
   const tieneConteo = efectivoContadoRaw !== null && efectivoContadoRaw !== undefined && efectivoContadoRaw !== "";
   const diferencia = tieneConteo ? (efectivoContadoRaw - efectivoEsperado) : null;
   return {
     totalVendido, ventasEfectivo, ventasTarjeta, comisionTerminal, fondoCaja: fondoCaja || 0,
+    juegosIngreso: juegos.ingreso, juegosParteSocios: juegos.parteSocio, juegosCount: juegos.count,
     efectivoEsperado, efectivoContado: tieneConteo ? efectivoContadoRaw : null, diferencia
   };
 }
 export function desgloseCierreBazar(bazar) {
-  return desgloseCierreCajaBase(c => bazarTiene(c, bazar.id), p => bazarTiene(p, bazar.id), v => bazarTiene(v, bazar.id), bazar.fondoCaja, bazar.efectivoContado, a => a.bazarId === bazar.id);
+  return desgloseCierreCajaBase(c => bazarTiene(c, bazar.id), p => bazarTiene(p, bazar.id), v => bazarTiene(v, bazar.id), bazar.fondoCaja, bazar.efectivoContado, a => a.bazarId === bazar.id, j => j.bazarId === bazar.id);
 }
 // Caja general (sin bazar): cuenta las ventas que NO tienen ningún bazar asignado — así
 // sirve para el día a día del taller, fuera de cualquier evento.
@@ -276,7 +278,7 @@ export function desgloseCierreCajaGeneral() {
     c => bazarIdsDe(c).length === 0,
     p => bazarIdsDe(p).length === 0,
     v => bazarIdsDe(v).length === 0,
-    cg.fondoCaja, cg.efectivoContado, a => !a.bazarId
+    cg.fondoCaja, cg.efectivoContado, a => !a.bazarId, j => !j.bazarId
   );
 }
 // Playeras tipo/etiqueta "Bolsa sorpresa" cuyo stock ya llegó (o bajó) al mínimo
@@ -305,13 +307,30 @@ export function costoBazarReal(bazar) {
   const base = (bazar && bazar.costoBaseBazar) || 0;
   return base + gastosBazarPorTipo(bazar).total;
 }
-// Juegos del bazar (ruleta, lotería, tiro...): ingreso por jugadas menos el costo de premios.
+// JUEGOS: cada juego tiene intentos (jugadas), precio por intento, costo de premios y, opcionalmente,
+// un socio con quien se reparte la ganancia (solo si hay ganancia positiva).
+export function calculoJuego(j) {
+  const jugadas = Number(j.jugadas) || 0;
+  const ingreso = (Number(j.precio) || 0) * jugadas;
+  const premios = Number(j.costoPremios) || 0;
+  const bruta = ingreso - premios;
+  const pct = Math.max(0, Math.min(100, Number(j.pctSocio) || 0));
+  const parteSocio = (j.socioId && bruta > 0) ? bruta * pct / 100 : 0;
+  return { jugadas, ingreso, premios, bruta, pct, parteSocio, tuParte: bruta - parteSocio };
+}
+export function resumenJuegos(filtro) {
+  const lista = (AppState.juegos || []).filter(filtro || (() => true));
+  const r = { count: lista.length, jugadas: 0, ingreso: 0, premios: 0, bruta: 0, parteSocio: 0, tuParte: 0 };
+  lista.forEach(j => {
+    const c = calculoJuego(j);
+    r.jugadas += c.jugadas; r.ingreso += c.ingreso; r.premios += c.premios;
+    r.bruta += c.bruta; r.parteSocio += c.parteSocio; r.tuParte += c.tuParte;
+  });
+  r.neto = r.tuParte;   // lo que realmente te queda
+  return r;
+}
 export function resumenJuegosBazar(bazar) {
-  const juegos = (bazar && bazar.juegos) || [];
-  const jugadas = juegos.reduce((s, j) => s + (Number(j.jugadas) || 0), 0);
-  const ingreso = juegos.reduce((s, j) => s + (Number(j.precio) || 0) * (Number(j.jugadas) || 0), 0);
-  const premios = juegos.reduce((s, j) => s + (Number(j.costoPremios) || 0), 0);
-  return { count: juegos.length, jugadas, ingreso, premios, neto: ingreso - premios };
+  return resumenJuegos(j => !!bazar && j.bazarId === bazar.id);
 }
 export function saldoBazarPendiente(bazar) {
   return Math.max(0, costoBazarReal(bazar) - ((bazar && bazar.montoPagadoBazar) || 0));
@@ -475,6 +494,27 @@ export function datosGrafica(fuente, dimension, metrica) {
       cantidades[estado] = (cantidades[estado] || 0) + (p.stock || 0);
     });
     return { labels: Object.keys(cantidades), values: Object.values(cantidades), label: "Playeras" };
+  }
+  if (fuente === "juegos-ingresos" || fuente === "juegos-jugadas") {
+    const juegos = AppState.juegos || [];
+    return {
+      labels: juegos.map(j => j.nombre + (j.bazarId ? ` · ${bazarNombre(j.bazarId)}` : "")),
+      values: juegos.map(j => fuente === "juegos-ingresos" ? calculoJuego(j).ingreso : (Number(j.jugadas) || 0)),
+      label: fuente === "juegos-ingresos" ? "Recaudado en juegos ($)" : "Intentos"
+    };
+  }
+  if (fuente === "juegos-tipos") {
+    const tipos = {};
+    (AppState.juegos || []).forEach(j => { const t = j.tipo || "Otro"; tipos[t] = (tipos[t] || 0) + calculoJuego(j).ingreso; });
+    return { labels: Object.keys(tipos), values: Object.values(tipos), label: "Recaudado en juegos ($)" };
+  }
+  if (fuente === "juegos-dias") {
+    const dias = {};
+    (AppState.juegos || []).forEach(j => Object.entries(j.porDia || {}).forEach(([d, n]) => {
+      dias[d] = (dias[d] || 0) + (Number(n) || 0) * (Number(j.precio) || 0);
+    }));
+    const labels = Object.keys(dias).sort();
+    return { labels, values: labels.map(d => dias[d]), label: "Recaudado en juegos ($)" };
   }
   if (fuente === "inventario") {
     return datosInventarioGrafica(dimension || "etiqueta", metrica || "stock");

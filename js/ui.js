@@ -2,7 +2,7 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA } from "./config.js";
+import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, MALETA_SUGERIDA, TIPOS_JUEGO } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
@@ -13,7 +13,7 @@ import {
   areaPiezaLigable, repartoProporcionalPorArea, pctLlenadoRollo, piezaCabeEnRollo,
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
-  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, resumenConsignacionesExternas, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago, resumenJuegosBazar
+  totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, resumenConsignacionesExternas, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago, resumenJuegosBazar, resumenJuegos, calculoJuego
 } from "./calculator.js";
 
 /* ---------------------------------------------------------------
@@ -268,6 +268,8 @@ const PAGE_TITLES = {
   mermas: "Mermas",
   compras: "Próximas compras",
   bazares: "Mis Bazares",
+  juegos: "Juegos",
+  maleta: "Maleta",
   "bloques-inventario": "Bloques para bazares",
   consignaciones: "Consignaciones",
   caja: "Caja",
@@ -286,6 +288,8 @@ export function switchPage(page) {
   if (page === "inicio" && typeof globalThis.renderInicio === "function") globalThis.renderInicio();
   if (page === "ventas-rapidas" && typeof globalThis.renderVentasRapidas === "function") globalThis.renderVentasRapidas();
   if (page === "bazares") renderBazares();
+  if (page === "juegos") renderJuegos();
+  if (page === "maleta") renderMaleta();
   if (page === "playeras") renderPlayeras();
   if (page === "stickers") renderStickers();
   if (page === "consignaciones") { renderConsignaciones(); renderSocios(); }
@@ -1996,7 +2000,7 @@ function saveBazar() {
     Object.assign(AppState.bazares.find(x => x.id === id), data);
   } else {
     newId = uid();
-    AppState.bazares.push(Object.assign({ id: newId, ingresosExtra: [] }, data));
+    AppState.bazares.push(Object.assign({ id: newId, ingresosExtra: [], maleta: plantillaComoMaleta() }, data));
     activeBazarId = newId; // el bazar recién creado se vuelve el activo automáticamente
   }
   saveState(); closeModal("modal-bazar"); renderBazares(); refreshAllSelects();
@@ -2027,6 +2031,7 @@ async function deleteBazar(id) {
       });
     });
   });
+  (AppState.juegos || []).forEach(j => { if (j.bazarId === id) j.bazarId = ""; });
   if (activeBazarId === id) activeBazarId = "";
   saveState(); renderBazares(); refreshAllSelects(); renderCotizacionesGuardadas(); renderPlayeras(); renderConsignaciones();
   return true;
@@ -2103,6 +2108,10 @@ function renderCaja() {
   document.getElementById("caja-tarjeta").textContent = fmt(d.ventasTarjeta);
   document.getElementById("caja-comision-sub").textContent = `comisión de terminal: ${fmt(d.comisionTerminal)}`;
   document.getElementById("caja-esperado").textContent = fmt(d.efectivoEsperado);
+  document.getElementById("caja-juegos").textContent = fmt(d.juegosIngreso);
+  document.getElementById("caja-juegos-sub").textContent = d.juegosCount
+    ? `${d.juegosCount} juego(s)${d.juegosParteSocios ? ` · de socios: ${fmt(d.juegosParteSocios)}` : ""}`
+    : "sin juegos en esta caja";
   document.getElementById("caja-fondo-hint").textContent = esGeneral
     ? "Cambio con el que abriste la caja."
     : "Es el mismo fondo de caja de este bazar — se edita desde aquí o desde el bazar.";
@@ -6326,7 +6335,8 @@ function renderBazarDetalle() {
   document.getElementById("bd-cierre-efectivo").textContent = fmt(cierre.ventasEfectivo);
   document.getElementById("bd-cierre-tarjeta").textContent = fmt(cierre.ventasTarjeta);
   document.getElementById("bd-cierre-comision").textContent = "− " + fmt(cierre.comisionTerminal);
-  document.getElementById("bd-cierre-esperado").textContent = `${fmt(b.fondoCaja || 0)} + ${fmt(cierre.ventasEfectivo)} = ${fmt(cierre.efectivoEsperado)}`;
+  document.getElementById("bd-cierre-juegos").textContent = fmt(cierre.juegosIngreso);
+  document.getElementById("bd-cierre-esperado").textContent = `${fmt(b.fondoCaja || 0)} + ${fmt(cierre.ventasEfectivo)} + ${fmt(cierre.juegosIngreso)} = ${fmt(cierre.efectivoEsperado)}`;
   setVal("bd-efectivo-contado", b.efectivoContado ?? "");
   const diferenciaEl = document.getElementById("bd-cierre-diferencia");
   if (cierre.diferencia === null) {
@@ -6467,131 +6477,233 @@ function renderBazarDetalle() {
 }
 
 /* =================================================================
-   JUEGOS DEL BAZAR Y MALETA (CHECKLIST)
-   Ambos viven dentro del bazar: b.juegos y b.maleta
+   JUEGOS (con intentos, tipo, reparto con socio y caja) Y MALETA
 ================================================================= */
-const MALETA_SUGERIDA = [
-  "Mesa y mantel", "Playeras (inventario)", "Stickers y estampados", "Perchero / exhibidores",
-  "Letrero o lona con el logo", "Terminal bancaria y cargador", "Fondo de caja (cambio)",
-  "Bolsas y papel de empaque", "Cinta, tijeras y marcador", "Etiquetas de precio",
-  "Extensión y multicontacto", "Tarjetas de contacto / QR de redes", "Sillas", "Agua y snacks"
-];
-function bazarActivoObj() {
-  return AppState.bazares.find(x => x.id === activeBazarId);
+let juegosFiltro = "all";
+let maletaBazarId = "";
+const hoyISO = () => new Date().toLocaleDateString("sv-SE");
+function nombreCajaJuego(j) {
+  return j.bazarId ? (AppState.bazares.find(b => b.id === j.bazarId)?.nombre || "Bazar eliminado") : "Caja general";
 }
-function renderJuegosBazar(b) {
-  const grid = document.getElementById("bd-juegos-grid");
-  const empty = document.getElementById("bd-juegos-empty");
-  if (!grid || !empty) return;
-  const juegos = b.juegos || [];
-  empty.style.display = juegos.length ? "none" : "block";
-  grid.innerHTML = juegos.map(j => {
-    const ingreso = (Number(j.precio) || 0) * (Number(j.jugadas) || 0);
-    const neto = ingreso - (Number(j.costoPremios) || 0);
-    const id = escapeHtml(j.id);
-    return `
+function enFiltroJuegos(j) {
+  return juegosFiltro === "all" || (juegosFiltro === "general" ? !j.bazarId : j.bazarId === juegosFiltro);
+}
+function tarjetaJuego(j) {
+  const c = calculoJuego(j);
+  const id = escapeHtml(j.id);
+  const socio = j.socioId ? AppState.socios.find(s => s.id === j.socioId) : null;
+  const hoy = Number(j.porDia?.[hoyISO()]) || 0;
+  return `
     <div class="card">
       <div class="card-top">
-        <span class="card-title">🎲 ${escapeHtml(j.nombre)}</span>
-        <span class="card-badge badge-media">${fmt(j.precio)} / jugada</span>
+        <span class="card-title">${escapeHtml(j.nombre)}</span>
+        <span class="card-badge badge-media">${fmt(j.precio)} / intento</span>
+      </div>
+      <div class="card-tags">
+        <span class="card-badge badge-alta">${escapeHtml(j.tipo || "Otro")}</span>
+        <span class="card-badge badge-baja">${j.bazarId ? "🏪" : "💰"} ${escapeHtml(nombreCajaJuego(j))}</span>
       </div>
       <div class="juego-contador">
-        <button type="button" aria-label="Quitar una jugada" onclick="ajustarJugadas('${id}', -1)">−</button>
-        <div><b>${Number(j.jugadas) || 0}</b><span>jugadas</span></div>
-        <button type="button" aria-label="Sumar una jugada" onclick="ajustarJugadas('${id}', 1)">+</button>
+        <button type="button" aria-label="Quitar un intento" onclick="ajustarJugadas('${id}', -1)">−</button>
+        <div><b>${c.jugadas}</b><span>intentos${hoy ? ` · hoy ${hoy}` : ""}</span></div>
+        <button type="button" aria-label="Sumar un intento" onclick="ajustarJugadas('${id}', 1)">+</button>
       </div>
-      <div class="card-row"><span>Ingreso</span><span>${fmt(ingreso)}</span></div>
-      <div class="card-row"><span>Premios / material</span><span style="color:var(--color-danger)">− ${fmt(j.costoPremios || 0)}</span></div>
-      <div class="card-row"><span>Ganancia del juego</span><span style="color:${neto >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(neto)}</span></div>
+      <div class="juego-rapidos"><button type="button" onclick="ajustarJugadas('${id}', 5)">+5</button><button type="button" onclick="ajustarJugadas('${id}', 10)">+10</button></div>
+      <div class="card-row"><span>Recaudado</span><span>${fmt(c.ingreso)}</span></div>
+      <div class="card-row"><span>Premios y material</span><span style="color:var(--color-danger)">− ${fmt(c.premios)}</span></div>
+      <div class="card-row"><span>Ganancia del juego</span><span style="color:${c.bruta >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(c.bruta)}</span></div>
+      ${socio ? `<div class="card-row"><span>Parte de ${escapeHtml(socio.nombre)} (${c.pct}%)</span><span>${fmt(c.parteSocio)}</span></div>
+      <div class="card-row"><span>Tu parte</span><span style="color:var(--color-success)">${fmt(c.tuParte)}</span></div>` : ""}
       <div class="card-actions">
         <button type="button" onclick="openModalJuego('${id}')">✏️ Editar</button>
         <button type="button" class="danger" onclick="deleteJuego('${id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
-  }).join("");
+}
+function renderJuegos() {
+  const grid = document.getElementById("juegos-grid");
+  const sel = document.getElementById("juegos-filtro");
+  if (!grid || !sel) return;
+  if (juegosFiltro !== "all" && juegosFiltro !== "general" && !AppState.bazares.some(b => b.id === juegosFiltro)) juegosFiltro = "all";
+  if (document.activeElement !== sel) {
+    sel.innerHTML = `<option value="all">Todas las cajas</option><option value="general">💰 Caja general (sin bazar)</option>` +
+      bazaresOrdenados().map(b => `<option value="${escapeHtml(b.id)}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
+    sel.value = juegosFiltro;
+  } else {
+    juegosFiltro = sel.value;
+  }
+  const lista = (AppState.juegos || []).filter(enFiltroJuegos);
+  const r = resumenJuegos(enFiltroJuegos);
+  document.getElementById("juegos-total-intentos").textContent = String(r.jugadas);
+  document.getElementById("juegos-total-recaudado").textContent = fmt(r.ingreso);
+  document.getElementById("juegos-total-socios").textContent = fmt(r.parteSocio);
+  document.getElementById("juegos-total-tuyo").textContent = fmt(r.tuParte);
+  document.getElementById("juegos-empty-hint").style.display = lista.length ? "none" : "block";
+  grid.innerHTML = lista.map(tarjetaJuego).join("");
+}
+function juegoDesdeFormulario() {
+  const socioId = val("juego-socio");
+  return {
+    nombre: val("juego-nombre").trim(), tipo: val("juego-tipo") || "Otro", bazarId: val("juego-caja"),
+    precio: Math.max(0, Number.parseFloat(num("juego-precio")) || 0),
+    jugadas: Math.max(0, Number.parseInt(num("juego-jugadas")) || 0),
+    costoPremios: Math.max(0, Number.parseFloat(num("juego-premios")) || 0),
+    socioId, pctSocio: socioId ? Math.max(0, Math.min(100, Number.parseFloat(num("juego-pct")) || 0)) : 0
+  };
+}
+function updateJuegoPreview() {
+  const p = document.getElementById("juego-preview");
+  if (!p) return;
+  const j = juegoDesdeFormulario();
+  const c = calculoJuego(j);
+  const socio = AppState.socios.find(s => s.id === j.socioId);
+  p.innerHTML = `Recaudado: <b>${fmt(c.ingreso)}</b> · Ganancia: <b>${fmt(c.bruta)}</b>` +
+    (socio ? ` · ${escapeHtml(socio.nombre)} (${c.pct}%): <b>${fmt(c.parteSocio)}</b> · Tu parte: <b>${fmt(c.tuParte)}</b>` : "");
+}
+function onJuegoSocioChange() {
+  document.getElementById("juego-pct-wrap").style.display = val("juego-socio") ? "block" : "none";
+  updateJuegoPreview();
 }
 function openModalJuego(id) {
-  const b = bazarActivoObj();
-  if (!b) return;
-  const j = id ? (b.juegos || []).find(x => x.id === id) : null;
+  const j = id ? (AppState.juegos || []).find(x => x.id === id) : null;
   setVal("juego-id", id || "");
   document.getElementById("modal-juego-title").textContent = j ? "Editar juego" : "Nuevo juego";
+  document.getElementById("juego-tipo").innerHTML = TIPOS_JUEGO.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  document.getElementById("juego-caja").innerHTML = `<option value="">💰 Caja general (sin bazar)</option>` +
+    bazaresOrdenados().map(b => `<option value="${escapeHtml(b.id)}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
+  document.getElementById("juego-socio").innerHTML = `<option value="">Nadie (la ganancia es toda mía)</option>` +
+    AppState.socios.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.nombre)}</option>`).join("");
+  const presetCaja = juegosFiltro !== "all" && juegosFiltro !== "general" ? juegosFiltro : "";
   setVal("juego-nombre", j ? j.nombre : "");
+  setVal("juego-tipo", j ? (j.tipo || "Otro") : TIPOS_JUEGO[0]);
+  setVal("juego-caja", j ? (j.bazarId || "") : presetCaja);
   setVal("juego-precio", j ? j.precio : "");
   setVal("juego-jugadas", j ? j.jugadas : 0);
   setVal("juego-premios", j ? j.costoPremios : 0);
+  setVal("juego-socio", j ? (j.socioId || "") : "");
+  setVal("juego-pct", j ? (j.pctSocio || 0) : 50);
+  document.getElementById("juego-pct-wrap").style.display = val("juego-socio") ? "block" : "none";
+  updateJuegoPreview();
   openModal("modal-juego");
 }
 function saveJuego() {
-  const b = bazarActivoObj();
-  if (!b) return;
-  const nombre = val("juego-nombre").trim();
-  if (!nombre) return showToast("Ponle un nombre al juego.", "error");
-  const precio = Number.parseFloat(num("juego-precio")) || 0;
-  const jugadas = Math.max(0, Number.parseInt(num("juego-jugadas")) || 0);
-  const costoPremios = Math.max(0, Number.parseFloat(num("juego-premios")) || 0);
-  if (precio < 0) return showToast("El precio por jugada no puede ser negativo.", "error");
-  if (!b.juegos) b.juegos = [];
+  const datos = juegoDesdeFormulario();
+  if (!datos.nombre) return showToast("Ponle un nombre al juego.", "error");
+  if (datos.socioId && datos.pctSocio <= 0) return showToast("Indica qué porcentaje de la ganancia se lleva el socio.", "error");
+  if (!Array.isArray(AppState.juegos)) AppState.juegos = [];
   const id = val("juego-id");
-  const datos = { nombre, precio, jugadas, costoPremios };
-  if (id) Object.assign(b.juegos.find(x => x.id === id), datos);
-  else b.juegos.push({ id: uid(), ...datos });
+  if (id) Object.assign(AppState.juegos.find(x => x.id === id), datos);
+  else AppState.juegos.push({ id: uid(), porDia: {}, ...datos });
   saveState({ sinRefresco: true });
   closeModal("modal-juego");
-  renderBazarDetalle();
+  renderJuegos();
   showToast("Juego guardado.");
 }
 async function deleteJuego(id) {
-  const b = bazarActivoObj();
-  if (!b || !(await pedirConfirmacion("¿Eliminar este juego? Sus jugadas dejarán de contar en los ingresos del bazar.", { aviso: "Juego eliminado." }))) return;
-  b.juegos = (b.juegos || []).filter(x => x.id !== id);
+  if (!(await pedirConfirmacion("¿Eliminar este juego? Sus intentos dejarán de contar en la caja y en las métricas.", { aviso: "Juego eliminado." }))) return;
+  AppState.juegos = (AppState.juegos || []).filter(x => x.id !== id);
   saveState({ sinRefresco: true });
-  renderBazarDetalle();
+  renderJuegos();
 }
+// Suma (o resta) intentos; el día de hoy se anota aparte para la gráfica "Recaudado por día".
 function ajustarJugadas(id, delta) {
-  const b = bazarActivoObj();
-  const j = b && (b.juegos || []).find(x => x.id === id);
+  const j = (AppState.juegos || []).find(x => x.id === id);
   if (!j) return;
-  j.jugadas = Math.max(0, (Number(j.jugadas) || 0) + delta);
+  const antes = Number(j.jugadas) || 0;
+  const despues = Math.max(0, antes + delta);
+  const real = despues - antes;
+  if (!real) return;
+  j.jugadas = despues;
+  if (!j.porDia) j.porDia = {};
+  const hoy = hoyISO();
+  j.porDia[hoy] = Math.max(0, (Number(j.porDia[hoy]) || 0) + real);
   saveState({ sinRefresco: true });
-  renderBazarDetalle();
+  renderJuegos();
 }
-
+// Resumen dentro del detalle de un bazar
+function renderJuegosBazar(b) {
+  const el = document.getElementById("bd-juegos-resumen");
+  if (!el) return;
+  const r = resumenJuegosBazar(b);
+  el.textContent = r.count
+    ? `🎲 ${r.count} juego(s) · ${r.jugadas} intentos · recaudado ${fmt(r.ingreso)}${r.parteSocio ? ` · de socios ${fmt(r.parteSocio)}` : ""} · tu parte ${fmt(r.tuParte)}`
+    : "🎲 Aún no hay juegos en este bazar.";
+}
 function renderMaletaBazar(b) {
-  const lista = document.getElementById("bd-maleta-lista");
-  if (!lista) return;
   const items = b.maleta || [];
   const hechos = items.filter(i => i.hecho).length;
   const pct = items.length ? Math.round(hechos / items.length * 100) : 0;
-  document.getElementById("bd-maleta-texto").textContent = items.length
-    ? (hechos === items.length ? "🎉 ¡Maleta lista!" : `${hechos} de ${items.length} cosas listas`)
-    : "Maleta vacía";
+  const texto = document.getElementById("bd-maleta-texto");
+  if (!texto) return;
+  texto.textContent = items.length ? `🧳 Maleta: ${hechos} de ${items.length} cosas listas` : "🧳 Maleta vacía";
   document.getElementById("bd-maleta-pct").textContent = `${pct}%`;
   const fill = document.getElementById("bd-maleta-fill");
   fill.style.width = `${pct}%`;
   fill.classList.toggle("complete", items.length > 0 && pct === 100);
-  lista.innerHTML = items.map(i => `
+}
+function abrirJuegosDeBazar() { juegosFiltro = activeBazarId || "all"; switchPage("juegos"); }
+function abrirMaletaDeBazar() { maletaBazarId = activeBazarId || ""; switchPage("maleta"); }
+
+/* ---------------- MALETA: checklist por bazar + plantilla ---------------- */
+const plantillaMaleta = () => AppState.maletaPlantilla || (AppState.maletaPlantilla = []);
+const plantillaComoMaleta = () => plantillaMaleta().map(i => ({ id: uid(), texto: i.texto, hecho: false }));
+function maletaBazarActual() { return AppState.bazares.find(x => x.id === maletaBazarId); }
+function renderMaleta() {
+  const sel = document.getElementById("maleta-bazar");
+  if (!sel) return;
+  const bazares = bazaresOrdenados();
+  if (!bazares.some(b => b.id === maletaBazarId)) {
+    maletaBazarId = bazares.some(b => b.id === activeBazarId) ? activeBazarId : (bazares[0]?.id || "");
+  }
+  if (document.activeElement !== sel) {
+    sel.innerHTML = bazares.map(b => `<option value="${escapeHtml(b.id)}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
+    sel.value = maletaBazarId;
+  } else {
+    maletaBazarId = sel.value;
+  }
+  const b = maletaBazarActual();
+  document.getElementById("maleta-checklist-wrap").style.display = b ? "block" : "none";
+  document.getElementById("maleta-sin-bazar").style.display = b ? "none" : "block";
+  if (b) pintarMaletaBazar(b);
+  pintarPlantillaMaleta();
+}
+function onMaletaBazarChange() {
+  maletaBazarId = val("maleta-bazar");
+  renderMaleta();
+}
+function pintarMaletaBazar(b) {
+  const items = b.maleta || [];
+  const hechos = items.filter(i => i.hecho).length;
+  const pct = items.length ? Math.round(hechos / items.length * 100) : 0;
+  document.getElementById("maleta-texto").textContent = items.length
+    ? (hechos === items.length ? "🎉 ¡Maleta lista!" : `${hechos} de ${items.length} cosas listas`)
+    : "Maleta vacía";
+  document.getElementById("maleta-pct").textContent = `${pct}%`;
+  const fill = document.getElementById("maleta-fill");
+  fill.style.width = `${pct}%`;
+  fill.classList.toggle("complete", items.length > 0 && pct === 100);
+  document.getElementById("maleta-lista").innerHTML = items.map(i => `
     <div class="maleta-item${i.hecho ? " hecho" : ""}">
       <label>
         <input type="checkbox" ${i.hecho ? "checked" : ""} onchange="toggleMaletaItem('${escapeHtml(i.id)}', this.checked)" aria-label="${escapeHtml(i.texto)}">
         <span>${escapeHtml(i.texto)}</span>
       </label>
       <button type="button" class="maleta-quitar" aria-label="Quitar ${escapeHtml(i.texto)}" title="Quitar" onclick="borrarMaletaItem('${escapeHtml(i.id)}')">✕</button>
-    </div>`).join("") || `<p class="empty-hint">Tu maleta está vacía. Agrega cosas abajo o usa “+ Lista sugerida”.</p>`;
+    </div>`).join("") || `<p class="empty-hint">Esta maleta está vacía. Carga tu plantilla o agrega cosas abajo.</p>`;
 }
 function guardarMaleta(b) {
   saveState({ sinRefresco: true });
-  renderMaletaBazar(b);
+  pintarMaletaBazar(b);
 }
 function toggleMaletaItem(id, hecho) {
-  const b = bazarActivoObj();
+  const b = maletaBazarActual();
   const item = b && (b.maleta || []).find(x => x.id === id);
   if (!item) return;
   item.hecho = !!hecho;
   guardarMaleta(b);
 }
 function agregarMaletaItem() {
-  const b = bazarActivoObj();
+  const b = maletaBazarActual();
   if (!b) return;
   const texto = val("maleta-nuevo").trim();
   if (!texto) return showToast("Escribe qué quieres agregar a la maleta.", "error");
@@ -6603,31 +6715,76 @@ function agregarMaletaItem() {
   document.getElementById("maleta-nuevo")?.focus();
 }
 function borrarMaletaItem(id) {
-  const b = bazarActivoObj();
+  const b = maletaBazarActual();
   if (!b) return;
   b.maleta = (b.maleta || []).filter(x => x.id !== id);
   guardarMaleta(b);
 }
-function agregarMaletaSugerida() {
-  const b = bazarActivoObj();
+function cargarPlantillaEnBazar() {
+  const b = maletaBazarActual();
   if (!b) return;
   if (!b.maleta) b.maleta = [];
   const existentes = new Set(b.maleta.map(i => i.texto.toLowerCase()));
-  const sugeridas = [...MALETA_SUGERIDA, ...(b.juegos || []).map(j => `Premios y material: ${j.nombre}`)];
   let nuevas = 0;
-  sugeridas.forEach(texto => {
-    if (existentes.has(texto.toLowerCase())) return;
-    b.maleta.push({ id: uid(), texto, hecho: false });
+  plantillaMaleta().forEach(i => {
+    if (existentes.has(i.texto.toLowerCase())) return;
+    b.maleta.push({ id: uid(), texto: i.texto, hecho: false });
     nuevas++;
   });
   guardarMaleta(b);
-  showToast(nuevas ? `Se agregaron ${nuevas} cosas a la maleta.` : "La lista sugerida ya estaba completa.");
+  showToast(nuevas ? `Se cargaron ${nuevas} cosas de tu plantilla.` : "Tu plantilla ya estaba completa en esta maleta.");
 }
 function desmarcarMaleta() {
-  const b = bazarActivoObj();
+  const b = maletaBazarActual();
   if (!b || !(b.maleta || []).length) return;
   b.maleta.forEach(i => { i.hecho = false; });
   guardarMaleta(b);
+}
+function pintarPlantillaMaleta() {
+  const lista = document.getElementById("plantilla-lista");
+  if (!lista) return;
+  const items = plantillaMaleta();
+  document.getElementById("plantilla-count").textContent = `${items.length} cosa(s)`;
+  lista.innerHTML = items.map(i => `
+    <div class="plantilla-item">
+      <input type="text" class="form-input" maxlength="80" value="${escapeHtml(i.texto)}" aria-label="Cosa de la maleta" onchange="editarPlantillaItem('${escapeHtml(i.id)}', this.value)">
+      <button type="button" class="maleta-quitar" aria-label="Quitar ${escapeHtml(i.texto)}" title="Quitar" onclick="borrarPlantillaItem('${escapeHtml(i.id)}')">✕</button>
+    </div>`).join("") || `<p class="empty-hint">Tu plantilla está vacía. Agrega cosas o restaura la lista sugerida.</p>`;
+}
+function agregarPlantillaItem() {
+  const texto = val("plantilla-nuevo").trim();
+  if (!texto) return showToast("Escribe qué quieres agregar a tu plantilla.", "error");
+  if (plantillaMaleta().some(i => i.texto.toLowerCase() === texto.toLowerCase())) return showToast("Eso ya está en tu plantilla.", "error");
+  plantillaMaleta().push({ id: uid(), texto });
+  setVal("plantilla-nuevo", "");
+  saveState({ sinRefresco: true });
+  pintarPlantillaMaleta();
+  document.getElementById("plantilla-nuevo")?.focus();
+}
+function editarPlantillaItem(id, texto) {
+  const item = plantillaMaleta().find(i => i.id === id);
+  const limpio = String(texto || "").trim();
+  if (!item) return;
+  if (!limpio || plantillaMaleta().some(i => i.id !== id && i.texto.toLowerCase() === limpio.toLowerCase())) {
+    showToast(limpio ? "Eso ya está en tu plantilla." : "El texto no puede quedar vacío.", "error");
+    pintarPlantillaMaleta();
+    return;
+  }
+  item.texto = limpio;
+  saveState({ sinRefresco: true });
+}
+function borrarPlantillaItem(id) {
+  AppState.maletaPlantilla = plantillaMaleta().filter(i => i.id !== id);
+  saveState({ sinRefresco: true });
+  pintarPlantillaMaleta();
+}
+async function restaurarPlantillaSugerida() {
+  if (!(await pedirConfirmacion("Tu plantilla se reemplazará por la lista sugerida. Las maletas que ya armaste en cada bazar no cambian.",
+    { titulo: "Restaurar plantilla", confirmLabel: "Restaurar", danger: false, deshacer: false }))) return;
+  AppState.maletaPlantilla = MALETA_SUGERIDA.map(texto => ({ id: uid(), texto }));
+  saveState({ sinRefresco: true });
+  pintarPlantillaMaleta();
+  showToast("Plantilla restaurada.");
 }
 
 /* =================================================================
@@ -6803,6 +6960,9 @@ function renderEstadisticas() {
   document.getElementById("stat-total-ganancia").textContent = fmt(totalGanancia);
   document.getElementById("stat-total-mayoreo").textContent = fmt(totalMayoreo);
   document.getElementById("stat-total-regalado").textContent = fmt(totalRegalado);
+  const juegosTodos = resumenJuegos();
+  document.getElementById("stat-total-juegos").textContent = fmt(juegosTodos.ingreso);
+  document.getElementById("stat-total-juegos-sub").textContent = `${juegosTodos.jugadas} intentos · tu parte ${fmt(juegosTodos.tuParte)}`;
 
   // Ventas por bazar
   // Por bazar: cotizaciones, playeras, stickers y productos externos consignados.
@@ -7051,6 +7211,7 @@ function refrescarDerivados() {
     consignaciones: () => { renderConsignaciones(); renderSocios(); },
     "bloques-inventario": renderBloquesInventario, "bazar-detalle": renderBazarDetalle,
     gastos: renderGastos, mermas: renderMermas, cotizaciones: renderCotizacionesGuardadas,
+    juegos: renderJuegos, maleta: renderMaleta,
     inicio: () => globalThis.renderInicio?.()
   };
   vistas[activa.id.replace("page-", "")]?.();
@@ -7081,6 +7242,8 @@ export function renderAll(opciones) {
   renderConsignaciones();
   renderSocios();
   renderCaja();
+  renderJuegos();
+  renderMaleta();
   renderInteres();
   renderAjustes();
   renderPlayeras();
@@ -7104,7 +7267,7 @@ Object.assign(globalThis, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, openModalJuego, saveJuego, deleteJuego, ajustarJugadas, toggleMaletaItem, agregarMaletaItem, borrarMaletaItem, agregarMaletaSugerida, desmarcarMaleta, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
+  verDetallePlayera, openModalJuego, saveJuego, deleteJuego, ajustarJugadas, renderJuegos, onJuegoSocioChange, updateJuegoPreview, abrirJuegosDeBazar, abrirMaletaDeBazar, onMaletaBazarChange, toggleMaletaItem, agregarMaletaItem, borrarMaletaItem, cargarPlantillaEnBazar, desmarcarMaleta, agregarPlantillaItem, editarPlantillaItem, borrarPlantillaItem, restaurarPlantillaSugerida, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
   openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, cambiarEtiquetaPlayeraBloque, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,

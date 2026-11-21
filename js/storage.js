@@ -50,6 +50,18 @@ function migrarEstampadosDe(registro) {
   delete registro.numEstampados;
 }
 function migrarDatosAntiguos() {
+  if (!Array.isArray(AppState.juegos)) AppState.juegos = [];
+  if (!Array.isArray(AppState.maletaPlantilla)) AppState.maletaPlantilla = defaultState().maletaPlantilla;
+  // Los juegos antes vivían dentro de cada bazar: ahora son una lista propia con bazarId.
+  (AppState.bazares || []).forEach(b => {
+    if (Array.isArray(b.juegos) && b.juegos.length) {
+      b.juegos.forEach(j => AppState.juegos.push({
+        id: j.id || uid(), nombre: j.nombre || "Juego", tipo: "Otro", precio: Number(j.precio) || 0, bazarId: b.id,
+        jugadas: Number(j.jugadas) || 0, porDia: {}, costoPremios: Number(j.costoPremios) || 0, socioId: "", pctSocio: 0
+      }));
+    }
+    delete b.juegos;
+  });
   (AppState.playeras || []).forEach(migrarEstampadosDe);
   (AppState.cotizaciones || []).forEach(c => {
     (c.items || []).forEach(migrarEstampadosDe);
@@ -84,7 +96,7 @@ export function getSectionData(section) {
     catalogo: { colores: AppState.colores, etiquetas: AppState.etiquetas, tiposPrenda: AppState.tiposPrenda, tallaEtiquetas: AppState.tallaEtiquetas, artistas: AppState.artistas, proveedores: AppState.proveedores, etiquetasOperativas: AppState.etiquetasOperativas },
     clientes: { clientes: AppState.clientes, clienteEtiquetas: AppState.clienteEtiquetas },
     finanzas: { gastos: AppState.gastos, comprasPendientes: AppState.comprasPendientes, mermas: AppState.mermas },
-    bazares: { bazares: AppState.bazares, consignaciones: AppState.consignaciones, socios: AppState.socios, cajaGeneral: AppState.cajaGeneral, turnosCaja: AppState.turnosCaja },
+    bazares: { bazares: AppState.bazares, juegos: AppState.juegos, maletaPlantilla: AppState.maletaPlantilla, consignaciones: AppState.consignaciones, socios: AppState.socios, cajaGeneral: AppState.cajaGeneral, turnosCaja: AppState.turnosCaja },
     reportes: { graficas: AppState.graficas, consultas: AppState.consultas, consultaEtiquetas: AppState.consultaEtiquetas, recommendedChartStyles: AppState.recommendedChartStyles },
     ajustes: { settings: AppState.settings }
   };

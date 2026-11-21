@@ -1413,7 +1413,7 @@ const PAGINAS = [
   ["inicio", "🏠", "Inicio"], ["cotizador", "🧮", "Cotizador"], ["cotizaciones", "📁", "Cotizaciones guardadas"],
   ["ventas-rapidas", "🧾", "Ventas rápidas"], ["clientes", "👥", "Clientes"], ["produccion", "🚦", "Producción (Kanban)"], ["artes", "🎨", "Historial de artes"],
   ["playeras", "👕", "Playeras"], ["stickers", "✂️", "Stickers"], ["etiquetas", "🏷️", "Etiquetas y colores"], ["mermas", "📉", "Mermas"],
-  ["bazares", "🏪", "Mis bazares"], ["consignaciones", "🤝", "Consignaciones"], ["caja", "💰", "Caja"], ["gastos", "💸", "Gastos generales"],
+  ["bazares", "🏪", "Mis bazares"], ["juegos", "🎲", "Juegos"], ["maleta", "🧳", "Maleta"], ["consignaciones", "🤝", "Consignaciones"], ["caja", "💰", "Caja"], ["gastos", "💸", "Gastos generales"],
   ["compras", "🎯", "Próximas compras"], ["artistas", "🎨", "Artistas y comisiones"], ["proveedores", "🚚", "Proveedores"],
   ["estadisticas", "📊", "Estadísticas"], ["interes", "❓", "Interés por producto"], ["ajustes", "⚙️", "Ajustes de costos"]
 ];

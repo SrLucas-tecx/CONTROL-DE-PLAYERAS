@@ -1933,3 +1933,20 @@ body:has(.bulk-bar:not([hidden])) .fab{display:none;}
 .maleta-add{display:flex;gap:var(--space-2);}
 .maleta-add .form-input{flex:1;min-width:0;}
 @media (max-width:480px){.maleta-lista{grid-template-columns:minmax(0,1fr);}.maleta-add{flex-direction:column;}}
+
+
+/* ============================================================
+   JUEGOS (página) Y PLANTILLA DE MALETA
+   ============================================================ */
+.juego-rapidos{display:flex;gap:var(--space-2);margin-bottom:var(--space-2);}
+.juego-rapidos button{
+  flex:1;min-height:36px;border-radius:var(--radius-md);font-weight:800;font-size:var(--fs-sm);
+  background:var(--color-surface-alt);border:1px solid var(--color-border);color:var(--color-text);
+}
+.juego-rapidos button:hover{border-color:var(--color-accent);}
+.maleta-acciones{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-3);}
+.plantilla-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--space-2);margin:var(--space-3) 0 var(--space-4);}
+.plantilla-lista .empty-hint{grid-column:1 / -1;}
+.plantilla-item{display:flex;align-items:center;gap:var(--space-2);}
+.plantilla-item .form-input{flex:1;min-width:0;}
+@media (max-width:480px){.plantilla-lista{grid-template-columns:minmax(0,1fr);}}

@@ -3,6 +3,13 @@
    Variables globales, tabuladores, catálogos fijos
    ============================================================ */
 
+export const TIPOS_JUEGO = ["Ruleta", "Lotería / rifa", "Tiro al blanco", "Pesca", "Dados", "Cartas / memorama", "Premio sorpresa", "Videojuego", "Otro"];
+export const MALETA_SUGERIDA = [
+  "Mesa y mantel", "Playeras (inventario)", "Stickers y estampados", "Perchero / exhibidores",
+  "Letrero o lona con el logo", "Terminal bancaria y cargador", "Fondo de caja (cambio)",
+  "Bolsas y papel de empaque", "Cinta, tijeras y marcador", "Etiquetas de precio",
+  "Extensión y multicontacto", "Tarjetas de contacto / QR de redes", "Sillas", "Agua y snacks"
+];
 export const STORAGE_KEY = "LUCXSTUDIO_APP_STATE";
 export const GUIA_TALLAS_DEFAULTS = [
   { talla: "CHI", ancho: 45.7, largo: 70.5 },
@@ -80,6 +87,8 @@ export function defaultState() {
     comprasPendientes: [],
     mermas: [],
     consignaciones: [],
+    juegos: [],
+    maletaPlantilla: MALETA_SUGERIDA.map((texto, i) => ({ id: `mp${i + 1}`, texto })),
     cajaGeneral: { fondoCaja: 0, efectivoContado: null },
     consultas: [],
     consultaEtiquetas: [
@@ -180,6 +189,9 @@ export const SECTION_LABELS = {
    GRÁFICAS RECOMENDADAS
 --------------------------------------------------------------- */
 export const RECOMMENDED_COMBINATIONS = [
+  { id: "juegos-ingresos", title: "Juego + recaudado", description: "Descubre qué juegos recaudan más dinero.", fuente: "juegos-ingresos", tipo: "bar" },
+  { id: "juegos-tipos", title: "Tipo de juego + recaudado", description: "Compara qué tipo de juego te conviene llevar.", fuente: "juegos-tipos", tipo: "doughnut" },
+  { id: "juegos-dias", title: "Recaudado por día", description: "Mira en qué días tus juegos juntan más dinero.", fuente: "juegos-dias", tipo: "bar" },
   { id: "etiqueta-ganancia", title: "Etiqueta + ganancia", description: "Identifica las etiquetas que dejan más ganancia potencial.", fuente: "inventario", dimension: "etiqueta", metrica: "ganancia", tipo: "bar" },
   { id: "color-ventas", title: "Color + ventas", description: "Descubre qué colores tienen mayor venta potencial.", fuente: "inventario", dimension: "color", metrica: "ventas", tipo: "bar" },
   { id: "talla-stock", title: "Talla + stock", description: "Detecta las tallas que debes reponer o producir.", fuente: "inventario", dimension: "talla", metrica: "stock", tipo: "bar" },

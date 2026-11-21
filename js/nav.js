@@ -15,7 +15,7 @@ const SECCIONES = [
   { id: "ventas",     icon: "calculator", label: "Ventas", paginas: ["cotizador", "cotizaciones", "guia-tallas", "ventas-rapidas", "clientes"] },
   { id: "produccion", icon: "kanban", label: "Producción", paginas: ["produccion", "artes"] },
   { id: "inventario", icon: "package", label: "Inventario", paginas: ["playeras", "bloques-inventario", "tipos-ropa", "stickers", "consignaciones", "etiquetas", "mermas"] },
-  { id: "negocio",    icon: "store", label: "Negocio", paginas: ["bazares", "caja", "gastos", "compras", "artistas", "socios", "proveedores"] },
+  { id: "negocio",    icon: "store", label: "Negocio", paginas: ["bazares", "juegos", "maleta", "caja", "gastos", "compras", "artistas", "socios", "proveedores"] },
   { id: "reportes",   icon: "chart-no-axes-column-increasing", label: "Reportes", paginas: ["estadisticas", "interes"] },
   { id: "ajustes",    icon: "settings", label: "Ajustes", paginas: ["ajustes"] }
 ];
@@ -24,7 +24,7 @@ const TAB_LABEL = {
   cotizador: ["calculator", "Cotizador"], cotizaciones: ["folder", "Guardadas"], "guia-tallas": ["ruler", "Guía de tallas"], "ventas-rapidas": ["receipt-text", "Ventas rápidas"], clientes: ["users", "Clientes"],
   produccion: ["kanban", "Kanban"], artes: ["palette", "Artes"],
   playeras: ["shirt", "Playeras"], "bloques-inventario": ["package", "Bloques para bazar"], "tipos-ropa": ["shirt", "Tipos de ropa"], stickers: ["scissors", "Stickers"], etiquetas: ["tags", "Etiquetas"], mermas: ["trending-down", "Mermas"],
-  bazares: ["store", "Bazares"], consignaciones: ["handshake", "Consignaciones"], caja: ["wallet", "Caja"], gastos: ["receipt", "Gastos"],
+  bazares: ["store", "Bazares"], juegos: ["dices", "Juegos"], maleta: ["luggage", "Maleta"], consignaciones: ["handshake", "Consignaciones"], caja: ["wallet", "Caja"], gastos: ["receipt", "Gastos"],
   compras: ["target", "Compras"], artistas: ["palette", "Artistas"], socios: ["handshake", "Socios"], proveedores: ["truck", "Proveedores"],
   estadisticas: ["chart-no-axes-column-increasing", "Estadísticas"], interes: ["circle-help", "Interés"],
   ajustes: ["settings", "Costos"]
@@ -70,7 +70,7 @@ function cargarCss() {
   const link = document.createElement("link");
   link.id = "redesign-css";
   link.rel = "stylesheet";
-  link.href = "dist/redesign.css?v=20261118d";   // cambia este número si el navegador no refleja tus cambios de estilo
+  link.href = "dist/redesign.css?v=20261118e";   // cambia este número si el navegador no refleja tus cambios de estilo
   document.head.appendChild(link);
 }
 
