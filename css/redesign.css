@@ -1950,3 +1950,27 @@ body:has(.bulk-bar:not([hidden])) .fab{display:none;}
 .plantilla-item{display:flex;align-items:center;gap:var(--space-2);}
 .plantilla-item .form-input{flex:1;min-width:0;}
 @media (max-width:480px){.plantilla-lista{grid-template-columns:minmax(0,1fr);}}
+
+
+/* ============================================================
+   PREMIOS DENTRO DE UN JUEGO
+   ============================================================ */
+.juego-premios-list{display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-2);}
+.juego-premio-row{
+  display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) minmax(0,1fr) 84px 96px 96px 34px;
+  gap:var(--space-2);align-items:end;padding:var(--space-2);
+  border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface-alt);
+}
+.jp-field{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.jp-field > span{font-size:var(--fs-xs);font-weight:700;color:var(--color-text-muted);line-height:1.25;}
+.jp-field[hidden]{display:none;}
+.jp-field .form-input,.jp-field .form-select{min-width:0;}
+.jp-quitar{align-self:end;}
+@media (max-width:900px){
+  .juego-premio-row{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .jp-quitar{grid-column:3;justify-self:end;}
+}
+@media (max-width:520px){
+  .juego-premio-row{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .jp-quitar{grid-column:2;}
+}

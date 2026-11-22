@@ -4,6 +4,7 @@
    ============================================================ */
 
 export const TIPOS_JUEGO = ["Ruleta", "Lotería / rifa", "Tiro al blanco", "Pesca", "Dados", "Cartas / memorama", "Premio sorpresa", "Videojuego", "Otro"];
+export const TIPOS_PREMIO = ["Producto", "Descuento (%)", "Descuento ($)", "Efectivo", "Otro"];
 export const MALETA_SUGERIDA = [
   "Mesa y mantel", "Playeras (inventario)", "Stickers y estampados", "Perchero / exhibidores",
   "Letrero o lona con el logo", "Terminal bancaria y cargador", "Fondo de caja (cambio)",
@@ -88,6 +89,7 @@ export function defaultState() {
     mermas: [],
     consignaciones: [],
     juegos: [],
+    premiosCatalogo: [],
     maletaPlantilla: MALETA_SUGERIDA.map((texto, i) => ({ id: `mp${i + 1}`, texto })),
     cajaGeneral: { fondoCaja: 0, efectivoContado: null },
     consultas: [],
@@ -191,6 +193,7 @@ export const SECTION_LABELS = {
 export const RECOMMENDED_COMBINATIONS = [
   { id: "juegos-ingresos", title: "Juego + recaudado", description: "Descubre qué juegos recaudan más dinero.", fuente: "juegos-ingresos", tipo: "bar" },
   { id: "juegos-tipos", title: "Tipo de juego + recaudado", description: "Compara qué tipo de juego te conviene llevar.", fuente: "juegos-tipos", tipo: "doughnut" },
+  { id: "juegos-premios", title: "Premios entregados", description: "Mira qué premios entregas más en tus juegos.", fuente: "juegos-premios", tipo: "bar" },
   { id: "juegos-dias", title: "Recaudado por día", description: "Mira en qué días tus juegos juntan más dinero.", fuente: "juegos-dias", tipo: "bar" },
   { id: "etiqueta-ganancia", title: "Etiqueta + ganancia", description: "Identifica las etiquetas que dejan más ganancia potencial.", fuente: "inventario", dimension: "etiqueta", metrica: "ganancia", tipo: "bar" },
   { id: "color-ventas", title: "Color + ventas", description: "Descubre qué colores tienen mayor venta potencial.", fuente: "inventario", dimension: "color", metrica: "ventas", tipo: "bar" },

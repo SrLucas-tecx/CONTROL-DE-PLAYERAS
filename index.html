@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="dist/styles.css?v=20261118e">
+<link rel="stylesheet" href="dist/styles.css?v=20261118f">
 </head>
 <body>
 
@@ -1571,6 +1571,7 @@
           <button type="button" class="settings-nav-tab active" role="tab" aria-selected="true" onclick="switchAjustesTab('tab-general', this)">General</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-apariencia', this)">Apariencia</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-productos', this)">Tipos de DTF</button>
+          <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-juegos', this)">Juegos y premios</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-respaldo', this)">Respaldo y nube</button>
         </div>
 
@@ -1735,6 +1736,26 @@
               </table>
             </div>
             <p class="form-hint">Después de agregar o quitar tipos, pulsa “Guardar cambios” en la pestaña General para conservarlos.</p>
+          </div>
+        </div>
+
+        <!-- ================= JUEGOS Y PREMIOS ================= -->
+        <div id="tab-juegos" class="ajustes-tab-content" style="display:none;">
+          <div class="settings-card">
+            <div class="settings-card-heading">
+              <div>
+                <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="gift" aria-hidden="true"></i> Premios de los juegos</h3>
+                <p class="settings-panel-description">Tu catálogo de premios: productos, descuentos, efectivo u otros, con su costo y su valor. Los marcados como predeterminados aparecen solos al crear un juego nuevo.</p>
+              </div>
+              <button type="button" class="btn-secondary" onclick="openModalPremio()"><i class="lucide-inline" data-lucide="plus" aria-hidden="true"></i> Nuevo premio</button>
+            </div>
+            <div class="settings-type-table-wrap">
+              <table class="settings-type-table">
+                <thead><tr><th>Premio</th><th>Tipo</th><th>Costo para mí</th><th>Valor</th><th>Predeterminado</th><th>Acciones</th></tr></thead>
+                <tbody id="premios-catalogo-list"></tbody>
+              </table>
+            </div>
+            <p class="form-hint">Los premios en efectivo salen de la caja: se restan del efectivo esperado. Un descuento no suma costo a menos que le pongas uno.</p>
           </div>
         </div>
 
@@ -2831,8 +2852,45 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-juego">
+<div class="modal-overlay" id="modal-premio">
   <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-premio-title">Nuevo premio</h2>
+      <button class="modal-close" data-modal="modal-premio" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="premio-id">
+      <div class="form-group">
+        <label class="form-label" for="premio-nombre">Nombre del premio</label>
+        <input type="text" id="premio-nombre" class="form-input" maxlength="60" placeholder="Ej. Llavero, Descuento 10%">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="premio-tipo">Tipo de premio</label>
+        <select id="premio-tipo" class="form-select" onchange="onPremioTipoChange()"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="premio-valor" id="premio-valor-label">Valor ($)</label>
+          <input type="number" id="premio-valor" class="form-input" min="0" step="0.01" value="0">
+        </div>
+        <div class="form-group" id="premio-costo-wrap">
+          <label class="form-label" for="premio-costo" id="premio-costo-label">Costo para mí ($)</label>
+          <input type="number" id="premio-costo" class="form-input" min="0" step="0.01" value="0">
+        </div>
+      </div>
+      <label class="tag-checkbox">
+        <input type="checkbox" id="premio-default"> Predeterminado: agregarlo a los juegos nuevos
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal="modal-premio">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="savePremio()">Guardar premio</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-juego">
+  <div class="modal-box">
     <div class="modal-header">
       <h2 class="modal-title" id="modal-juego-title">Nuevo juego</h2>
       <button class="modal-close" data-modal="modal-juego" aria-label="Cerrar">✕</button>
@@ -2864,9 +2922,17 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label" for="juego-premios">Costo de premios y material ($)</label>
+        <div class="section-header" style="justify-content:space-between;margin-bottom:var(--space-2);">
+          <span class="form-label" style="margin:0;">Premios que entrega este juego</span>
+          <button type="button" class="btn-secondary" onclick="addPremioJuego()">+ Agregar premio</button>
+        </div>
+        <div id="juego-premios-list" class="juego-premios-list"></div>
+        <span class="form-hint" id="juego-premios-total">Sin premios agregados.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="juego-premios">Otros gastos del juego ($)</label>
         <input type="number" id="juego-premios" class="form-input" min="0" step="0.01" value="0" oninput="updateJuegoPreview()">
-        <span class="form-hint">Lo que gastaste en premios; se resta de la ganancia.</span>
+        <span class="form-hint">Material, bolsas, etc. El costo de los premios de arriba se suma solo.</span>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -3333,6 +3399,7 @@
           <option value="juegos-ingresos">Juegos: recaudado por juego</option>
           <option value="juegos-jugadas">Juegos: intentos por juego</option>
           <option value="juegos-tipos">Juegos: recaudado por tipo</option>
+          <option value="juegos-premios">Juegos: premios entregados</option>
           <option value="juegos-dias">Juegos: recaudado por día</option>
           <option value="inventario">Comparar inventario</option>
         </select>

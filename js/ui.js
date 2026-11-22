@@ -2,7 +2,7 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, MALETA_SUGERIDA, TIPOS_JUEGO } from "./config.js";
+import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, MALETA_SUGERIDA, TIPOS_JUEGO, TIPOS_PREMIO } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
@@ -1790,6 +1790,7 @@ function renderAjustes() {
   renderGangSheetSupplierSelect();
   renderGangSheetTipos();
   updateCostPreview();
+  renderPremiosCatalogo();
 }
 function renderGangSheetSupplierSelect() {
   const proveedorSelect = document.getElementById("set-gangsheet-tipo-proveedor");
@@ -2110,7 +2111,7 @@ function renderCaja() {
   document.getElementById("caja-esperado").textContent = fmt(d.efectivoEsperado);
   document.getElementById("caja-juegos").textContent = fmt(d.juegosIngreso);
   document.getElementById("caja-juegos-sub").textContent = d.juegosCount
-    ? `${d.juegosCount} juego(s)${d.juegosParteSocios ? ` · de socios: ${fmt(d.juegosParteSocios)}` : ""}`
+    ? `${d.juegosCount} juego(s)${d.juegosPremiosEfectivo ? ` · premios en efectivo −${fmt(d.juegosPremiosEfectivo)}` : ""}${d.juegosParteSocios ? ` · de socios: ${fmt(d.juegosParteSocios)}` : ""}`
     : "sin juegos en esta caja";
   document.getElementById("caja-fondo-hint").textContent = esGeneral
     ? "Cambio con el que abriste la caja."
@@ -6510,6 +6511,7 @@ function tarjetaJuego(j) {
       </div>
       <div class="juego-rapidos"><button type="button" onclick="ajustarJugadas('${id}', 5)">+5</button><button type="button" onclick="ajustarJugadas('${id}', 10)">+10</button></div>
       <div class="card-row"><span>Recaudado</span><span>${fmt(c.ingreso)}</span></div>
+      ${c.premiosCant ? `<div class="card-row"><span>Premios entregados</span><span>${c.premiosCant}</span></div><div class="card-meta">${escapeHtml(resumenPremiosJuego(j))}</div>` : ""}
       <div class="card-row"><span>Premios y material</span><span style="color:var(--color-danger)">− ${fmt(c.premios)}</span></div>
       <div class="card-row"><span>Ganancia del juego</span><span style="color:${c.bruta >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(c.bruta)}</span></div>
       ${socio ? `<div class="card-row"><span>Parte de ${escapeHtml(socio.nombre)} (${c.pct}%)</span><span>${fmt(c.parteSocio)}</span></div>
@@ -6541,6 +6543,154 @@ function renderJuegos() {
   document.getElementById("juegos-empty-hint").style.display = lista.length ? "none" : "block";
   grid.innerHTML = lista.map(tarjetaJuego).join("");
 }
+/* ---------------- PREMIOS: catálogo (Ajustes) y filas dentro de un juego ---------------- */
+function etiquetasPremio(tipo) {
+  const mapa = {
+    "Producto": { costo: "Costo para mí ($)", valor: "Precio de venta ($)", costoVisible: true },
+    "Descuento (%)": { costo: "Costo para mí ($)", valor: "Descuento (%)", costoVisible: true },
+    "Descuento ($)": { costo: "Costo para mí ($)", valor: "Descuento ($)", costoVisible: true },
+    "Efectivo": { costo: "Costo para mí ($)", valor: "Monto en efectivo ($)", costoVisible: false },
+    "Otro": { costo: "Costo para mí ($)", valor: "Valor ($)", costoVisible: true }
+  };
+  return mapa[tipo] || mapa.Otro;
+}
+const opcionesTipoPremio = (sel = "") => TIPOS_PREMIO.map(t => `<option value="${escapeHtml(t)}"${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
+function textoValorPremio(p) {
+  const v = Number(p.valor) || 0;
+  return p.tipo === "Descuento (%)" ? `${v}%` : fmt(v);
+}
+function renderPremiosCatalogo() {
+  const body = document.getElementById("premios-catalogo-list");
+  if (!body) return;
+  const lista = AppState.premiosCatalogo || [];
+  body.innerHTML = lista.map(p => `<tr>
+    <td data-label="Premio">${escapeHtml(p.nombre)}</td>
+    <td data-label="Tipo">${escapeHtml(p.tipo)}</td>
+    <td data-label="Costo para mí">${p.tipo === "Efectivo" ? fmt(p.valor) : fmt(p.costo)}</td>
+    <td data-label="Valor">${escapeHtml(textoValorPremio(p))}</td>
+    <td data-label="Predeterminado">${p.predeterminado ? "✅ Sí" : "—"}</td>
+    <td data-label="Acciones"><div class="bazar-row-actions">
+      <button type="button" onclick="openModalPremio('${escapeHtml(p.id)}')">✏️ Editar</button>
+      <button type="button" class="danger" onclick="deletePremio('${escapeHtml(p.id)}')">🗑️ Quitar</button>
+    </div></td>
+  </tr>`).join("") || `<tr><td colspan="6" class="settings-type-empty">Aún no agregas premios. Crea los que sueles regalar en tus juegos.</td></tr>`;
+}
+function onPremioTipoChange() {
+  const e = etiquetasPremio(val("premio-tipo"));
+  document.getElementById("premio-valor-label").textContent = e.valor;
+  document.getElementById("premio-costo-label").textContent = e.costo;
+  document.getElementById("premio-costo-wrap").style.display = e.costoVisible ? "block" : "none";
+}
+function openModalPremio(id) {
+  const p = id ? (AppState.premiosCatalogo || []).find(x => x.id === id) : null;
+  setVal("premio-id", id || "");
+  document.getElementById("modal-premio-title").textContent = p ? "Editar premio" : "Nuevo premio";
+  document.getElementById("premio-tipo").innerHTML = opcionesTipoPremio(p ? p.tipo : "Producto");
+  setVal("premio-nombre", p ? p.nombre : "");
+  setVal("premio-costo", p ? p.costo : 0);
+  setVal("premio-valor", p ? p.valor : 0);
+  setChecked("premio-default", !!(p && p.predeterminado));
+  onPremioTipoChange();
+  openModal("modal-premio");
+}
+function savePremio() {
+  const nombre = val("premio-nombre").trim();
+  if (!nombre) return showToast("Ponle un nombre al premio.", "error");
+  const tipo = val("premio-tipo");
+  const valor = Math.max(0, Number.parseFloat(num("premio-valor")) || 0);
+  if (tipo === "Descuento (%)" && valor > 100) return showToast("Un descuento en porcentaje no puede pasar de 100.", "error");
+  const costo = tipo === "Efectivo" ? valor : Math.max(0, Number.parseFloat(num("premio-costo")) || 0);
+  if (!Array.isArray(AppState.premiosCatalogo)) AppState.premiosCatalogo = [];
+  const id = val("premio-id");
+  const datos = { nombre, tipo, costo, valor, predeterminado: checked("premio-default") };
+  if (id) Object.assign(AppState.premiosCatalogo.find(x => x.id === id), datos);
+  else AppState.premiosCatalogo.push({ id: uid(), ...datos });
+  saveState({ sinRefresco: true });
+  closeModal("modal-premio");
+  renderPremiosCatalogo();
+  showToast("Premio guardado.");
+}
+async function deletePremio(id) {
+  if (!(await pedirConfirmacion("¿Quitar este premio del catálogo? Los juegos que ya lo usaron conservan su registro.", { aviso: "Premio quitado." }))) return;
+  AppState.premiosCatalogo = (AppState.premiosCatalogo || []).filter(x => x.id !== id);
+  saveState({ sinRefresco: true });
+  renderPremiosCatalogo();
+}
+function resumenPremiosJuego(j) {
+  const filas = (j.premios || []).filter(p => Number(p.cantidad) > 0);
+  const texto = filas.slice(0, 3).map(p => `${p.cantidad}× ${p.nombre}`).join(" · ");
+  return texto + (filas.length > 3 ? ` · y ${filas.length - 3} más` : "");
+}
+function aplicarTipoPremioFila(row) {
+  const e = etiquetasPremio(row.querySelector(".jp-tipo").value);
+  row.querySelector(".jp-valor-label").textContent = e.valor;
+  row.querySelector(".jp-costo-wrap").hidden = !e.costoVisible;
+}
+function addPremioJuego(p = {}) {
+  const lista = document.getElementById("juego-premios-list");
+  if (!lista) return;
+  const cat = AppState.premiosCatalogo || [];
+  const row = document.createElement("div");
+  row.className = "juego-premio-row";
+  row.innerHTML = `
+    <label class="jp-field"><span>Del catálogo</span>
+      <select class="form-select jp-catalogo" onchange="onJuegoPremioCatalogo(this)">
+        <option value="">✍️ Manual…</option>
+        ${cat.map(x => `<option value="${escapeHtml(x.id)}"${x.id === p.premioId ? " selected" : ""}>${escapeHtml(x.nombre)}</option>`).join("")}
+      </select></label>
+    <label class="jp-field"><span>Nombre</span>
+      <input type="text" class="form-input jp-nombre" maxlength="60" value="${escapeHtml(p.nombre || "")}" placeholder="Ej. Llavero" oninput="updateJuegoPreview()"></label>
+    <label class="jp-field"><span>Tipo</span>
+      <select class="form-select jp-tipo" onchange="aplicarTipoPremioFila(this.closest('.juego-premio-row')); updateJuegoPreview()">${opcionesTipoPremio(p.tipo || "Producto")}</select></label>
+    <label class="jp-field"><span>Entregados</span>
+      <input type="number" class="form-input jp-cantidad" min="0" step="1" value="${Number(p.cantidad) || 0}" oninput="updateJuegoPreview()"></label>
+    <label class="jp-field jp-costo-wrap"><span>Costo c/u ($)</span>
+      <input type="number" class="form-input jp-costo" min="0" step="0.01" value="${Number(p.costo) || 0}" oninput="updateJuegoPreview()"></label>
+    <label class="jp-field"><span class="jp-valor-label">Valor</span>
+      <input type="number" class="form-input jp-valor" min="0" step="0.01" value="${Number(p.valor) || 0}" oninput="updateJuegoPreview()"></label>
+    <button type="button" class="maleta-quitar jp-quitar" aria-label="Quitar premio" title="Quitar" onclick="quitarPremioJuego(this)">✕</button>`;
+  lista.appendChild(row);
+  aplicarTipoPremioFila(row);
+  updateJuegoPreview();
+}
+function quitarPremioJuego(btn) {
+  btn.closest(".juego-premio-row").remove();
+  updateJuegoPreview();
+}
+function onJuegoPremioCatalogo(select) {
+  const row = select.closest(".juego-premio-row");
+  const p = (AppState.premiosCatalogo || []).find(x => x.id === select.value);
+  if (p) {
+    row.querySelector(".jp-nombre").value = p.nombre;
+    row.querySelector(".jp-tipo").value = p.tipo;
+    row.querySelector(".jp-costo").value = p.costo;
+    row.querySelector(".jp-valor").value = p.valor;
+    if (!Number(row.querySelector(".jp-cantidad").value)) row.querySelector(".jp-cantidad").value = 1;
+    aplicarTipoPremioFila(row);
+  }
+  updateJuegoPreview();
+}
+function renderPremiosJuegoFilas(j) {
+  const lista = document.getElementById("juego-premios-list");
+  if (!lista) return;
+  lista.innerHTML = "";
+  // Juego nuevo: arranca con los premios marcados como predeterminados (cantidad 0).
+  const filas = j ? (j.premios || []) : (AppState.premiosCatalogo || []).filter(p => p.predeterminado)
+    .map(p => ({ premioId: p.id, nombre: p.nombre, tipo: p.tipo, costo: p.costo, valor: p.valor, cantidad: 0 }));
+  filas.forEach(p => addPremioJuego(p));
+}
+function premiosDesdeFormulario() {
+  return [...document.querySelectorAll(".juego-premio-row")].map(row => {
+    const tipo = row.querySelector(".jp-tipo").value;
+    const valor = Math.max(0, Number.parseFloat(row.querySelector(".jp-valor").value) || 0);
+    const costo = tipo === "Efectivo" ? valor : Math.max(0, Number.parseFloat(row.querySelector(".jp-costo").value) || 0);
+    return {
+      premioId: row.querySelector(".jp-catalogo").value, nombre: row.querySelector(".jp-nombre").value.trim(), tipo,
+      cantidad: Math.max(0, Number.parseInt(row.querySelector(".jp-cantidad").value) || 0), costo, valor
+    };
+  }).filter(p => p.nombre || p.cantidad > 0);
+}
+
 function juegoDesdeFormulario() {
   const socioId = val("juego-socio");
   return {
@@ -6548,6 +6698,7 @@ function juegoDesdeFormulario() {
     precio: Math.max(0, Number.parseFloat(num("juego-precio")) || 0),
     jugadas: Math.max(0, Number.parseInt(num("juego-jugadas")) || 0),
     costoPremios: Math.max(0, Number.parseFloat(num("juego-premios")) || 0),
+    premios: premiosDesdeFormulario(),
     socioId, pctSocio: socioId ? Math.max(0, Math.min(100, Number.parseFloat(num("juego-pct")) || 0)) : 0
   };
 }
@@ -6557,7 +6708,13 @@ function updateJuegoPreview() {
   const j = juegoDesdeFormulario();
   const c = calculoJuego(j);
   const socio = AppState.socios.find(s => s.id === j.socioId);
-  p.innerHTML = `Recaudado: <b>${fmt(c.ingreso)}</b> · Ganancia: <b>${fmt(c.bruta)}</b>` +
+  const totalPremios = document.getElementById("juego-premios-total");
+  if (totalPremios) {
+    totalPremios.textContent = c.premiosCant
+      ? `${c.premiosCant} premio(s) · costo para ti ${fmt(c.premios - (j.costoPremios || 0))}${c.premiosValor ? ` · valor de los productos ${fmt(c.premiosValor)}` : ""}`
+      : "Sin premios agregados.";
+  }
+  p.innerHTML = `Recaudado: <b>${fmt(c.ingreso)}</b> · Premios y material: <b>${fmt(c.premios)}</b> · Ganancia: <b>${fmt(c.bruta)}</b>` +
     (socio ? ` · ${escapeHtml(socio.nombre)} (${c.pct}%): <b>${fmt(c.parteSocio)}</b> · Tu parte: <b>${fmt(c.tuParte)}</b>` : "");
 }
 function onJuegoSocioChange() {
@@ -6583,12 +6740,14 @@ function openModalJuego(id) {
   setVal("juego-socio", j ? (j.socioId || "") : "");
   setVal("juego-pct", j ? (j.pctSocio || 0) : 50);
   document.getElementById("juego-pct-wrap").style.display = val("juego-socio") ? "block" : "none";
+  renderPremiosJuegoFilas(j);
   updateJuegoPreview();
   openModal("modal-juego");
 }
 function saveJuego() {
   const datos = juegoDesdeFormulario();
   if (!datos.nombre) return showToast("Ponle un nombre al juego.", "error");
+  if (datos.premios.some(p => !p.nombre)) return showToast("Ponle nombre a cada premio o quita la fila.", "error");
   if (datos.socioId && datos.pctSocio <= 0) return showToast("Indica qué porcentaje de la ganancia se lleva el socio.", "error");
   if (!Array.isArray(AppState.juegos)) AppState.juegos = [];
   const id = val("juego-id");
@@ -7267,7 +7426,7 @@ Object.assign(globalThis, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, openModalJuego, saveJuego, deleteJuego, ajustarJugadas, renderJuegos, onJuegoSocioChange, updateJuegoPreview, abrirJuegosDeBazar, abrirMaletaDeBazar, onMaletaBazarChange, toggleMaletaItem, agregarMaletaItem, borrarMaletaItem, cargarPlantillaEnBazar, desmarcarMaleta, agregarPlantillaItem, editarPlantillaItem, borrarPlantillaItem, restaurarPlantillaSugerida, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
+  verDetallePlayera, openModalJuego, saveJuego, deleteJuego, openModalPremio, savePremio, deletePremio, onPremioTipoChange, addPremioJuego, quitarPremioJuego, onJuegoPremioCatalogo, aplicarTipoPremioFila, ajustarJugadas, renderJuegos, onJuegoSocioChange, updateJuegoPreview, abrirJuegosDeBazar, abrirMaletaDeBazar, onMaletaBazarChange, toggleMaletaItem, agregarMaletaItem, borrarMaletaItem, cargarPlantillaEnBazar, desmarcarMaleta, agregarPlantillaItem, editarPlantillaItem, borrarPlantillaItem, restaurarPlantillaSugerida, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
   openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, cambiarEtiquetaPlayeraBloque, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,

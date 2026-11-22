@@ -258,12 +258,12 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCa
   comisionTerminal += consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.comisionTerminal, 0);
   const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
   const juegos = resumenJuegos(filtroJuego || (() => false));
-  const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo + juegos.ingreso;
+  const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo + (juegos.ingreso - juegos.premiosEfectivo);
   const tieneConteo = efectivoContadoRaw !== null && efectivoContadoRaw !== undefined && efectivoContadoRaw !== "";
   const diferencia = tieneConteo ? (efectivoContadoRaw - efectivoEsperado) : null;
   return {
     totalVendido, ventasEfectivo, ventasTarjeta, comisionTerminal, fondoCaja: fondoCaja || 0,
-    juegosIngreso: juegos.ingreso, juegosParteSocios: juegos.parteSocio, juegosCount: juegos.count,
+    juegosIngreso: juegos.ingreso - juegos.premiosEfectivo, juegosPremiosEfectivo: juegos.premiosEfectivo, juegosParteSocios: juegos.parteSocio, juegosCount: juegos.count,
     efectivoEsperado, efectivoContado: tieneConteo ? efectivoContadoRaw : null, diferencia
   };
 }
@@ -312,19 +312,30 @@ export function costoBazarReal(bazar) {
 export function calculoJuego(j) {
   const jugadas = Number(j.jugadas) || 0;
   const ingreso = (Number(j.precio) || 0) * jugadas;
-  const premios = Number(j.costoPremios) || 0;
+  // Premios: filas del juego (costo x cantidad) + otros gastos capturados a mano
+  let costoFilas = 0, premiosCant = 0, premiosEfectivo = 0, premiosValor = 0;
+  (Array.isArray(j.premios) ? j.premios : []).forEach(p => {
+    const cant = Number(p.cantidad) || 0;
+    const valor = Number(p.valor) || 0;
+    const costo = p.tipo === "Efectivo" ? valor : (Number(p.costo) || 0);
+    costoFilas += costo * cant;
+    premiosCant += cant;
+    if (p.tipo === "Efectivo") premiosEfectivo += valor * cant;
+    else if (!String(p.tipo || "").startsWith("Descuento")) premiosValor += valor * cant;
+  });
+  const premios = (Number(j.costoPremios) || 0) + costoFilas;
   const bruta = ingreso - premios;
   const pct = Math.max(0, Math.min(100, Number(j.pctSocio) || 0));
   const parteSocio = (j.socioId && bruta > 0) ? bruta * pct / 100 : 0;
-  return { jugadas, ingreso, premios, bruta, pct, parteSocio, tuParte: bruta - parteSocio };
+  return { jugadas, ingreso, premios, premiosCant, premiosEfectivo, premiosValor, bruta, pct, parteSocio, tuParte: bruta - parteSocio };
 }
 export function resumenJuegos(filtro) {
   const lista = (AppState.juegos || []).filter(filtro || (() => true));
-  const r = { count: lista.length, jugadas: 0, ingreso: 0, premios: 0, bruta: 0, parteSocio: 0, tuParte: 0 };
+  const r = { count: lista.length, jugadas: 0, ingreso: 0, premios: 0, premiosCant: 0, premiosEfectivo: 0, bruta: 0, parteSocio: 0, tuParte: 0 };
   lista.forEach(j => {
     const c = calculoJuego(j);
-    r.jugadas += c.jugadas; r.ingreso += c.ingreso; r.premios += c.premios;
-    r.bruta += c.bruta; r.parteSocio += c.parteSocio; r.tuParte += c.tuParte;
+    r.jugadas += c.jugadas; r.ingreso += c.ingreso; r.premios += c.premios; r.premiosCant += c.premiosCant;
+    r.premiosEfectivo += c.premiosEfectivo; r.bruta += c.bruta; r.parteSocio += c.parteSocio; r.tuParte += c.tuParte;
   });
   r.neto = r.tuParte;   // lo que realmente te queda
   return r;
@@ -502,6 +513,13 @@ export function datosGrafica(fuente, dimension, metrica) {
       values: juegos.map(j => fuente === "juegos-ingresos" ? calculoJuego(j).ingreso : (Number(j.jugadas) || 0)),
       label: fuente === "juegos-ingresos" ? "Recaudado en juegos ($)" : "Intentos"
     };
+  }
+  if (fuente === "juegos-premios") {
+    const premios = {};
+    (AppState.juegos || []).forEach(j => (j.premios || []).forEach(p => {
+      if (Number(p.cantidad) > 0) premios[p.nombre || "Premio"] = (premios[p.nombre || "Premio"] || 0) + Number(p.cantidad);
+    }));
+    return { labels: Object.keys(premios), values: Object.values(premios), label: "Premios entregados" };
   }
   if (fuente === "juegos-tipos") {
     const tipos = {};
