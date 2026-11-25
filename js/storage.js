@@ -2,11 +2,11 @@
    LUCXSTUDIO — storage.js
    Funciones CRUD para interactuar con localStorage
    ============================================================ */
-import { STORAGE_KEY, SECTION_LABELS, defaultState } from "./config.js";
+import { STORAGE_KEY, SECTION_LABELS, defaultState } from "./config.js?v=202611252220";
 
 /* ---------------------------------------------------------------
    ESTADO EN MEMORIA (binding vivo — los módulos que hagan
-   `import { AppState } from "./storage.js"` ven siempre el valor
+   `import { AppState } from "./storage.js?v=202611252220"` ven siempre el valor
    más reciente, incluso después de un reassign hecho aquí adentro)
 --------------------------------------------------------------- */
 export let AppState = defaultState();

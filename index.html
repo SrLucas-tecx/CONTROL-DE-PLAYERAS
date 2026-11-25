@@ -8,6 +8,7 @@
 <link rel="apple-touch-icon" href="assets/images/OJITOS-crop.png">
 <link rel="manifest" href="site.webmanifest">
 <meta name="theme-color" content="#121214">
+<meta name="app-version" content="202611252220">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
-<link rel="stylesheet" href="dist/styles.css?v=20261118f">
+<link rel="stylesheet" href="dist/styles.css?v=202611252220">
 </head>
 <body>
 
@@ -1117,7 +1118,7 @@
         <div class="section-header" style="justify-content:space-between;">
           <div>
             <h2 class="section-title">Juegos</h2>
-            <p class="section-sub">Cada intento suma el dinero recaudado. Elige el tipo de juego, la caja (general o de un bazar) y, si la ganancia se reparte con alguien, su porcentaje. Todo cuenta en la caja y en las métricas.</p>
+            <p class="section-sub">Marca cada intento como falló o ganó. Cada uno suma el valor del intento a la caja; si ganan, eliges qué ganó y la playera sale del inventario.</p>
           </div>
           <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
             <div class="form-group" style="margin:0;min-width:220px;">
@@ -1126,27 +1127,11 @@
             <button class="btn-primary" onclick="openModalJuego()">+ Nuevo juego</button>
           </div>
         </div>
-        <div class="sticker-count-row">
-          <div class="sticker-count-card size-chico">
-            <span class="sticker-count-label">Intentos</span>
-            <span class="sticker-count-value" id="juegos-total-intentos">0</span>
-            <span class="sticker-count-sub">jugadas registradas</span>
-          </div>
-          <div class="sticker-count-card size-total">
-            <span class="sticker-count-label">Recaudado</span>
-            <span class="sticker-count-value" id="juegos-total-recaudado">$0</span>
-            <span class="sticker-count-sub">entra a la caja en efectivo</span>
-          </div>
-          <div class="sticker-count-card size-mediano">
-            <span class="sticker-count-label">Parte de socios</span>
-            <span class="sticker-count-value" id="juegos-total-socios">$0</span>
-            <span class="sticker-count-sub">lo que toca repartir</span>
-          </div>
-          <div class="sticker-count-card size-grande">
-            <span class="sticker-count-label">Tu ganancia</span>
-            <span class="sticker-count-value" id="juegos-total-tuyo">$0</span>
-            <span class="sticker-count-sub">después de premios y reparto</span>
-          </div>
+        <div class="stats-strip">
+          <div class="stat-mini"><span>Intentos</span><b id="juegos-total-intentos">0</b></div>
+          <div class="stat-mini"><span>Recaudado</span><b id="juegos-total-recaudado">$0</b></div>
+          <div class="stat-mini"><span>Socios</span><b id="juegos-total-socios">$0</b></div>
+          <div class="stat-mini"><span>Tu ganancia</span><b id="juegos-total-tuyo">$0</b></div>
         </div>
         <div id="juegos-grid" class="cards-grid"></div>
         <div class="empty-state" id="juegos-empty-hint"><div class="empty-ico">🎲</div><strong>Aún no hay juegos</strong><span>Agrega uno para contar intentos y ver cuánto recauda.</span><button type="button" class="btn-primary" onclick="openModalJuego()">+ Nuevo juego</button></div>
@@ -1571,7 +1556,7 @@
           <button type="button" class="settings-nav-tab active" role="tab" aria-selected="true" onclick="switchAjustesTab('tab-general', this)">General</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-apariencia', this)">Apariencia</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-productos', this)">Tipos de DTF</button>
-          <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-juegos', this)">Juegos y premios</button>
+          <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-juegos', this)">Juegos</button>
           <button type="button" class="settings-nav-tab" role="tab" aria-selected="false" onclick="switchAjustesTab('tab-respaldo', this)">Respaldo y nube</button>
         </div>
 
@@ -1739,23 +1724,37 @@
           </div>
         </div>
 
-        <!-- ================= JUEGOS Y PREMIOS ================= -->
+        <!-- ================= JUEGOS ================= -->
         <div id="tab-juegos" class="ajustes-tab-content" style="display:none;">
           <div class="settings-card">
-            <div class="settings-card-heading">
-              <div>
-                <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="gift" aria-hidden="true"></i> Premios de los juegos</h3>
-                <p class="settings-panel-description">Tu catálogo de premios: productos, descuentos, efectivo u otros, con su costo y su valor. Los marcados como predeterminados aparecen solos al crear un juego nuevo.</p>
+            <h3 class="settings-panel-title"><i class="lucide-inline" data-lucide="gift" aria-hidden="true"></i> Juegos: valores predeterminados</h3>
+            <p class="settings-panel-description">Se cargan solos al crear un juego nuevo. Los cambios se guardan al salir de cada campo.</p>
+            <div class="settings-fields">
+              <div class="form-group">
+                <label class="form-label" for="set-juego-precio">Valor del intento ($)</label>
+                <input type="number" id="set-juego-precio" class="form-input" min="0" step="0.01" onchange="saveJuegosDefaults()">
               </div>
-              <button type="button" class="btn-secondary" onclick="openModalPremio()"><i class="lucide-inline" data-lucide="plus" aria-hidden="true"></i> Nuevo premio</button>
+              <div class="form-group">
+                <label class="form-label" for="set-juego-pct">% para el socio</label>
+                <input type="number" id="set-juego-pct" class="form-input" min="0" max="100" step="1" onchange="saveJuegosDefaults()">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="set-juego-sorpresa">Costo del paquete sorpresa ($)</label>
+                <input type="number" id="set-juego-sorpresa" class="form-input" min="0" step="0.01" onchange="saveJuegosDefaults()">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="set-juego-desc-tipo">Descuento: tipo</label>
+                <select id="set-juego-desc-tipo" class="form-select" onchange="saveJuegosDefaults()"><option value="%">Porcentaje (%)</option><option value="$">Monto ($)</option></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="set-juego-desc-valor">Descuento: valor</label>
+                <input type="number" id="set-juego-desc-valor" class="form-input" min="0" step="0.01" onchange="saveJuegosDefaults()">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="set-juego-ganada">La playera ganada se registra como</label>
+                <select id="set-juego-ganada" class="form-select" onchange="saveJuegosDefaults()"><option value="Venta nula">Regalada</option><option value="Vendida">Vendida</option></select>
+              </div>
             </div>
-            <div class="settings-type-table-wrap">
-              <table class="settings-type-table">
-                <thead><tr><th>Premio</th><th>Tipo</th><th>Costo para mí</th><th>Valor</th><th>Predeterminado</th><th>Acciones</th></tr></thead>
-                <tbody id="premios-catalogo-list"></tbody>
-              </table>
-            </div>
-            <p class="form-hint">Los premios en efectivo salen de la caja: se restan del efectivo esperado. Un descuento no suma costo a menos que le pongas uno.</p>
           </div>
         </div>
 
@@ -2852,43 +2851,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-premio">
-  <div class="modal-box modal-box-sm">
-    <div class="modal-header">
-      <h2 class="modal-title" id="modal-premio-title">Nuevo premio</h2>
-      <button class="modal-close" data-modal="modal-premio" aria-label="Cerrar">✕</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="premio-id">
-      <div class="form-group">
-        <label class="form-label" for="premio-nombre">Nombre del premio</label>
-        <input type="text" id="premio-nombre" class="form-input" maxlength="60" placeholder="Ej. Llavero, Descuento 10%">
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="premio-tipo">Tipo de premio</label>
-        <select id="premio-tipo" class="form-select" onchange="onPremioTipoChange()"></select>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="premio-valor" id="premio-valor-label">Valor ($)</label>
-          <input type="number" id="premio-valor" class="form-input" min="0" step="0.01" value="0">
-        </div>
-        <div class="form-group" id="premio-costo-wrap">
-          <label class="form-label" for="premio-costo" id="premio-costo-label">Costo para mí ($)</label>
-          <input type="number" id="premio-costo" class="form-input" min="0" step="0.01" value="0">
-        </div>
-      </div>
-      <label class="tag-checkbox">
-        <input type="checkbox" id="premio-default"> Predeterminado: agregarlo a los juegos nuevos
-      </label>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn-secondary" data-modal="modal-premio">Cancelar</button>
-      <button type="button" class="btn-primary" onclick="savePremio()">Guardar premio</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modal-juego">
   <div class="modal-box">
     <div class="modal-header">
@@ -2897,59 +2859,105 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="juego-id">
-      <div class="form-group">
-        <label class="form-label" for="juego-nombre">Nombre del juego</label>
-        <input type="text" id="juego-nombre" class="form-input" maxlength="60" placeholder="Ej. Ruleta de premios" oninput="updateJuegoPreview()">
-      </div>
       <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="juego-nombre">Nombre del juego</label>
+          <input type="text" id="juego-nombre" class="form-input" maxlength="60" placeholder="Ej. Ruleta de premios" oninput="updateJuegoPreview()">
+        </div>
         <div class="form-group">
           <label class="form-label" for="juego-tipo">Tipo de juego</label>
           <select id="juego-tipo" class="form-select"></select>
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label class="form-label" for="juego-caja">Caja donde entra el dinero</label>
           <select id="juego-caja" class="form-select"></select>
         </div>
+        <div class="form-group">
+          <label class="form-label" for="juego-precio">Valor del intento ($)</label>
+          <input type="number" id="juego-precio" class="form-input" min="0" step="0.01" placeholder="10" oninput="updateJuegoPreview()">
+        </div>
       </div>
+      <fieldset class="juego-premios-box">
+        <legend>Premios</legend>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="juego-playera1">Playera 1 (del inventario)</label>
+            <select id="juego-playera1" class="form-select" onchange="updateJuegoPreview()"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="juego-playera2">Playera 2 (opcional)</label>
+            <select id="juego-playera2" class="form-select" onchange="updateJuegoPreview()"></select>
+          </div>
+        </div>
+        <div class="juego-premio-linea">
+          <label class="tag-checkbox"><input type="checkbox" id="juego-sorpresa-on" onchange="updateJuegoPreview()"> 🎁 Paquete sorpresa (fuera de inventario)</label>
+          <label class="jp-inline"><span>Costo c/u ($)</span><input type="number" id="juego-sorpresa-costo" class="form-input" min="0" step="0.01" aria-label="Costo del paquete sorpresa"></label>
+        </div>
+        <div class="juego-premio-linea">
+          <label class="tag-checkbox"><input type="checkbox" id="juego-desc-on" onchange="updateJuegoPreview()"> 🏷️ Descuento</label>
+          <select id="juego-desc-tipo" class="form-select" aria-label="Tipo de descuento" onchange="updateJuegoPreview()"><option value="%">%</option><option value="$">$</option></select>
+          <input type="number" id="juego-desc-valor" class="form-input" min="0" step="0.01" aria-label="Valor del descuento" oninput="updateJuegoPreview()">
+        </div>
+        <div class="form-group" style="margin:var(--space-3) 0 0;">
+          <label class="form-label" for="juego-ganada">La playera ganada se registra como</label>
+          <select id="juego-ganada" class="form-select"><option value="Venta nula">Regalada</option><option value="Vendida">Vendida</option></select>
+        </div>
+      </fieldset>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="juego-precio">Precio por intento ($)</label>
-          <input type="number" id="juego-precio" class="form-input" min="0" step="0.01" placeholder="0.00" oninput="updateJuegoPreview()">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="juego-jugadas">Intentos hasta ahora</label>
-          <input type="number" id="juego-jugadas" class="form-input" min="0" step="1" value="0" oninput="updateJuegoPreview()">
-        </div>
-      </div>
-      <div class="form-group">
-        <div class="section-header" style="justify-content:space-between;margin-bottom:var(--space-2);">
-          <span class="form-label" style="margin:0;">Premios que entrega este juego</span>
-          <button type="button" class="btn-secondary" onclick="addPremioJuego()">+ Agregar premio</button>
-        </div>
-        <div id="juego-premios-list" class="juego-premios-list"></div>
-        <span class="form-hint" id="juego-premios-total">Sin premios agregados.</span>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="juego-premios">Otros gastos del juego ($)</label>
-        <input type="number" id="juego-premios" class="form-input" min="0" step="0.01" value="0" oninput="updateJuegoPreview()">
-        <span class="form-hint">Material, bolsas, etc. El costo de los premios de arriba se suma solo.</span>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label" for="juego-socio">¿Se reparte con alguien?</label>
+          <label class="form-label" for="juego-socio">¿Se reparte con un socio?</label>
           <select id="juego-socio" class="form-select" onchange="onJuegoSocioChange()"></select>
         </div>
         <div class="form-group" id="juego-pct-wrap" style="display:none;">
-          <label class="form-label" for="juego-pct">% para esa persona</label>
+          <label class="form-label" for="juego-pct">% que le toca</label>
           <input type="number" id="juego-pct" class="form-input" min="0" max="100" step="1" value="50" oninput="updateJuegoPreview()">
         </div>
       </div>
       <p class="cost-preview" id="juego-preview">—</p>
-      <p class="form-hint">Los socios se crean en Negocio → Socios. El reparto solo aplica si el juego tiene ganancia.</p>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn-secondary" data-modal="modal-juego">Cancelar</button>
       <button type="button" class="btn-primary" onclick="saveJuego()">Guardar juego</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-juego-gano">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">¿Qué ganó?</h2>
+      <button class="modal-close" data-modal="modal-juego-gano" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="section-sub" id="gano-juego-nombre"></p>
+      <div id="gano-opciones" class="gano-opciones"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal="modal-juego-gano">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-asignar-juego">
+  <div class="modal-box modal-box-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">🎲 Premio de juego</h2>
+      <button class="modal-close" data-modal="modal-asignar-juego" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="aj-playera-id">
+      <p class="vr-elegida" id="aj-playera-nombre"></p>
+      <div class="form-group">
+        <label class="form-label" for="aj-juego">Juego al que se asigna</label>
+        <select id="aj-juego" class="form-select"></select>
+        <span class="form-hint">Cada juego puede tener hasta 2 playeras de premio. Al ganar, sale del inventario.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" data-modal="modal-asignar-juego">Cancelar</button>
+      <button type="button" class="btn-primary" onclick="saveAsignarJuego()">Guardar</button>
     </div>
   </div>
 </div>
@@ -3400,6 +3408,7 @@
           <option value="juegos-jugadas">Juegos: intentos por juego</option>
           <option value="juegos-tipos">Juegos: recaudado por tipo</option>
           <option value="juegos-premios">Juegos: premios entregados</option>
+          <option value="juegos-resultados">Juegos: ganó vs falló</option>
           <option value="juegos-dias">Juegos: recaudado por día</option>
           <option value="inventario">Comparar inventario</option>
         </select>
@@ -3620,6 +3629,6 @@
   .form-row > .form-group > .form-label{margin-top:0 !important;}
 </style>
 
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=202611252220"></script>
 </body>
 </html>

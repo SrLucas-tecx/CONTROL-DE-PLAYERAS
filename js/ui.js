@@ -2,8 +2,8 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, MALETA_SUGERIDA, TIPOS_JUEGO } from "./config.js";
-import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
+import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, MALETA_SUGERIDA, TIPOS_JUEGO } from "./config.js?v=202611252220";
+import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js?v=202611252220";
 import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
   areaTotalCm2, costoImpresion, comisionPlayera, costoImpresionEfectivoPlayera, montoPorPiezaLigada,
@@ -14,7 +14,7 @@ import {
   rankingConsultas, consultasPorEtiqueta, totalConsultas, nombreProductoConsulta,
   datosGrafica, semaforoCotizacion, agruparClientes, agruparArtes,
   totalGastos, totalGastosMesActual, progresoCompra, faltanteCompra, resumenVentasStickers, resumenConsignacionesExternas, playerasInventario, totalVentasSinBazar, playeraVendidaORegalada, playerasDisponibles, resumenPagoCotizacion, etiquetaMetodoPago, resumenJuegosBazar, resumenJuegos, calculoJuego
-} from "./calculator.js";
+} from "./calculator.js?v=202611252220";
 
 /* ---------------------------------------------------------------
    ESTADO DE UI (filtros, selección activa, etc.)

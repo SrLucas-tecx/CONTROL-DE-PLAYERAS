@@ -8,9 +8,9 @@
    Pensado para: respaldo de la PC → celular → vender en el bazar
    → regresar el respaldo a la PC y ver todo lo que pasó.
    ============================================================ */
-import { AppState, saveState, importData } from "./storage.js";
-import { showToast } from "./ui.js";
-import { fmt, bazarIdsDe, desgloseCierreBazar, desgloseCierreCajaGeneral, colorNombre } from "./calculator.js";
+import { AppState, saveState, importData } from "./storage.js?v=202611252220";
+import { showToast } from "./ui.js?v=202611252220";
+import { fmt, bazarIdsDe, desgloseCierreBazar, desgloseCierreCajaGeneral, colorNombre } from "./calculator.js?v=202611252220";
 
 const $ = id => document.getElementById(id);
 const K_ULTIMO = "LUCXSTUDIO_ULTIMO_RESPALDO";

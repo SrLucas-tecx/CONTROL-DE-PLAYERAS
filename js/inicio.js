@@ -4,9 +4,9 @@
    "Requiere atención". Cada número abre un pop-up con el desglose.
    Solo lee datos (AppState); no modifica nada.
    ============================================================ */
-import { AppState } from "./storage.js";
-import { ETAPAS_PRODUCCION } from "./config.js";
-import { fmt, escapeHtml, semaforoCotizacion, costoTotalPlayera, playeraVendidaORegalada } from "./calculator.js";
+import { AppState } from "./storage.js?v=202611252220";
+import { ETAPAS_PRODUCCION } from "./config.js?v=202611252220";
+import { fmt, escapeHtml, semaforoCotizacion, costoTotalPlayera, playeraVendidaORegalada } from "./calculator.js?v=202611252220";
 
 const $ = id => document.getElementById(id);
 

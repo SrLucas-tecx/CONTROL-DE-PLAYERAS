@@ -4,8 +4,8 @@
    Usa los logos que ya están en el proyecto: assets/images/LOGO-crop.png,
    Letras-crop.png (letras blancas) y OJITOS-crop.png.
    ============================================================ */
-import { fmt, escapeHtml, colorNombre, resumenPagoCotizacion, etiquetaMetodoPago } from "./calculator.js";
-import { showToast, conCarga } from "./ui.js";
+import { fmt, escapeHtml, colorNombre, resumenPagoCotizacion, etiquetaMetodoPago } from "./calculator.js?v=202611252220";
+import { showToast, conCarga } from "./ui.js?v=202611252220";
 
 /* ---------------------------------------------------------------
    IMÁGENES: se reducen y se convierten a data URL

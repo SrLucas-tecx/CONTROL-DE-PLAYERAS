@@ -79,3 +79,11 @@ menú de respaldo y elige combinar o reemplazar cuando se solicite.
 
 Descarga periódicamente el respaldo completo y conserva una copia fuera de este
 dispositivo; el archivo descargado no se actualiza automáticamente.
+
+## Versión de los archivos (caché)
+
+Si después de copiar archivos nuevos algún botón "no responde", casi siempre es el
+navegador usando una copia vieja. Todos los módulos y el CSS llevan un número de
+versión (`?v=...`). Para cambiarlo en todos a la vez usa `npm run bump` y luego
+`npm run build:css`. Si el navegador mezcla versiones, la app muestra un aviso para
+recargar con Ctrl + Shift + R.

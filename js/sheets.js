@@ -6,8 +6,8 @@
    - Si la hoja cambió desde otro dispositivo, pregunta qué versión usar.
    - Ajustes: estado de la conexión, subir cambios y configuración.
    ============================================================ */
-import { AppState, importData, saveState } from "./storage.js";
-import { showToast } from "./ui.js";
+import { AppState, importData, saveState } from "./storage.js?v=202611252220";
+import { showToast } from "./ui.js?v=202611252220";
 
 const URL_POR_DEFECTO = "https://script.google.com/macros/s/AKfycbwQXPSYkhxRT0xbzIo8Hvlz2t_gBweqHCORF8ATnyTli3gws6KOQF4YFX-KkFxJ__Fd/exec";
 

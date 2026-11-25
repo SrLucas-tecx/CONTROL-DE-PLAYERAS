@@ -4,7 +4,7 @@
    Solo controla qué panel se ve; la lógica de costos sigue en ui.js.
    ui.js le avisa los totales con window.actualizarPasosCotizador().
    ============================================================ */
-import { showToast } from "./ui.js";
+import { showToast } from "./ui.js?v=202611252220";
 
 const TOTAL_PASOS = 4;
 let paso = 1;

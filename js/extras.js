@@ -8,9 +8,9 @@
    (o en la caja general), igual que las que marcas a mano, y se
    pueden deshacer desde el aviso.
    ============================================================ */
-import { AppState, uid, saveState } from "./storage.js";
-import { fmt, escapeHtml, colorNombre, colorHex, comisionTerminalMonto, bazarIdsDe, getBazarVentasYGanancia, playerasDisponibles, clienteNombre, bazaresOrdenados } from "./calculator.js";
-import { showToast } from "./ui.js";
+import { AppState, uid, saveState } from "./storage.js?v=202611252220";
+import { fmt, escapeHtml, colorNombre, colorHex, comisionTerminalMonto, bazarIdsDe, getBazarVentasYGanancia, playerasDisponibles, clienteNombre, bazaresOrdenados } from "./calculator.js?v=202611252220";
+import { showToast } from "./ui.js?v=202611252220";
 
 const $ = id => document.getElementById(id);
 function el(tag, cls, text) {

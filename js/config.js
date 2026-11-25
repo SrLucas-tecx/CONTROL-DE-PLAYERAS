@@ -3,6 +3,7 @@
    Variables globales, tabuladores, catálogos fijos
    ============================================================ */
 
+export const APP_VERSION = "202611252220";
 export const TIPOS_JUEGO = ["Ruleta", "Lotería / rifa", "Tiro al blanco", "Pesca", "Dados", "Cartas / memorama", "Premio sorpresa", "Videojuego", "Otro"];
 export const MALETA_SUGERIDA = [
   "Mesa y mantel", "Playeras (inventario)", "Stickers y estampados", "Perchero / exhibidores",

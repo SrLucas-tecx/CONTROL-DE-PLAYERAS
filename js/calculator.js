@@ -3,7 +3,7 @@
    Lógica financiera, áreas, márgenes y comisiones.
    Ninguna función de este archivo toca el DOM.
    ============================================================ */
-import { AppState } from "./storage.js";
+import { AppState } from "./storage.js?v=202611252220";
 
 /* ---------------------------------------------------------------
    FORMATO Y ESCAPADO (helpers puros de texto)

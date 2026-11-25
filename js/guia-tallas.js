@@ -1,6 +1,6 @@
-import { GUIA_TALLAS_DEFAULTS } from "./config.js";
-import { AppState, saveState } from "./storage.js";
-import { showToast, conCarga } from "./ui.js";
+import { GUIA_TALLAS_DEFAULTS } from "./config.js?v=202611252220";
+import { AppState, saveState } from "./storage.js?v=202611252220";
+import { showToast, conCarga } from "./ui.js?v=202611252220";
 
 const TALLAS_KEY = "guiaTallasMulti";
 let prendaActual = "playera"; // Opciones: 'playera', 'dama', 'oversize', 'cuello_v', 'manga_larga', 'polo', 'sudadera_crew', 'sudadera_hoodie'
