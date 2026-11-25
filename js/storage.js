@@ -51,7 +51,6 @@ function migrarEstampadosDe(registro) {
 }
 function migrarDatosAntiguos() {
   if (!Array.isArray(AppState.juegos)) AppState.juegos = [];
-  if (!Array.isArray(AppState.premiosCatalogo)) AppState.premiosCatalogo = [];
   if (!Array.isArray(AppState.maletaPlantilla)) AppState.maletaPlantilla = defaultState().maletaPlantilla;
   // Los juegos antes vivían dentro de cada bazar: ahora son una lista propia con bazarId.
   (AppState.bazares || []).forEach(b => {
@@ -97,7 +96,7 @@ export function getSectionData(section) {
     catalogo: { colores: AppState.colores, etiquetas: AppState.etiquetas, tiposPrenda: AppState.tiposPrenda, tallaEtiquetas: AppState.tallaEtiquetas, artistas: AppState.artistas, proveedores: AppState.proveedores, etiquetasOperativas: AppState.etiquetasOperativas },
     clientes: { clientes: AppState.clientes, clienteEtiquetas: AppState.clienteEtiquetas },
     finanzas: { gastos: AppState.gastos, comprasPendientes: AppState.comprasPendientes, mermas: AppState.mermas },
-    bazares: { bazares: AppState.bazares, juegos: AppState.juegos, premiosCatalogo: AppState.premiosCatalogo, maletaPlantilla: AppState.maletaPlantilla, consignaciones: AppState.consignaciones, socios: AppState.socios, cajaGeneral: AppState.cajaGeneral, turnosCaja: AppState.turnosCaja },
+    bazares: { bazares: AppState.bazares, juegos: AppState.juegos, maletaPlantilla: AppState.maletaPlantilla, consignaciones: AppState.consignaciones, socios: AppState.socios, cajaGeneral: AppState.cajaGeneral, turnosCaja: AppState.turnosCaja },
     reportes: { graficas: AppState.graficas, consultas: AppState.consultas, consultaEtiquetas: AppState.consultaEtiquetas, recommendedChartStyles: AppState.recommendedChartStyles },
     ajustes: { settings: AppState.settings }
   };

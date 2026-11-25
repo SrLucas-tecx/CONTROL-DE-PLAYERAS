@@ -2,7 +2,7 @@
    LUCXSTUDIO — ui.js
    Manipulación del DOM, renderizado de tarjetas, modales y alertas
    ============================================================ */
-import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, MALETA_SUGERIDA, TIPOS_JUEGO, TIPOS_PREMIO } from "./config.js";
+import { STORAGE_KEY, SECTION_LABELS, ARTIST_PRESETS, ARTIST_MODE_LABEL, ETAPAS_PRODUCCION, RECOMMENDED_COMBINATIONS, RECOMMENDED_PALETTES, GASTOS_CATEGORIAS, GASTOS_BAZAR_TIPOS, MOTIVOS_MERMA, MALETA_SUGERIDA, TIPOS_JUEGO } from "./config.js";
 import { AppState, uid, saveState, getSectionData, importData, resetState, setToastHandler } from "./storage.js";
 import {
   fmt, escapeHtml, costoTotalPlayera, cantidadVendidaPlayera, costoEstampado, costoDtfPorMetros, costoDtfPorArea, costoEstampadoDtfTipo, precioDtfMetro, getCostoEstampadoEfectivo, sobrecargoTalla, costoUnitarioItem,
@@ -1790,7 +1790,7 @@ function renderAjustes() {
   renderGangSheetSupplierSelect();
   renderGangSheetTipos();
   updateCostPreview();
-  renderPremiosCatalogo();
+  renderJuegosDefaults();
 }
 function renderGangSheetSupplierSelect() {
   const proveedorSelect = document.getElementById("set-gangsheet-tipo-proveedor");
@@ -2111,7 +2111,7 @@ function renderCaja() {
   document.getElementById("caja-esperado").textContent = fmt(d.efectivoEsperado);
   document.getElementById("caja-juegos").textContent = fmt(d.juegosIngreso);
   document.getElementById("caja-juegos-sub").textContent = d.juegosCount
-    ? `${d.juegosCount} juego(s)${d.juegosPremiosEfectivo ? ` · premios en efectivo −${fmt(d.juegosPremiosEfectivo)}` : ""}${d.juegosParteSocios ? ` · de socios: ${fmt(d.juegosParteSocios)}` : ""}`
+    ? `${d.juegosJugadas} intentos · ${d.juegosGanadas} ganó${d.juegosParteSocios ? ` · de socios: ${fmt(d.juegosParteSocios)}` : ""}`
     : "sin juegos en esta caja";
   document.getElementById("caja-fondo-hint").textContent = esGeneral
     ? "Cambio con el que abriste la caja."
@@ -3730,7 +3730,10 @@ function playeraCardCompacta(p) {
   const stockBajo = !p.ventaRapida && !playeraVendidaORegalada(p) && (p.stockMinimo || 0) > 0 && (p.stock || 0) <= p.stockMinimo;
   const bazarEstado = p.ventaRapida ? "Vendida" : (p.bazarEstado || "Disponible");
   const badges = [`<span class="card-badge ${estadoBadgeClass(p.estado)}">${escapeHtml(p.estado)}</span>`];
-  if (p.ventaRapida) badges.push(`<span class="card-badge badge-media">⚡ Venta rápida${p.fechaVenta ? " · " + escapeHtml(p.fechaVenta) : ""}</span>`);
+  const juegoDePremio = (AppState.juegos || []).find(j => (j.playerasPremio || []).includes(p.id));
+  if (juegoDePremio) badges.push(`<span class="card-badge badge-alta">🎲 Premio · ${escapeHtml(juegoDePremio.nombre)}</span>`);
+  if (p.juegoId) badges.push(`<span class="card-badge badge-media">🎲 Ganada en juego</span>`);
+  else if (p.ventaRapida) badges.push(`<span class="card-badge badge-media">⚡ Venta rápida${p.fechaVenta ? " · " + escapeHtml(p.fechaVenta) : ""}</span>`);
   if (stockBajo) badges.push(`<span class="card-badge badge-agotado">⚠️ Stock bajo</span>`);
   const difLista = (p.ventaRapida && p.precioLista != null) ? (Number(p.precioLista) - (Number(p.precioVenta) || 0)) : 0;
   if (Math.abs(difLista) > 0.004) badges.push(`<span class="card-badge badge-media">🏷️ ${difLista > 0 ? "−" : "+"}${fmt(Math.abs(difLista))} c/u vs. lista</span>`);
@@ -3856,6 +3859,7 @@ function verDetallePlayera(id) {
     { label: "✏️ Editar", variant: "primary", onClick: () => openModalPlayera(id) },
     { label: "🏪 Bazar", onClick: () => openModalAsignarPlayeraBazar(id) },
     { label: "🤝 Consignar", onClick: () => openModalAsignarConsignacion(id) },
+    { label: "🎲 Premio", onClick: () => openModalAsignarJuego(id) },
     { label: "👤 Cliente", onClick: () => openModalAsignarCliente(id) },
     { label: "📉 Merma", onClick: () => openModalMermaDesdePlayera(id) }
   ];
@@ -6336,7 +6340,7 @@ function renderBazarDetalle() {
   document.getElementById("bd-cierre-efectivo").textContent = fmt(cierre.ventasEfectivo);
   document.getElementById("bd-cierre-tarjeta").textContent = fmt(cierre.ventasTarjeta);
   document.getElementById("bd-cierre-comision").textContent = "− " + fmt(cierre.comisionTerminal);
-  document.getElementById("bd-cierre-juegos").textContent = fmt(cierre.juegosIngreso);
+  document.getElementById("bd-cierre-juegos").textContent = `${fmt(cierre.juegosIngreso)} · ${cierre.juegosJugadas} intentos`;
   document.getElementById("bd-cierre-esperado").textContent = `${fmt(b.fondoCaja || 0)} + ${fmt(cierre.ventasEfectivo)} + ${fmt(cierre.juegosIngreso)} = ${fmt(cierre.efectivoEsperado)}`;
   setVal("bd-efectivo-contado", b.efectivoContado ?? "");
   const diferenciaEl = document.getElementById("bd-cierre-diferencia");
@@ -6494,31 +6498,43 @@ function tarjetaJuego(j) {
   const id = escapeHtml(j.id);
   const socio = j.socioId ? AppState.socios.find(s => s.id === j.socioId) : null;
   const hoy = Number(j.porDia?.[hoyISO()]) || 0;
+  const camisas = (j.playerasPremio || []).map(pid => AppState.playeras.find(p => p.id === pid)).filter(Boolean);
+  const premios = [
+    ...camisas.map(p => `🎽 ${escapeHtml(p.nombre)} (${p.stock || 0})`),
+    j.sorpresa?.activo ? "🎁 Paquete sorpresa" : "",
+    j.descuento?.activo ? `🏷️ Descuento ${j.descuento.valor}${j.descuento.tipo === "%" ? "%" : " $"}` : ""
+  ].filter(Boolean);
+  const entregados = [
+    c.ganadasPlayera ? `${c.ganadasPlayera} playera(s)` : "",
+    c.ganadasSorpresa ? `${c.ganadasSorpresa} sorpresa` : "",
+    c.ganadasDescuento ? `${c.ganadasDescuento} descuento(s)` : ""
+  ].filter(Boolean).join(" · ");
   return `
-    <div class="card">
-      <div class="card-top">
+    <div class="card juego-card">
+      <div class="juego-head">
         <span class="card-title">${escapeHtml(j.nombre)}</span>
         <span class="card-badge badge-media">${fmt(j.precio)} / intento</span>
       </div>
-      <div class="card-tags">
-        <span class="card-badge badge-alta">${escapeHtml(j.tipo || "Otro")}</span>
-        <span class="card-badge badge-baja">${j.bazarId ? "🏪" : "💰"} ${escapeHtml(nombreCajaJuego(j))}</span>
+      <div class="card-meta">${escapeHtml(j.tipo || "Otro")} · ${j.bazarId ? "🏪" : "💰"} ${escapeHtml(nombreCajaJuego(j))}</div>
+      <div class="juego-botones">
+        <button type="button" class="juego-fallo" onclick="registrarIntento('${id}', 'fallo')">✕ Falló</button>
+        <button type="button" class="juego-gano" onclick="abrirGanoJuego('${id}')">✔ Ganó</button>
       </div>
-      <div class="juego-contador">
-        <button type="button" aria-label="Quitar un intento" onclick="ajustarJugadas('${id}', -1)">−</button>
-        <div><b>${c.jugadas}</b><span>intentos${hoy ? ` · hoy ${hoy}` : ""}</span></div>
-        <button type="button" aria-label="Sumar un intento" onclick="ajustarJugadas('${id}', 1)">+</button>
+      <div class="juego-stats">
+        <span><b>${c.jugadas}</b> intentos</span><span><b>${c.ganadas}</b> ganó</span><span><b>${c.fallos}</b> falló</span>${hoy ? `<span>hoy <b>${hoy}</b></span>` : ""}
       </div>
-      <div class="juego-rapidos"><button type="button" onclick="ajustarJugadas('${id}', 5)">+5</button><button type="button" onclick="ajustarJugadas('${id}', 10)">+10</button></div>
-      <div class="card-row"><span>Recaudado</span><span>${fmt(c.ingreso)}</span></div>
-      ${c.premiosCant ? `<div class="card-row"><span>Premios entregados</span><span>${c.premiosCant}</span></div><div class="card-meta">${escapeHtml(resumenPremiosJuego(j))}</div>` : ""}
-      <div class="card-row"><span>Premios y material</span><span style="color:var(--color-danger)">− ${fmt(c.premios)}</span></div>
-      <div class="card-row"><span>Ganancia del juego</span><span style="color:${c.bruta >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(c.bruta)}</span></div>
-      ${socio ? `<div class="card-row"><span>Parte de ${escapeHtml(socio.nombre)} (${c.pct}%)</span><span>${fmt(c.parteSocio)}</span></div>
-      <div class="card-row"><span>Tu parte</span><span style="color:var(--color-success)">${fmt(c.tuParte)}</span></div>` : ""}
+      <div class="juego-nums">
+        <div><span>Recaudado</span><b>${fmt(c.ingreso)}</b></div>
+        <div><span>Premios</span><b style="color:var(--color-danger)">−${fmt(c.premios)}</b></div>
+        <div><span>Ganancia</span><b style="color:${c.bruta >= 0 ? "var(--color-success)" : "var(--color-danger)"}">${fmt(c.bruta)}</b></div>
+      </div>
+      ${socio ? `<div class="card-meta">${c.pct}% para ${escapeHtml(socio.nombre)}: ${fmt(c.parteSocio)} · tú ${fmt(c.tuParte)}</div>` : ""}
+      <div class="card-meta">Premios: ${premios.join(" · ") || "sin premio asignado"}</div>
+      ${entregados ? `<div class="card-meta">Entregados: ${entregados}</div>` : ""}
       <div class="card-actions">
+        <button type="button" onclick="deshacerIntento('${id}')">↩ Deshacer último</button>
         <button type="button" onclick="openModalJuego('${id}')">✏️ Editar</button>
-        <button type="button" class="danger" onclick="deleteJuego('${id}')">🗑️ Eliminar</button>
+        <button type="button" class="danger" onclick="deleteJuego('${id}')">🗑️</button>
       </div>
     </div>`;
 }
@@ -6536,169 +6552,29 @@ function renderJuegos() {
   }
   const lista = (AppState.juegos || []).filter(enFiltroJuegos);
   const r = resumenJuegos(enFiltroJuegos);
-  document.getElementById("juegos-total-intentos").textContent = String(r.jugadas);
+  document.getElementById("juegos-total-intentos").textContent = `${r.jugadas} · ${r.ganadas} ganó`;
   document.getElementById("juegos-total-recaudado").textContent = fmt(r.ingreso);
   document.getElementById("juegos-total-socios").textContent = fmt(r.parteSocio);
   document.getElementById("juegos-total-tuyo").textContent = fmt(r.tuParte);
   document.getElementById("juegos-empty-hint").style.display = lista.length ? "none" : "block";
   grid.innerHTML = lista.map(tarjetaJuego).join("");
 }
-/* ---------------- PREMIOS: catálogo (Ajustes) y filas dentro de un juego ---------------- */
-function etiquetasPremio(tipo) {
-  const mapa = {
-    "Producto": { costo: "Costo para mí ($)", valor: "Precio de venta ($)", costoVisible: true },
-    "Descuento (%)": { costo: "Costo para mí ($)", valor: "Descuento (%)", costoVisible: true },
-    "Descuento ($)": { costo: "Costo para mí ($)", valor: "Descuento ($)", costoVisible: true },
-    "Efectivo": { costo: "Costo para mí ($)", valor: "Monto en efectivo ($)", costoVisible: false },
-    "Otro": { costo: "Costo para mí ($)", valor: "Valor ($)", costoVisible: true }
-  };
-  return mapa[tipo] || mapa.Otro;
+const playerasParaPremio = (seleccionada = "") => [...playerasDisponibles()]
+  .filter(p => (p.stock || 0) > 0 || p.id === seleccionada)
+  .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" }));
+function opcionesPlayerasJuego(sel = "") {
+  return `<option value="">— Ninguna —</option>` + playerasParaPremio(sel).map(p =>
+    `<option value="${escapeHtml(p.id)}"${p.id === sel ? " selected" : ""}>${escapeHtml(p.nombre)} · ${escapeHtml(p.talla || "—")} · ${escapeHtml(colorNombre(p.colorId))} (${p.stock || 0})</option>`).join("");
 }
-const opcionesTipoPremio = (sel = "") => TIPOS_PREMIO.map(t => `<option value="${escapeHtml(t)}"${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
-function textoValorPremio(p) {
-  const v = Number(p.valor) || 0;
-  return p.tipo === "Descuento (%)" ? `${v}%` : fmt(v);
-}
-function renderPremiosCatalogo() {
-  const body = document.getElementById("premios-catalogo-list");
-  if (!body) return;
-  const lista = AppState.premiosCatalogo || [];
-  body.innerHTML = lista.map(p => `<tr>
-    <td data-label="Premio">${escapeHtml(p.nombre)}</td>
-    <td data-label="Tipo">${escapeHtml(p.tipo)}</td>
-    <td data-label="Costo para mí">${p.tipo === "Efectivo" ? fmt(p.valor) : fmt(p.costo)}</td>
-    <td data-label="Valor">${escapeHtml(textoValorPremio(p))}</td>
-    <td data-label="Predeterminado">${p.predeterminado ? "✅ Sí" : "—"}</td>
-    <td data-label="Acciones"><div class="bazar-row-actions">
-      <button type="button" onclick="openModalPremio('${escapeHtml(p.id)}')">✏️ Editar</button>
-      <button type="button" class="danger" onclick="deletePremio('${escapeHtml(p.id)}')">🗑️ Quitar</button>
-    </div></td>
-  </tr>`).join("") || `<tr><td colspan="6" class="settings-type-empty">Aún no agregas premios. Crea los que sueles regalar en tus juegos.</td></tr>`;
-}
-function onPremioTipoChange() {
-  const e = etiquetasPremio(val("premio-tipo"));
-  document.getElementById("premio-valor-label").textContent = e.valor;
-  document.getElementById("premio-costo-label").textContent = e.costo;
-  document.getElementById("premio-costo-wrap").style.display = e.costoVisible ? "block" : "none";
-}
-function openModalPremio(id) {
-  const p = id ? (AppState.premiosCatalogo || []).find(x => x.id === id) : null;
-  setVal("premio-id", id || "");
-  document.getElementById("modal-premio-title").textContent = p ? "Editar premio" : "Nuevo premio";
-  document.getElementById("premio-tipo").innerHTML = opcionesTipoPremio(p ? p.tipo : "Producto");
-  setVal("premio-nombre", p ? p.nombre : "");
-  setVal("premio-costo", p ? p.costo : 0);
-  setVal("premio-valor", p ? p.valor : 0);
-  setChecked("premio-default", !!(p && p.predeterminado));
-  onPremioTipoChange();
-  openModal("modal-premio");
-}
-function savePremio() {
-  const nombre = val("premio-nombre").trim();
-  if (!nombre) return showToast("Ponle un nombre al premio.", "error");
-  const tipo = val("premio-tipo");
-  const valor = Math.max(0, Number.parseFloat(num("premio-valor")) || 0);
-  if (tipo === "Descuento (%)" && valor > 100) return showToast("Un descuento en porcentaje no puede pasar de 100.", "error");
-  const costo = tipo === "Efectivo" ? valor : Math.max(0, Number.parseFloat(num("premio-costo")) || 0);
-  if (!Array.isArray(AppState.premiosCatalogo)) AppState.premiosCatalogo = [];
-  const id = val("premio-id");
-  const datos = { nombre, tipo, costo, valor, predeterminado: checked("premio-default") };
-  if (id) Object.assign(AppState.premiosCatalogo.find(x => x.id === id), datos);
-  else AppState.premiosCatalogo.push({ id: uid(), ...datos });
-  saveState({ sinRefresco: true });
-  closeModal("modal-premio");
-  renderPremiosCatalogo();
-  showToast("Premio guardado.");
-}
-async function deletePremio(id) {
-  if (!(await pedirConfirmacion("¿Quitar este premio del catálogo? Los juegos que ya lo usaron conservan su registro.", { aviso: "Premio quitado." }))) return;
-  AppState.premiosCatalogo = (AppState.premiosCatalogo || []).filter(x => x.id !== id);
-  saveState({ sinRefresco: true });
-  renderPremiosCatalogo();
-}
-function resumenPremiosJuego(j) {
-  const filas = (j.premios || []).filter(p => Number(p.cantidad) > 0);
-  const texto = filas.slice(0, 3).map(p => `${p.cantidad}× ${p.nombre}`).join(" · ");
-  return texto + (filas.length > 3 ? ` · y ${filas.length - 3} más` : "");
-}
-function aplicarTipoPremioFila(row) {
-  const e = etiquetasPremio(row.querySelector(".jp-tipo").value);
-  row.querySelector(".jp-valor-label").textContent = e.valor;
-  row.querySelector(".jp-costo-wrap").hidden = !e.costoVisible;
-}
-function addPremioJuego(p = {}) {
-  const lista = document.getElementById("juego-premios-list");
-  if (!lista) return;
-  const cat = AppState.premiosCatalogo || [];
-  const row = document.createElement("div");
-  row.className = "juego-premio-row";
-  row.innerHTML = `
-    <label class="jp-field"><span>Del catálogo</span>
-      <select class="form-select jp-catalogo" onchange="onJuegoPremioCatalogo(this)">
-        <option value="">✍️ Manual…</option>
-        ${cat.map(x => `<option value="${escapeHtml(x.id)}"${x.id === p.premioId ? " selected" : ""}>${escapeHtml(x.nombre)}</option>`).join("")}
-      </select></label>
-    <label class="jp-field"><span>Nombre</span>
-      <input type="text" class="form-input jp-nombre" maxlength="60" value="${escapeHtml(p.nombre || "")}" placeholder="Ej. Llavero" oninput="updateJuegoPreview()"></label>
-    <label class="jp-field"><span>Tipo</span>
-      <select class="form-select jp-tipo" onchange="aplicarTipoPremioFila(this.closest('.juego-premio-row')); updateJuegoPreview()">${opcionesTipoPremio(p.tipo || "Producto")}</select></label>
-    <label class="jp-field"><span>Entregados</span>
-      <input type="number" class="form-input jp-cantidad" min="0" step="1" value="${Number(p.cantidad) || 0}" oninput="updateJuegoPreview()"></label>
-    <label class="jp-field jp-costo-wrap"><span>Costo c/u ($)</span>
-      <input type="number" class="form-input jp-costo" min="0" step="0.01" value="${Number(p.costo) || 0}" oninput="updateJuegoPreview()"></label>
-    <label class="jp-field"><span class="jp-valor-label">Valor</span>
-      <input type="number" class="form-input jp-valor" min="0" step="0.01" value="${Number(p.valor) || 0}" oninput="updateJuegoPreview()"></label>
-    <button type="button" class="maleta-quitar jp-quitar" aria-label="Quitar premio" title="Quitar" onclick="quitarPremioJuego(this)">✕</button>`;
-  lista.appendChild(row);
-  aplicarTipoPremioFila(row);
-  updateJuegoPreview();
-}
-function quitarPremioJuego(btn) {
-  btn.closest(".juego-premio-row").remove();
-  updateJuegoPreview();
-}
-function onJuegoPremioCatalogo(select) {
-  const row = select.closest(".juego-premio-row");
-  const p = (AppState.premiosCatalogo || []).find(x => x.id === select.value);
-  if (p) {
-    row.querySelector(".jp-nombre").value = p.nombre;
-    row.querySelector(".jp-tipo").value = p.tipo;
-    row.querySelector(".jp-costo").value = p.costo;
-    row.querySelector(".jp-valor").value = p.valor;
-    if (!Number(row.querySelector(".jp-cantidad").value)) row.querySelector(".jp-cantidad").value = 1;
-    aplicarTipoPremioFila(row);
-  }
-  updateJuegoPreview();
-}
-function renderPremiosJuegoFilas(j) {
-  const lista = document.getElementById("juego-premios-list");
-  if (!lista) return;
-  lista.innerHTML = "";
-  // Juego nuevo: arranca con los premios marcados como predeterminados (cantidad 0).
-  const filas = j ? (j.premios || []) : (AppState.premiosCatalogo || []).filter(p => p.predeterminado)
-    .map(p => ({ premioId: p.id, nombre: p.nombre, tipo: p.tipo, costo: p.costo, valor: p.valor, cantidad: 0 }));
-  filas.forEach(p => addPremioJuego(p));
-}
-function premiosDesdeFormulario() {
-  return [...document.querySelectorAll(".juego-premio-row")].map(row => {
-    const tipo = row.querySelector(".jp-tipo").value;
-    const valor = Math.max(0, Number.parseFloat(row.querySelector(".jp-valor").value) || 0);
-    const costo = tipo === "Efectivo" ? valor : Math.max(0, Number.parseFloat(row.querySelector(".jp-costo").value) || 0);
-    return {
-      premioId: row.querySelector(".jp-catalogo").value, nombre: row.querySelector(".jp-nombre").value.trim(), tipo,
-      cantidad: Math.max(0, Number.parseInt(row.querySelector(".jp-cantidad").value) || 0), costo, valor
-    };
-  }).filter(p => p.nombre || p.cantidad > 0);
-}
-
 function juegoDesdeFormulario() {
   const socioId = val("juego-socio");
   return {
     nombre: val("juego-nombre").trim(), tipo: val("juego-tipo") || "Otro", bazarId: val("juego-caja"),
     precio: Math.max(0, Number.parseFloat(num("juego-precio")) || 0),
-    jugadas: Math.max(0, Number.parseInt(num("juego-jugadas")) || 0),
-    costoPremios: Math.max(0, Number.parseFloat(num("juego-premios")) || 0),
-    premios: premiosDesdeFormulario(),
+    playerasPremio: [...new Set([val("juego-playera1"), val("juego-playera2")].filter(Boolean))],
+    sorpresa: { activo: checked("juego-sorpresa-on"), costo: Math.max(0, Number.parseFloat(num("juego-sorpresa-costo")) || 0) },
+    descuento: { activo: checked("juego-desc-on"), tipo: val("juego-desc-tipo") || "%", valor: Math.max(0, Number.parseFloat(num("juego-desc-valor")) || 0) },
+    ganadaComo: val("juego-ganada") || "Venta nula",
     socioId, pctSocio: socioId ? Math.max(0, Math.min(100, Number.parseFloat(num("juego-pct")) || 0)) : 0
   };
 }
@@ -6706,16 +6582,14 @@ function updateJuegoPreview() {
   const p = document.getElementById("juego-preview");
   if (!p) return;
   const j = juegoDesdeFormulario();
-  const c = calculoJuego(j);
   const socio = AppState.socios.find(s => s.id === j.socioId);
-  const totalPremios = document.getElementById("juego-premios-total");
-  if (totalPremios) {
-    totalPremios.textContent = c.premiosCant
-      ? `${c.premiosCant} premio(s) · costo para ti ${fmt(c.premios - (j.costoPremios || 0))}${c.premiosValor ? ` · valor de los productos ${fmt(c.premiosValor)}` : ""}`
-      : "Sin premios agregados.";
-  }
-  p.innerHTML = `Recaudado: <b>${fmt(c.ingreso)}</b> · Premios y material: <b>${fmt(c.premios)}</b> · Ganancia: <b>${fmt(c.bruta)}</b>` +
-    (socio ? ` · ${escapeHtml(socio.nombre)} (${c.pct}%): <b>${fmt(c.parteSocio)}</b> · Tu parte: <b>${fmt(c.tuParte)}</b>` : "");
+  const premios = [
+    j.playerasPremio.length ? `${j.playerasPremio.length} playera(s)` : "",
+    j.sorpresa.activo ? "paquete sorpresa" : "",
+    j.descuento.activo ? `descuento ${j.descuento.valor}${j.descuento.tipo === "%" ? "%" : " $"}` : ""
+  ].filter(Boolean).join(" · ");
+  p.innerHTML = `Cada intento vale <b>${fmt(j.precio)}</b> · Premios: <b>${premios || "ninguno"}</b>` +
+    (socio ? ` · ${j.pctSocio}% de la ganancia para <b>${escapeHtml(socio.nombre)}</b>` : "");
 }
 function onJuegoSocioChange() {
   document.getElementById("juego-pct-wrap").style.display = val("juego-socio") ? "block" : "none";
@@ -6723,69 +6597,196 @@ function onJuegoSocioChange() {
 }
 function openModalJuego(id) {
   const j = id ? (AppState.juegos || []).find(x => x.id === id) : null;
+  const ajustes = AppState.settings;
   setVal("juego-id", id || "");
   document.getElementById("modal-juego-title").textContent = j ? "Editar juego" : "Nuevo juego";
   document.getElementById("juego-tipo").innerHTML = TIPOS_JUEGO.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
   document.getElementById("juego-caja").innerHTML = `<option value="">💰 Caja general (sin bazar)</option>` +
     bazaresOrdenados().map(b => `<option value="${escapeHtml(b.id)}">🏪 ${escapeHtml(b.nombre)}</option>`).join("");
-  document.getElementById("juego-socio").innerHTML = `<option value="">Nadie (la ganancia es toda mía)</option>` +
+  document.getElementById("juego-socio").innerHTML = `<option value="">Nadie (todo es mío)</option>` +
     AppState.socios.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.nombre)}</option>`).join("");
   const presetCaja = juegosFiltro !== "all" && juegosFiltro !== "general" ? juegosFiltro : "";
+  const [p1 = "", p2 = ""] = j ? (j.playerasPremio || []) : [];
+  document.getElementById("juego-playera1").innerHTML = opcionesPlayerasJuego(p1);
+  document.getElementById("juego-playera2").innerHTML = opcionesPlayerasJuego(p2);
   setVal("juego-nombre", j ? j.nombre : "");
   setVal("juego-tipo", j ? (j.tipo || "Otro") : TIPOS_JUEGO[0]);
   setVal("juego-caja", j ? (j.bazarId || "") : presetCaja);
-  setVal("juego-precio", j ? j.precio : "");
-  setVal("juego-jugadas", j ? j.jugadas : 0);
-  setVal("juego-premios", j ? j.costoPremios : 0);
+  setVal("juego-precio", j ? j.precio : (ajustes.juegoPrecioIntento ?? 10));
+  setChecked("juego-sorpresa-on", !!j?.sorpresa?.activo);
+  setVal("juego-sorpresa-costo", j?.sorpresa ? j.sorpresa.costo : (ajustes.juegoSorpresaCosto ?? 0));
+  setChecked("juego-desc-on", !!j?.descuento?.activo);
+  setVal("juego-desc-tipo", j?.descuento ? j.descuento.tipo : (ajustes.juegoDescuentoTipo || "%"));
+  setVal("juego-desc-valor", j?.descuento ? j.descuento.valor : (ajustes.juegoDescuentoValor ?? 10));
+  setVal("juego-ganada", j ? (j.ganadaComo || "Venta nula") : (ajustes.juegoGanadaComo || "Venta nula"));
   setVal("juego-socio", j ? (j.socioId || "") : "");
-  setVal("juego-pct", j ? (j.pctSocio || 0) : 50);
+  setVal("juego-pct", j ? (j.pctSocio || ajustes.juegoPctSocio || 50) : (ajustes.juegoPctSocio ?? 50));
   document.getElementById("juego-pct-wrap").style.display = val("juego-socio") ? "block" : "none";
-  renderPremiosJuegoFilas(j);
   updateJuegoPreview();
   openModal("modal-juego");
 }
 function saveJuego() {
   const datos = juegoDesdeFormulario();
   if (!datos.nombre) return showToast("Ponle un nombre al juego.", "error");
-  if (datos.premios.some(p => !p.nombre)) return showToast("Ponle nombre a cada premio o quita la fila.", "error");
+  if (datos.descuento.activo && datos.descuento.tipo === "%" && datos.descuento.valor > 100) return showToast("Un descuento en porcentaje no puede pasar de 100.", "error");
   if (datos.socioId && datos.pctSocio <= 0) return showToast("Indica qué porcentaje de la ganancia se lleva el socio.", "error");
   if (!Array.isArray(AppState.juegos)) AppState.juegos = [];
   const id = val("juego-id");
   if (id) Object.assign(AppState.juegos.find(x => x.id === id), datos);
-  else AppState.juegos.push({ id: uid(), porDia: {}, ...datos });
+  else AppState.juegos.push({ id: uid(), jugadas: 0, ganadas: { playera: 0, sorpresa: 0, descuento: 0, otro: 0 }, porDia: {}, historial: [], costoPlayerasGanadas: 0, ...datos });
   saveState({ sinRefresco: true });
   closeModal("modal-juego");
   renderJuegos();
   showToast("Juego guardado.");
 }
 async function deleteJuego(id) {
-  if (!(await pedirConfirmacion("¿Eliminar este juego? Sus intentos dejarán de contar en la caja y en las métricas.", { aviso: "Juego eliminado." }))) return;
+  if (!(await pedirConfirmacion("¿Eliminar este juego? Sus intentos dejarán de contar en la caja y en las métricas. Las playeras ya entregadas siguen como regaladas en el inventario.", { aviso: "Juego eliminado." }))) return;
   AppState.juegos = (AppState.juegos || []).filter(x => x.id !== id);
   saveState({ sinRefresco: true });
   renderJuegos();
 }
-// Suma (o resta) intentos; el día de hoy se anota aparte para la gráfica "Recaudado por día".
-function ajustarJugadas(id, delta) {
+
+/* ---- Intentos: falló / ganó (y qué ganó) ---- */
+// La playera ganada sale del inventario: se crea un registro "regalada" (o "vendida") de 1 pieza
+// y se descuenta del stock de la original; así el inventario y los reportes quedan conectados.
+function entregarPlayeraPremio(j, playeraId) {
+  const p = AppState.playeras.find(x => x.id === playeraId);
+  if (!p || (p.stock || 0) < 1) return null;
+  const estado = j.ganadaComo === "Vendida" ? "Vendida" : "Venta nula";
+  const copia = JSON.parse(JSON.stringify(p));
+  const costo = costoTotalPlayera(p);
+  Object.assign(copia, {
+    id: uid(), origenId: p.id, juegoId: j.id, stock: 1, stockMinimo: 0, ventaRapida: true, bazarEstado: estado,
+    bazarId: j.bazarId || "", bazarIds: j.bazarId ? [j.bazarId] : [],
+    metodoPago: estado === "Vendida" ? "Efectivo" : "", montoTarjeta: 0, comisionTerminal: 0, fechaVenta: hoyISO(),
+    consignacionId: "", consignacionEstado: "", etiquetaTallaConsumo: null, tieneEtiquetaTalla: false,
+    gastoVinculadoId: "", stockDescontadoVenta: 1
+  });
+  p.stock = Math.max(0, (p.stock || 0) - 1);
+  if (p.stock === 0) p.estado = "Agotado";
+  AppState.playeras.push(copia);
+  return { copiaId: copia.id, costo };
+}
+function registrarIntento(id, resultado, premio = {}) {
   const j = (AppState.juegos || []).find(x => x.id === id);
   if (!j) return;
-  const antes = Number(j.jugadas) || 0;
-  const despues = Math.max(0, antes + delta);
-  const real = despues - antes;
-  if (!real) return;
-  j.jugadas = despues;
+  const entrada = { d: hoyISO(), r: resultado };
+  if (!j.ganadas) j.ganadas = { playera: 0, sorpresa: 0, descuento: 0, otro: 0 };
+  if (resultado === "gano") {
+    const tipo = premio.tipo || "otro";
+    if (tipo === "playera") {
+      const res = entregarPlayeraPremio(j, premio.playeraId);
+      if (!res) return showToast("Esa playera ya no tiene stock.", "error");
+      Object.assign(entrada, { pid: premio.playeraId, cid: res.copiaId, costo: res.costo });
+      j.costoPlayerasGanadas = (Number(j.costoPlayerasGanadas) || 0) + res.costo;
+    }
+    entrada.w = tipo;
+    j.ganadas[tipo] = (Number(j.ganadas[tipo]) || 0) + 1;
+  }
+  j.jugadas = (Number(j.jugadas) || 0) + 1;
   if (!j.porDia) j.porDia = {};
-  const hoy = hoyISO();
-  j.porDia[hoy] = Math.max(0, (Number(j.porDia[hoy]) || 0) + real);
+  j.porDia[entrada.d] = (Number(j.porDia[entrada.d]) || 0) + 1;
+  j.historial = [...(j.historial || []), entrada].slice(-40);
   saveState({ sinRefresco: true });
+  closeModal("modal-juego-gano");
   renderJuegos();
 }
+function deshacerIntento(id) {
+  const j = (AppState.juegos || []).find(x => x.id === id);
+  const e = j && (j.historial || []).pop();
+  if (!e) return showToast("No hay un intento reciente que deshacer.", "error");
+  j.jugadas = Math.max(0, (Number(j.jugadas) || 0) - 1);
+  if (j.porDia && j.porDia[e.d]) j.porDia[e.d] = Math.max(0, j.porDia[e.d] - 1);
+  if (e.r === "gano" && j.ganadas) {
+    j.ganadas[e.w] = Math.max(0, (Number(j.ganadas[e.w]) || 0) - 1);
+    if (e.w === "playera") {
+      AppState.playeras = AppState.playeras.filter(p => p.id !== e.cid);
+      const origen = AppState.playeras.find(p => p.id === e.pid);
+      if (origen) { origen.stock = (origen.stock || 0) + 1; if (origen.estado === "Agotado") origen.estado = "En stock"; }
+      j.costoPlayerasGanadas = Math.max(0, (Number(j.costoPlayerasGanadas) || 0) - (e.costo || 0));
+    }
+  }
+  saveState({ sinRefresco: true });
+  renderJuegos();
+  showToast(e.r === "gano" ? "Se deshizo el último intento ganado (la playera regresó al inventario)." : "Se deshizo el último intento.");
+}
+let ganoJuegoId = "";
+function abrirGanoJuego(id) {
+  const j = (AppState.juegos || []).find(x => x.id === id);
+  if (!j) return;
+  ganoJuegoId = id;
+  document.getElementById("gano-juego-nombre").textContent = `${j.nombre} · ¿qué ganó?`;
+  const opciones = [];
+  (j.playerasPremio || []).map(pid => AppState.playeras.find(p => p.id === pid)).filter(Boolean).forEach(p => {
+    const sinStock = (p.stock || 0) < 1;
+    opciones.push(`<button type="button" class="gano-opcion" ${sinStock ? "disabled" : ""} onclick="elegirGanoJuego('playera', '${escapeHtml(p.id)}')">🎽 Playera: ${escapeHtml(p.nombre)} · ${escapeHtml(p.talla || "—")}<small>${sinStock ? "sin stock" : `quedan ${p.stock}`}</small></button>`);
+  });
+  if (j.sorpresa?.activo) opciones.push(`<button type="button" class="gano-opcion" onclick="elegirGanoJuego('sorpresa')">🎁 Paquete sorpresa</button>`);
+  if (j.descuento?.activo) opciones.push(`<button type="button" class="gano-opcion" onclick="elegirGanoJuego('descuento')">🏷️ Descuento ${j.descuento.valor}${j.descuento.tipo === "%" ? "%" : " $"}</button>`);
+  if (!opciones.length) opciones.push(`<button type="button" class="gano-opcion" onclick="elegirGanoJuego('otro')">✔ Ganó (sin premio asignado)</button>`);
+  document.getElementById("gano-opciones").innerHTML = opciones.join("");
+  openModal("modal-juego-gano");
+}
+function elegirGanoJuego(tipo, playeraId = "") {
+  registrarIntento(ganoJuegoId, "gano", { tipo, playeraId });
+}
+/* ---- Asignar una playera del inventario como premio de un juego ---- */
+function openModalAsignarJuego(playeraId) {
+  const p = AppState.playeras.find(x => x.id === playeraId);
+  if (!p) return;
+  if (!(AppState.juegos || []).length) return showToast("Primero crea un juego en Negocio → Juegos.", "error");
+  setVal("aj-playera-id", playeraId);
+  document.getElementById("aj-playera-nombre").textContent = `${p.nombre} · Talla ${p.talla || "—"} · ${colorNombre(p.colorId)}`;
+  const actual = AppState.juegos.find(j => (j.playerasPremio || []).includes(playeraId));
+  document.getElementById("aj-juego").innerHTML = `<option value="">— Quitar de los juegos —</option>` +
+    AppState.juegos.map(j => `<option value="${escapeHtml(j.id)}">${escapeHtml(j.nombre)} (${(j.playerasPremio || []).length}/2)</option>`).join("");
+  setVal("aj-juego", actual ? actual.id : "");
+  openModal("modal-asignar-juego");
+}
+function saveAsignarJuego() {
+  const playeraId = val("aj-playera-id");
+  const destino = val("aj-juego");
+  const j = destino && AppState.juegos.find(x => x.id === destino);
+  if (j && !(j.playerasPremio || []).includes(playeraId) && (j.playerasPremio || []).length >= 2) {
+    return showToast("Ese juego ya tiene 2 playeras de premio.", "error");
+  }
+  AppState.juegos.forEach(x => { x.playerasPremio = (x.playerasPremio || []).filter(pid => pid !== playeraId); });
+  if (j) j.playerasPremio = [...(j.playerasPremio || []), playeraId];
+  saveState({ sinRefresco: true });
+  closeModal("modal-asignar-juego");
+  renderPlayeras();
+  showToast(j ? `Playera asignada como premio de ${j.nombre}.` : "Playera quitada de los juegos.");
+}
+/* ---- Valores predeterminados (Ajustes → Juegos) ---- */
+function renderJuegosDefaults() {
+  const s = AppState.settings;
+  if (!document.getElementById("set-juego-precio")) return;
+  setVal("set-juego-precio", s.juegoPrecioIntento ?? 10);
+  setVal("set-juego-pct", s.juegoPctSocio ?? 50);
+  setVal("set-juego-sorpresa", s.juegoSorpresaCosto ?? 0);
+  setVal("set-juego-desc-tipo", s.juegoDescuentoTipo || "%");
+  setVal("set-juego-desc-valor", s.juegoDescuentoValor ?? 10);
+  setVal("set-juego-ganada", s.juegoGanadaComo || "Venta nula");
+}
+function saveJuegosDefaults() {
+  const s = AppState.settings;
+  s.juegoPrecioIntento = Math.max(0, Number.parseFloat(num("set-juego-precio")) || 0);
+  s.juegoPctSocio = Math.max(0, Math.min(100, Number.parseFloat(num("set-juego-pct")) || 0));
+  s.juegoSorpresaCosto = Math.max(0, Number.parseFloat(num("set-juego-sorpresa")) || 0);
+  s.juegoDescuentoTipo = val("set-juego-desc-tipo") || "%";
+  s.juegoDescuentoValor = Math.max(0, Number.parseFloat(num("set-juego-desc-valor")) || 0);
+  s.juegoGanadaComo = val("set-juego-ganada") || "Venta nula";
+  saveState({ sinRefresco: true });
+  showToast("Valores predeterminados de juegos guardados.");
+}
+
 // Resumen dentro del detalle de un bazar
 function renderJuegosBazar(b) {
   const el = document.getElementById("bd-juegos-resumen");
   if (!el) return;
   const r = resumenJuegosBazar(b);
   el.textContent = r.count
-    ? `🎲 ${r.count} juego(s) · ${r.jugadas} intentos · recaudado ${fmt(r.ingreso)}${r.parteSocio ? ` · de socios ${fmt(r.parteSocio)}` : ""} · tu parte ${fmt(r.tuParte)}`
+    ? `🎲 ${r.count} juego(s) · ${r.jugadas} intentos (${r.ganadas} ganó) · recaudado ${fmt(r.ingreso)}${r.parteSocio ? ` · de socios ${fmt(r.parteSocio)}` : ""} · tu parte ${fmt(r.tuParte)}`
     : "🎲 Aún no hay juegos en este bazar.";
 }
 function renderMaletaBazar(b) {
@@ -7426,7 +7427,7 @@ Object.assign(globalThis, {
   refrescarVistaActual, tomarCopiaEstado, ofrecerDeshacer,
   openModalQuoteSticker, onQuoteStickerProductoChange, updateQuoteStickerFieldDesdeModal, quitarStickerDesdeModal,
   openModalQuotePrenda, onQuotePrendaProductoChange, updateQuotePrendaField, onQuotePrendaClienteChange, abrirImpresionDesdePrenda, quitarPrendaDesdeModal,
-  verDetallePlayera, openModalJuego, saveJuego, deleteJuego, openModalPremio, savePremio, deletePremio, onPremioTipoChange, addPremioJuego, quitarPremioJuego, onJuegoPremioCatalogo, aplicarTipoPremioFila, ajustarJugadas, renderJuegos, onJuegoSocioChange, updateJuegoPreview, abrirJuegosDeBazar, abrirMaletaDeBazar, onMaletaBazarChange, toggleMaletaItem, agregarMaletaItem, borrarMaletaItem, cargarPlantillaEnBazar, desmarcarMaleta, agregarPlantillaItem, editarPlantillaItem, borrarPlantillaItem, restaurarPlantillaSugerida, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
+  verDetallePlayera, openModalJuego, saveJuego, deleteJuego, registrarIntento, abrirGanoJuego, elegirGanoJuego, deshacerIntento, openModalAsignarJuego, saveAsignarJuego, saveJuegosDefaults, renderJuegos, onJuegoSocioChange, updateJuegoPreview, abrirJuegosDeBazar, abrirMaletaDeBazar, onMaletaBazarChange, toggleMaletaItem, agregarMaletaItem, borrarMaletaItem, cargarPlantillaEnBazar, desmarcarMaleta, agregarPlantillaItem, editarPlantillaItem, borrarPlantillaItem, restaurarPlantillaSugerida, onPlayeraTallaChange, toggleModoSeleccionPlayeras, togglePlayeraSeleccion, seleccionarTodasPlayeras, limpiarSeleccionPlayeras, openModalLotePlayeras, aplicarLotePlayeras, cambiarSeccionPlayeras, cambiarEstadoVenta, onPlayeraEstadoVentaChange, toggleFiltrosPlayeras, limpiarFiltrosPlayeras, cambiarVistaPlayeras, cambiarResumenCostoInventario,
   openModalBloqueInventario, onSeleccionarTematicaBloque, verDetallesPlayerasTematica, cambiarEtiquetaPlayeraBloque, prepararAgregarPlayerasBloqueInventario, confirmarAgregarPlayerasBloqueInventario, agregarTematicaBloqueInventario, ajustarCantidadBloqueInventario, quitarPlayeraBloqueInventario, guardarBloqueInventario, eliminarBloqueInventario, toggleTematicasBloqueInventario,
   adjustTallaEtiqueta, addQuoteItem, addQuoteSticker, confirmResetAll,
   deleteArtista, deleteBazar, deleteBazarFromDetalle, deleteColor, deleteCotizacion,

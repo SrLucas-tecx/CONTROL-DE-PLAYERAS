@@ -67,7 +67,7 @@ const COLECCIONES = [
   ["proveedores", "Proveedores"], ["etiquetasOperativas", "Etiquetas operativas"], ["bazares", "Bazares"],
   ["gastos", "Gastos"], ["mermas", "Mermas"], ["consignaciones", "Consignaciones"], ["socios", "Socios"],
   ["comprasPendientes", "Compras pendientes"], ["turnosCaja", "Turnos de caja"], ["graficas", "Gráficas"],
-  ["consultas", "Consultas de interés"], ["juegos", "Juegos"], ["premiosCatalogo", "Premios de juegos"], ["bloquesInventario", "Bloques para bazares"]
+  ["consultas", "Consultas de interés"], ["juegos", "Juegos"], ["bloquesInventario", "Bloques para bazares"]
 ];
 const conteo = (estado, k) => (estado && Array.isArray(estado[k]) ? estado[k].length : 0);
 

@@ -258,12 +258,12 @@ function desgloseCierreCajaBase(filtroCot, filtroPlayera, filtroSticker, fondoCa
   comisionTerminal += consignacionesAsignadas.reduce((total, asignacion) => total + asignacion.comisionTerminal, 0);
   const ventasEfectivo = Math.max(0, totalVendido - ventasTarjeta);
   const juegos = resumenJuegos(filtroJuego || (() => false));
-  const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo + (juegos.ingreso - juegos.premiosEfectivo);
+  const efectivoEsperado = (fondoCaja || 0) + ventasEfectivo + juegos.ingreso;
   const tieneConteo = efectivoContadoRaw !== null && efectivoContadoRaw !== undefined && efectivoContadoRaw !== "";
   const diferencia = tieneConteo ? (efectivoContadoRaw - efectivoEsperado) : null;
   return {
     totalVendido, ventasEfectivo, ventasTarjeta, comisionTerminal, fondoCaja: fondoCaja || 0,
-    juegosIngreso: juegos.ingreso - juegos.premiosEfectivo, juegosPremiosEfectivo: juegos.premiosEfectivo, juegosParteSocios: juegos.parteSocio, juegosCount: juegos.count,
+    juegosIngreso: juegos.ingreso, juegosJugadas: juegos.jugadas, juegosGanadas: juegos.ganadas, juegosParteSocios: juegos.parteSocio, juegosCount: juegos.count,
     efectivoEsperado, efectivoContado: tieneConteo ? efectivoContadoRaw : null, diferencia
   };
 }
@@ -311,31 +311,24 @@ export function costoBazarReal(bazar) {
 // un socio con quien se reparte la ganancia (solo si hay ganancia positiva).
 export function calculoJuego(j) {
   const jugadas = Number(j.jugadas) || 0;
+  const g = j.ganadas || {};
+  const gp = Number(g.playera) || 0, gs = Number(g.sorpresa) || 0, gd = Number(g.descuento) || 0, go = Number(g.otro) || 0;
+  const ganadas = gp + gs + gd + go;
+  const fallos = Math.max(0, jugadas - ganadas);
   const ingreso = (Number(j.precio) || 0) * jugadas;
-  // Premios: filas del juego (costo x cantidad) + otros gastos capturados a mano
-  let costoFilas = 0, premiosCant = 0, premiosEfectivo = 0, premiosValor = 0;
-  (Array.isArray(j.premios) ? j.premios : []).forEach(p => {
-    const cant = Number(p.cantidad) || 0;
-    const valor = Number(p.valor) || 0;
-    const costo = p.tipo === "Efectivo" ? valor : (Number(p.costo) || 0);
-    costoFilas += costo * cant;
-    premiosCant += cant;
-    if (p.tipo === "Efectivo") premiosEfectivo += valor * cant;
-    else if (!String(p.tipo || "").startsWith("Descuento")) premiosValor += valor * cant;
-  });
-  const premios = (Number(j.costoPremios) || 0) + costoFilas;
+  // Premios: paquetes sorpresa entregados + playeras entregadas (a su costo real) + gastos sueltos
+  const premios = (Number(j.costoPremios) || 0) + gs * (Number(j.sorpresa && j.sorpresa.costo) || 0) + (Number(j.costoPlayerasGanadas) || 0);
   const bruta = ingreso - premios;
   const pct = Math.max(0, Math.min(100, Number(j.pctSocio) || 0));
   const parteSocio = (j.socioId && bruta > 0) ? bruta * pct / 100 : 0;
-  return { jugadas, ingreso, premios, premiosCant, premiosEfectivo, premiosValor, bruta, pct, parteSocio, tuParte: bruta - parteSocio };
+  return { jugadas, ganadas, fallos, ganadasPlayera: gp, ganadasSorpresa: gs, ganadasDescuento: gd, ingreso, premios, bruta, pct, parteSocio, tuParte: bruta - parteSocio };
 }
 export function resumenJuegos(filtro) {
   const lista = (AppState.juegos || []).filter(filtro || (() => true));
-  const r = { count: lista.length, jugadas: 0, ingreso: 0, premios: 0, premiosCant: 0, premiosEfectivo: 0, bruta: 0, parteSocio: 0, tuParte: 0 };
+  const r = { count: lista.length, jugadas: 0, ganadas: 0, fallos: 0, ganadasPlayera: 0, ganadasSorpresa: 0, ganadasDescuento: 0, ingreso: 0, premios: 0, bruta: 0, parteSocio: 0, tuParte: 0 };
   lista.forEach(j => {
     const c = calculoJuego(j);
-    r.jugadas += c.jugadas; r.ingreso += c.ingreso; r.premios += c.premios; r.premiosCant += c.premiosCant;
-    r.premiosEfectivo += c.premiosEfectivo; r.bruta += c.bruta; r.parteSocio += c.parteSocio; r.tuParte += c.tuParte;
+    Object.keys(r).forEach(key => { if (key !== "count" && key in c) r[key] += c[key]; });
   });
   r.neto = r.tuParte;   // lo que realmente te queda
   return r;
@@ -515,11 +508,12 @@ export function datosGrafica(fuente, dimension, metrica) {
     };
   }
   if (fuente === "juegos-premios") {
-    const premios = {};
-    (AppState.juegos || []).forEach(j => (j.premios || []).forEach(p => {
-      if (Number(p.cantidad) > 0) premios[p.nombre || "Premio"] = (premios[p.nombre || "Premio"] || 0) + Number(p.cantidad);
-    }));
-    return { labels: Object.keys(premios), values: Object.values(premios), label: "Premios entregados" };
+    const r = resumenJuegos();
+    return { labels: ["Playera", "Paquete sorpresa", "Descuento"], values: [r.ganadasPlayera, r.ganadasSorpresa, r.ganadasDescuento], label: "Premios entregados" };
+  }
+  if (fuente === "juegos-resultados") {
+    const r = resumenJuegos();
+    return { labels: ["Ganó", "Falló"], values: [r.ganadas, r.fallos], label: "Intentos" };
   }
   if (fuente === "juegos-tipos") {
     const tipos = {};
